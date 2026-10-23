@@ -92,6 +92,33 @@ export async function POST(req: NextRequest) {
     const currentToken = getActiveBotToken();
     const currentChannel = getActiveChannelId();
 
+    // 0. تفعيل الرد التلقائي وزر start للبوت عبر الويب هوك
+    if (action === 'setup_webhook') {
+      if (!currentToken) {
+        return NextResponse.json({ ok: false, error: 'يرجى إدخال رمز البوت أولاً.' }, { status: 400 });
+      }
+
+      const host = req.headers.get('host') || 'wasli-smart.vercel.app';
+      const protocol = host.includes('localhost') ? 'http' : 'https';
+      const webhookUrl = `${protocol}://${host}/api/telegram/webhook`;
+
+      const hookRes = await fetch(`https://api.telegram.org/bot${currentToken}/setWebhook?url=${encodeURIComponent(webhookUrl)}`);
+      const hookData = await hookRes.json();
+
+      if (hookData.ok) {
+        return NextResponse.json({
+          ok: true,
+          message: 'تم تفعيل زر start والرد التلقائي للبوت بنجاح! افتح محادثة البوت واضغط start وسيرد عليك فوراً.',
+          webhookUrl,
+        });
+      } else {
+        return NextResponse.json({
+          ok: false,
+          error: `تعذر تفعيل الويب هوك: ${hookData.description}`,
+        }, { status: 400 });
+      }
+    }
+
     // 1. فحص الاتصال بالبوت فقط (getMe)
     if (action === 'test_bot') {
       if (!currentToken) {

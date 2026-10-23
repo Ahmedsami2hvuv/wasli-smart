@@ -81,6 +81,32 @@ export default function TelegramManagerPage() {
     }
   };
 
+  // تفعيل الويب هوك والرد التلقائي على /start
+  const handleSetupWebhook = async () => {
+    try {
+      setActionLoading('setup_webhook');
+      setStatusMsg(null);
+      const res = await fetch('/api/admin/telegram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'setup_webhook',
+          botToken: botToken.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setStatusMsg({ text: data.message, type: 'success' });
+      } else {
+        setStatusMsg({ text: data.error, type: 'error' });
+      }
+    } catch (err: any) {
+      setStatusMsg({ text: 'خطأ: ' + err.message, type: 'error' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   // 1. فحص التوكن
   const handleTestBot = async () => {
     if (!botToken.trim() && !botInfo) {
@@ -343,6 +369,27 @@ export default function TelegramManagerPage() {
 
           {/* أزرار الفحص والتجربة المباشرة */}
           <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleSetupWebhook}
+              disabled={actionLoading !== null}
+              className="py-3 px-5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {actionLoading === 'setup_webhook' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4 text-indigo-200" />}
+              <span>تفعيل زر Start والرد التلقائي</span>
+            </button>
+
+            {botInfo && (
+              <a
+                href={`https://t.me/${botInfo.username}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-3 px-4 bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-300 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5"
+              >
+                <ExternalLink className="w-4 h-4 text-sky-600" />
+                <span>فتح محادثة البوت (@{botInfo.username})</span>
+              </a>
+            )}
+
             <button
               onClick={handleTestBot}
               disabled={actionLoading !== null}
