@@ -490,7 +490,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-base font-black text-slate-900">توصيل سريع وموثوق للمنازل</h3>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                مناديبنا يصلون لأدق عناوين قضاء أبي الخصيب وعموم البصرة والمحافظات، مع خدمة الدفع عند الاستلام.
+                مناديبنا يصلون لجميع مناطق العراق ، مع خدمة الدفع عند الاستلام.
               </p>
             </div>
 
