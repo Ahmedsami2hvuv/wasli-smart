@@ -51,8 +51,13 @@ export async function optimizeProductImage(inputBuffer: Buffer): Promise<Process
 /**
  * دوال مساعدة لجلب إعدادات بوت مستودع الصور وبوت إشعارات المتاجر
  */
-export function getVaultBotToken(): string | undefined {
-  return process.env.TELEGRAM_VAULT_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+export function getVaultBotToken(): string {
+  const envToken = process.env.TELEGRAM_VAULT_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+  // إذا كانت القيمة في فيرسل مضبوطة على توكن بوت الإشعارات (wasliasharatbot)، نستخدم تلقائياً توكن بوت مستودع المنتجات المشرف في القناة
+  if (!envToken || envToken.startsWith('8664781934')) {
+    return '8862218858:AAHPyAOmL4_Y1R3um05z1CXbNd1UmdM-wk4';
+  }
+  return envToken;
 }
 
 export function getVaultChannelId(): string | undefined {
