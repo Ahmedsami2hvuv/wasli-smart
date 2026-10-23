@@ -155,7 +155,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* زر لوحة الإدارة */}
             <a
-              href="/admin"
+              href="/waahhlstor"
               className="hidden lg:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-brand-800 hover:bg-slate-100 border border-slate-200 transition-colors"
             >
               <span>لوحة الإدارة</span>
@@ -227,7 +227,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               لوحة تحكم صاحب المتجر
             </a>
             <a
-              href="/admin"
+              href="/waahhlstor"
               onClick={() => setMobileMenuOpen(false)}
               className="block px-3 py-2 rounded-xl text-sm font-semibold text-slate-800 hover:bg-slate-100"
             >

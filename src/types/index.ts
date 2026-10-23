@@ -24,6 +24,7 @@ export interface Category {
 export interface Store {
   id: string;
   name: string;
+  ownerName?: string; // الاسم الثلاثي لصاحب المتجر
   slug?: string;
   code?: string; // كود مميز وفريد يصعب تخمينه لمشاركة المتجر
   ownerId?: string;

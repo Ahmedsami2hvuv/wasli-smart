@@ -168,7 +168,7 @@ export default function AdminProductsPage() {
         {/* شريط علوي */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <Link
-            href="/admin"
+            href="/waahhlstor"
             className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-brand-700 transition-colors"
           >
             <ArrowRight className="w-4 h-4" />

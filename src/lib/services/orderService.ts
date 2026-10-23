@@ -159,7 +159,7 @@ export async function createOrder(params: CreateOrderParams): Promise<{
     title: `طلب جديد: ${newOrder.orderNumber}`,
     message: `استلم متجر ${storeName} طلباً جديداً بقيمة ${totalAmount.toLocaleString('ar-IQ')} د.ع من الزبون ${customerName}`,
     type: 'order',
-    link: `/admin/orders/${newOrder.id}`,
+    link: `/waahhlstor/orders/${newOrder.id}`,
     isRead: false,
     createdAt: new Date().toISOString(),
   });

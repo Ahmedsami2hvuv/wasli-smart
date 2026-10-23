@@ -106,7 +106,7 @@ export default function AdminDashboardPage() {
 
           <div className="flex flex-wrap items-center gap-3">
             <Link
-              href="/admin/products"
+              href="/waahhlstor/products"
               className="py-2.5 px-4 bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
             >
               <Plus className="w-4 h-4 text-accent-400" />
