@@ -31,10 +31,7 @@ export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
   
-  const [cartItems, setCartItems] = useState<CartItem[]>([
-    // عنصر أولي توضيحي في السلة
-    { product: PRODUCTS[0], quantity: 1 }
-  ]);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
 
@@ -216,16 +213,28 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {filteredProducts.map(product => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onAddToCart={handleAddToCart}
-                  isInCart={cartProductIds.includes(product.id)}
-                />
-              ))}
-            </div>
+            {filteredProducts.length === 0 ? (
+              <div className="py-16 text-center bg-white rounded-3xl border border-slate-200/80 p-8">
+                <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-400">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-bold text-slate-800">لا توجد منتجات معروضة حالياً</h3>
+                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                  سيتم إضافة منتجات جديدة وحصرية إلى الكتالوج قريباً عبر إدارة المنصة والمتاجر المسجلة.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {filteredProducts.map(product => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onAddToCart={handleAddToCart}
+                    isInCart={cartProductIds.includes(product.id)}
+                  />
+                ))}
+              </div>
+            )}
 
           </div>
         </section>
