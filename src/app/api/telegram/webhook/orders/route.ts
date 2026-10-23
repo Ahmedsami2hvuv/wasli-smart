@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getOrdersBotToken } from '@/lib/telegram/vault';
 
 export const dynamic = 'force-dynamic';
-
-const ORDERS_BOT_TOKEN = '8664781934:AAErHan17WIpk2zENrp6C1_U7MCdB95rw3Y';
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,6 +12,11 @@ export async function POST(req: NextRequest) {
       const chatId = message.chat.id;
       const text = message.text || '';
       const firstName = message.from?.first_name || 'صديقنا';
+      const botToken = getOrdersBotToken();
+
+      if (!botToken) {
+        return NextResponse.json({ ok: false, error: 'رمز بوت الطلبات غير محدد' }, { status: 500 });
+      }
 
       if (text.startsWith('/start')) {
         const welcomeMessage = [
@@ -28,7 +32,7 @@ export async function POST(req: NextRequest) {
           'جاهز لإرسال إشعارات الطلبات فور حدوثها.'
         ].join('\n');
 
-        await fetch(`https://api.telegram.org/bot${ORDERS_BOT_TOKEN}/sendMessage`, {
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

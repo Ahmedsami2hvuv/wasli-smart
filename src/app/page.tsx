@@ -49,20 +49,20 @@ export default function HomePage() {
 
   const faqs = [
     {
-      q: 'هل أحتاج إلى رأس مال أو دفع مبالغ مسبقة للبدء؟',
-      a: 'كلا نهائياً، التسجيل وإنشاء متجرك في منصة وصلي مجاني 100%. لا تحتاج لشراء أي بضاعة مقدماً ولا تدفع أي رسوم اشتراك، وتبدأ تجارتك من الصفر برأس مال 0 دينار.'
+      q: 'هل أحتاج إلى رأس مال أو دفع مبالغ مسبقة للبدء كتاجر؟',
+      a: 'كلا نهائياً، التسجيل وإنشاء متجر التاجر في منصة وصلي مجاني 100%. لا تحتاج لشراء أي بضاعة مقدماً ولا تدفع أي رسوم اشتراك، وتبدأ تجارتك من الصفر برأس مال 0 دينار.'
     },
     {
-      q: 'كيف يظهر المتجر للزبائن عند مشاركة الرابط؟',
-      a: 'عندما ترسل رابط متجرك لزبائنك أو تضعه في بايو حساباتك على مواقع التواصل، يفتح المتجر باسم متجرك الخاص وهويتك ورقم هاتفك، ويشاهد الزبون أسعار البيع التي حددتها أنت فقط دون ظهور أسعار الجملة ولا اسم وصلي .'
+      q: 'كيف يظهر متجر التاجر للزبائن عند مشاركة الرابط؟',
+      a: 'عندما ترسل رابط متجرك لزبائنك أو تضعه في بايو حساباتك على مواقع التواصل، يفتح متجر التاجر باسمك الخاص وهويتك ورقم هاتفك، ويشاهد الزبون أسعار البيع التي حددتها أنت فقط دون ظهور أسعار الجملة ولا اسم وصلي.'
     },
     {
-      q: 'من يتولى تخزين المنتجات وتوصيل الطلبات للزبائن؟',
-      a: 'نحن في منصة وصلي نتولى إدارة المستودعات وتخزين المنتجات وفحص جودتها وتغليفها، ثم نقوم بشحنها وتوصيلها مباشرة لباب بيت الزبون عبر مناديبنا المتخصصين في كل العراق.'
+      q: 'من يتولى تخزين المنتجات وتوصيل الطلبات لزبائن متجر التاجر؟',
+      a: 'نحن في منصة وصلي نتولى إدارة المستودعات وتخزين المنتجات وفحص جودتها وتغليفها، ثم نقوم بشحنها وتوصيلها مباشرة لباب بيت زبونك عبر مناديبنا في كل العراق.'
     },
     {
-      q: 'كيف ومتى أستلم أرباحي الصافية؟',
-      a: 'بمجرد استلام الزبون للطلب وتسديد المبلغ للمندوب، يتم تسجيل ربحك الصافي فوراً في محفظة متجرك الإلكترونية، ويمكنك سحب أرباحك عبر الماستر كارت أو عبر محفظة زين كاش بكل سهولة.'
+      q: 'كيف ومتى أستلم أرباحي الصافية في صفحة التاجر؟',
+      a: 'بمجرد استلام الزبون للطلب وتسديد المبلغ للمندوب، يتم تسجيل ربحك الصافي فوراً في محفظتك داخل صفحة التاجر، ويمكنك طلب سحب أرباحك عبر الماستر كارت أو عبر محفظة زين كاش بكل سهولة.'
     },
     {
       q: 'هل يمكنني تعديل أسعار البيع للمنتجات في متجري؟',
@@ -76,7 +76,7 @@ export default function HomePage() {
       {/* 1. الشريط العلوي الإعلاني */}
       <div className="bg-brand-900 text-sky-200 text-xs py-2.5 px-4 text-center font-bold tracking-wide border-b border-brand-800 flex items-center justify-center gap-2">
         <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-        <span>فرصة عمل حر وتجارة حقيقية في البصرة وعموم العراق: أنشئ متجرك مجاناً وابدأ بربح دخل يومي مستمر</span>
+        <span>فرصة تجارة حقيقية في كافة محافظات العراق: أنشئ متجرك مجاناً وابدأ بربح دخل يومي مستمر</span>
       </div>
 
       {/* 2. شريط التنقل الرئيسي (Navbar) */}
@@ -93,7 +93,7 @@ export default function HomePage() {
                 <span>وصلي</span>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 font-bold border border-brand-200">سمارت</span>
               </div>
-              <p className="text-[11px] font-semibold text-slate-500 -mt-0.5">منصة التجارة الذكية للمسوقين</p>
+              <p className="text-[11px] font-semibold text-slate-500 -mt-0.5">منصة التجارة الذكية للتجار</p>
             </div>
           </Link>
 
@@ -112,7 +112,7 @@ export default function HomePage() {
               onClick={() => setIsLoginModalOpen(true)}
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 transition-colors cursor-pointer"
             >
-              <span>دخول التاجر</span>
+              <span>صفحة التاجر</span>
             </button>
 
             <Link
@@ -139,7 +139,7 @@ export default function HomePage() {
             {/* وسم ترويجي علوي */}
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-slate-200 shadow-xs text-xs font-black text-brand-700">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>فرصة تجارة حقيقية بدون مخاطرة لأبناء البصرة وكافة المحافظات</span>
+              <span>فرصة تجارة حقيقية بدون مخاطرة في كافة المحافظات</span>
             </div>
 
             {/* العنوان العريض الرئيسي */}
@@ -167,7 +167,7 @@ export default function HomePage() {
 
             {/* النص التوضيحي */}
             <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto">
-              نوفر لك المنتجات الأصلية بسعر الجملة، ونخزنها، ونوصلها لباب زبونك في عموم العراق. دورك فقط هو إنشاء متجرك باسمك وتحديد أسعارك ونشر متجرك ومنتجاتك واستلام أرباحك الصافية!
+              نوفر لك المنتجات الأصلية بسعر الجملة، ونخزنها، ونوصلها لباب زبونك في عموم العراق. دورك كتاجر فقط هو إنشاء متجرك باسمك وتحديد أسعارك ونشر متجرك ومنتجاتك واستلام أرباحك الصافية!
             </p>
 
             {/* أزرار التحرك السريع */}
@@ -244,12 +244,12 @@ export default function HomePage() {
               <div className="w-12 h-12 rounded-2xl bg-brand-700 text-white font-black text-lg flex items-center justify-center mb-5 shadow-md shadow-brand-700/20">
                 1
               </div>
-              <h3 className="text-lg font-black text-slate-900 mb-2">أنشئ متجرك مجاناً</h3>
+              <h3 className="text-lg font-black text-slate-900 mb-2">أنشئ متجر التاجر مجاناً</h3>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
                 ادخل اسمك واسم متجرك ورقم هاتفك، وخلال دقيقة واحدة سيكون لديك متجر إلكتروني متكامل بكل منتجاته برابط مخصص وباسمك الخاص.
               </p>
               <div className="mt-4 pt-4 border-t border-slate-200/60 text-xs font-bold text-brand-700 flex items-center gap-1">
-                <span>رابط خاص بك تماماً</span>
+                <span>متجر خاص بك تماماً</span>
               </div>
             </div>
 
@@ -288,7 +288,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-lg font-black text-slate-900 mb-2">انشر متجرك واستلم أرباحك</h3>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                شارك رابط متجرك على تيك توك، انستغرام، أو واتساب. الزبون يطلب، ونحن نجهز ونوصل الطلب لبابه، وأرباحك تتحول لمحفظتك فوراً عند استلام الطلب من قبل الزبون .
+                شارك رابط متجرك على تيك توك، انستغرام، أو واتساب. الزبون يطلب، ونحن نجهز ونوصل الطلب لبابه، وأرباحك تتحول لمحفظتك داخل صفحة التاجر فوراً عند استلام الطلب من قبل الزبون.
               </p>
               <div className="mt-4 pt-4 border-t border-slate-200/60 text-xs font-bold text-emerald-700 flex items-center gap-1">
                 <span>توصيل سريع ودفع عند الاستلام</span>
@@ -303,17 +303,17 @@ export default function HomePage() {
               
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-amber-300 text-xs font-black border border-white/15">
                 <BadgePercent className="w-4 h-4" />
-                <span>مثال عملي توضيحي بالأرقام الحقيقية</span>
+                <span>مثال عملي توضيحي بالأرقام الحقيقية للتاجر</span>
               </div>
 
               <h3 className="text-xl sm:text-2xl font-black tracking-tight leading-snug">
-                كيف تربح من بيع قطعة واحدة مع منصة وصلي؟
+                كيف يربح التاجر من بيع قطعة واحدة مع منصة وصلي؟
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
                 
                 <div className="p-4 rounded-2xl bg-white/10 border border-white/15">
-                  <span className="text-xs text-sky-200 block mb-1">1. سعر الجملة من المنصة</span>
+                  <span className="text-xs text-sky-200 block mb-1">1. سعر الجملة للتاجر من المنصة</span>
                   <span className="text-2xl font-black text-white">13,000 د.ع</span>
                   <p className="text-[11px] text-slate-300 mt-1">سعر المنتج الثابت الذي توفره لك إدارة وصلي</p>
                 </div>
@@ -327,7 +327,7 @@ export default function HomePage() {
                 <div className="p-4 rounded-2xl bg-emerald-500/20 border border-emerald-400/40">
                   <span className="text-xs text-emerald-300 font-bold block mb-1">3. ربحك الصافي في جيبك</span>
                   <span className="text-2xl font-black text-emerald-400">+9,000 د.ع</span>
-                  <p className="text-[11px] text-emerald-200 mt-1">ربح صافٍ لك من قطعة واحدة بدون أن تدفع فلساً مسبقاً</p>
+                  <p className="text-[11px] text-emerald-200 mt-1">ربح صافٍ لك كتاجر من قطعة واحدة بدون أن تدفع فلساً مسبقاً</p>
                 </div>
 
               </div>
@@ -353,7 +353,7 @@ export default function HomePage() {
               <span>جرب حساب أرباحك بنفسك</span>
             </div>
             <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight">
-              حاسبة الدخل والأرباح التفاعلية
+              حاسبة الدخل والأرباح للتاجر
             </h2>
             <p className="text-sm text-slate-500">
               حرك الأشرطة وجرب تغيير سعر البيع وعدد الطلبات الشهرية لترى أرباحك المتوقعة فوراً.
@@ -411,7 +411,7 @@ export default function HomePage() {
                 </div>
 
                 <div className="p-4 rounded-2xl bg-brand-50/70 border border-brand-100 text-xs text-brand-900 leading-relaxed">
-                  <strong>ملاحظة:</strong> آلاف المنتجات المتنوعة ستضاف إلى متجرك بشكل تلقائي وعليك البيع لأقاربك وأصدقائك ومتابعيك على مواقع التواصل بدون أي حدود.
+                  <strong>ملاحظة للتاجر:</strong> آلاف المنتجات المتنوعة ستضاف إلى متجرك بشكل تلقائي وعليك البيع لأقاربك وأصدقائك ومتابعيك على مواقع التواصل بدون أي حدود.
                 </div>
 
               </div>
@@ -438,7 +438,7 @@ export default function HomePage() {
                   href="/register-store"
                   className="w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-r from-brand-600 to-skybrand-600 hover:from-brand-500 hover:to-skybrand-500 text-white font-black text-sm shadow-md transition-all hover:scale-[1.02]"
                 >
-                  <span>سجل وابدأ تحقيق هذا الدخل</span>
+                  <span>سجل كتاجر وابدأ تحقيق هذا الدخل</span>
                   <ArrowLeft className="w-4 h-4" />
                 </Link>
 
@@ -460,10 +460,10 @@ export default function HomePage() {
               <span>لماذا تختار منصة وصلي؟</span>
             </div>
             <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight">
-              كل ما تحتاجه لتنجح في التجارة الإلكترونية
+              كل ما يحتاجه التاجر لينجح في التجارة الإلكترونية
             </h2>
             <p className="text-sm text-slate-500">
-              وفرنا عليك كل التعقيدات اللوجستية والمالية لتركز فقط على التسويق والأرباح.
+              وفرنا عليك كل التعقيدات اللوجستية والمالية لتركز فقط على البيع والتسويق واستلام أرباحك.
             </p>
           </div>
 
@@ -485,7 +485,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-base font-black text-slate-900">متجر باسمك وهويتك الخاصة</h3>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                متجرك يظهر للزبون باسمك وعلامتك التجارية ورقمك الخاص، مما يمنح زبائنك ثقة تامة بالتعامل معك.
+                متجر التاجر يظهر للزبون باسمك وعلامتك التجارية ورقمك الخاص دون أي أثر للمنصة، مما يمنح زبائنك ثقة تامة بالتعامل معك.
               </p>
             </div>
 
@@ -495,7 +495,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-base font-black text-slate-900">توصيل سريع وموثوق للمنازل</h3>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                مناديبنا يصلون لجميع مناطق العراق ، مع خدمة الدفع عند الاستلام.
+                مناديبنا يصلون لجميع مناطق العراق، مع خدمة الدفع عند الاستلام.
               </p>
             </div>
 
@@ -523,7 +523,7 @@ export default function HomePage() {
               <div className="w-11 h-11 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
                 <TrendingUp className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-black text-slate-900">لوحة تحكم ذكية وشاملة</h3>
+              <h3 className="text-base font-black text-slate-900">صفحة تاجر ذكية وشاملة</h3>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
                 تابع عدد مبيعاتك، والطلبات الجارية، والأرباح المعلقة والمسحوبة عبر واجهة عربية واضحة ومبسطة.
               </p>
@@ -585,11 +585,11 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6 relative z-10">
           
           <h2 className="text-2xl sm:text-4xl font-black tracking-tight">
-            جاهز لتبدأ مشروعك وتكسب أول أرباحك اليوم؟
+            جاهز لتبدأ مشروعك وتكسب أول أرباحك اليوم كتاجر؟
           </h2>
           
           <p className="text-sm sm:text-base text-sky-100 max-w-xl mx-auto leading-relaxed">
-            انضم الآن لمئات المسوقين وأصحاب المتاجر في العراق، وابدأ تجارتك بدون رأس مال وبدون أي مخاطرة.
+            انضم الآن لمئات التجار في العراق، وابدأ تجارتك بدون رأس مال وبدون أي مخاطرة.
           </p>
 
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -606,7 +606,7 @@ export default function HomePage() {
               onClick={() => setIsLoginModalOpen(true)}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-brand-900/40 hover:bg-brand-900/60 text-white font-bold text-sm border border-white/20 transition-colors cursor-pointer"
             >
-              <span>تسجيل دخول التاجر</span>
+              <span>دخول صفحة التاجر</span>
             </button>
           </div>
 
@@ -634,9 +634,9 @@ export default function HomePage() {
               onClick={() => setIsLoginModalOpen(true)}
               className="hover:text-white transition-colors cursor-pointer"
             >
-              لوحة التاجر
+              صفحة التاجر
             </button>
-            <Link href="/waahhlstor" className="hover:text-white transition-colors">لوحة الإدارة</Link>
+            <Link href="/waahhlstor" className="hover:text-white transition-colors">صفحة المدير</Link>
           </div>
 
           <div className="text-slate-500 text-center sm:text-left">

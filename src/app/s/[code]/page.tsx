@@ -119,11 +119,25 @@ function StorePageContent() {
           setStore(foundStore);
         }
 
-        // جلب المنتجات المتاحة
-        const prodRes = await fetch('/api/products');
-        const prodData = await prodRes.json();
-        if (prodData.success && prodData.products) {
-          setProducts(prodData.products);
+        // جلب المنتجات المتاحة بأسعار متجر هذا التاجر
+        try {
+          const prodRes = await fetch(`/api/stores/products?storeCode=${code}&forCustomer=true`);
+          const prodData = await prodRes.json();
+          if (prodData.success && prodData.products && prodData.products.length > 0) {
+            setProducts(prodData.products);
+          } else {
+            const fallbackRes = await fetch('/api/products');
+            const fallbackData = await fallbackRes.json();
+            if (fallbackData.success && fallbackData.products) {
+              setProducts(fallbackData.products);
+            }
+          }
+        } catch (pErr) {
+          const fallbackRes = await fetch('/api/products');
+          const fallbackData = await fallbackRes.json();
+          if (fallbackData.success && fallbackData.products) {
+            setProducts(fallbackData.products);
+          }
         }
       } catch (err) {
         console.error('خطأ في تحميل بيانات المتجر:', err);

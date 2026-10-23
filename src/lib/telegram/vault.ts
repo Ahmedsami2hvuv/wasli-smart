@@ -51,18 +51,16 @@ export async function optimizeProductImage(inputBuffer: Buffer): Promise<Process
 /**
  * دوال مساعدة لجلب إعدادات بوت مستودع الصور وبوت إشعارات المتاجر
  */
-export function getVaultBotToken(): string {
-  // توكن بوت مستودع المنتجات الرسمي
-  return '8862218858:AAHPyAOmL4_Y1R3um05z1CXbNd1UmdM-wk4';
+export function getVaultBotToken(): string | undefined {
+  return process.env.TELEGRAM_VAULT_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
 }
 
-export function getVaultChannelId(): string {
-  return '-1003906281269';
+export function getVaultChannelId(): string | undefined {
+  return process.env.TELEGRAM_VAULT_CHANNEL_ID || process.env.TELEGRAM_CHANNEL_ID;
 }
 
-export function getOrdersBotToken(): string {
-  // توكن بوت إشعارات الطلبات الرسمي
-  return '8664781934:AAErHan17WIpk2zENrp6C1_U7MCdB95rw3Y';
+export function getOrdersBotToken(): string | undefined {
+  return process.env.TELEGRAM_ORDERS_BOT_TOKEN || process.env.TELEGRAM_NOTIFICATIONS_BOT_TOKEN;
 }
 
 /**
@@ -280,9 +278,27 @@ export function cleanTelegramChatId(input: string | number | null | undefined): 
 /**
  * نشر المنتج المستورد تلقائياً في قناة تيليجرام
  */
+async function fetchAndOptimizeImage(url: string): Promise<Buffer | null> {
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (!res.ok) return null;
+    const arrayBuffer = await res.arrayBuffer();
+    const inputBuffer = Buffer.from(arrayBuffer);
+    const optimized = await optimizeProductImage(inputBuffer);
+    return optimized.buffer;
+  } catch (err) {
+    console.warn('تعذر تحميل وضغط صورة المنتج للتيليجرام:', url, err);
+    return null;
+  }
+}
+
+/**
+ * نشر المنتج المستورد تلقائياً في قناة تيليجرام ككتلة صور مجمعة WebP
+ */
 export async function publishProductToTelegramChannel(product: {
   name: string;
   image?: string;
+  images?: string[];
   wholesalePriceIqd: number;
   minPriceIqd: number;
   maxPriceIqd: number;
@@ -299,7 +315,7 @@ export async function publishProductToTelegramChannel(product: {
   if (!botToken || !channelId) {
     return { 
       success: false, 
-      error: 'متغيرات بيئة بوت تيليجرام أو معرّف القناة غير معينة في فيرسل (TELEGRAM_BOT_TOKEN أو TELEGRAM_CHANNEL_ID)' 
+      error: 'متغيرات بيئة بوت تيليجرام أو معرّف القناة غير معينة في فيرسل (TELEGRAM_VAULT_BOT_TOKEN أو TELEGRAM_VAULT_CHANNEL_ID)' 
     };
   }
 
@@ -319,13 +335,119 @@ export async function publishProductToTelegramChannel(product: {
   ].filter(Boolean).join('\n');
 
   try {
-    if (product.image && (product.image.startsWith('http://') || product.image.startsWith('https://'))) {
+    // جمع الصور وتصفيتها (بحد أقصى 10 صور لتيليجرام)
+    const rawImages = (product.images && product.images.length > 0)
+      ? product.images
+      : (product.image ? [product.image] : []);
+
+    const validUrls = rawImages
+      .filter(img => typeof img === 'string' && (img.startsWith('http://') || img.startsWith('https://')))
+      .slice(0, 10);
+
+    // 1. إذا كان لدينا أكثر من صورة: تنزيلها وضغطها WebP وإرسالها كألبوم صور مجمع (sendMediaGroup)
+    if (validUrls.length > 1) {
+      try {
+        const formData = new FormData();
+        formData.append('chat_id', String(channelId));
+
+        const mediaMeta: Array<{ type: string; media: string; caption?: string }> = [];
+        let addedCount = 0;
+
+        for (let i = 0; i < validUrls.length; i++) {
+          const webpBuffer = await fetchAndOptimizeImage(validUrls[i]);
+          if (webpBuffer) {
+            const fieldName = `photo_${addedCount}`;
+            const blob = new Blob([new Uint8Array(webpBuffer)], { type: 'image/webp' });
+            formData.append(fieldName, blob, `product_${addedCount}.webp`);
+
+            mediaMeta.push({
+              type: 'photo',
+              media: `attach://${fieldName}`,
+              caption: addedCount === 0 ? caption.slice(0, 1024) : undefined,
+            });
+            addedCount++;
+          }
+        }
+
+        if (mediaMeta.length > 1) {
+          formData.append('media', JSON.stringify(mediaMeta));
+
+          const groupRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMediaGroup`, {
+            method: 'POST',
+            body: formData,
+          });
+
+          const groupData = await groupRes.json();
+          if (groupData.ok) {
+            return {
+              success: true,
+              messageId: Array.isArray(groupData.result) ? groupData.result[0]?.message_id : undefined,
+            };
+          } else {
+            console.warn('تعذر إرسال ألبوم الصور المضغوط كـ FormData، جاري التجربة بروابط الصور:', groupData.description);
+          }
+        }
+      } catch (albumErr) {
+        console.warn('خطأ في معالجة ألبوم الصور المضغوط:', albumErr);
+      }
+
+      // بديل إضافي: إرسال ألبوم الصور بروابطها المباشرة
+      try {
+        const mediaUrls = validUrls.map((url, idx) => ({
+          type: 'photo',
+          media: url,
+          caption: idx === 0 ? caption.slice(0, 1024) : undefined,
+        }));
+
+        const groupUrlRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMediaGroup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: channelId,
+            media: mediaUrls,
+          }),
+        });
+
+        const groupUrlData = await groupUrlRes.json();
+        if (groupUrlData.ok) {
+          return {
+            success: true,
+            messageId: Array.isArray(groupUrlData.result) ? groupUrlData.result[0]?.message_id : undefined,
+          };
+        }
+      } catch (groupFallbackErr) {
+        console.warn('تعذر إرسال ألبوم الروابط:', groupFallbackErr);
+      }
+    }
+
+    // 2. إذا كانت صورة واحدة فقط: ضغطها بصيغة WebP وإرسالها
+    const singleImageUrl = validUrls[0] || product.image;
+    if (singleImageUrl && (singleImageUrl.startsWith('http://') || singleImageUrl.startsWith('https://'))) {
+      const singleWebp = await fetchAndOptimizeImage(singleImageUrl);
+      if (singleWebp) {
+        const formData = new FormData();
+        formData.append('chat_id', String(channelId));
+        formData.append('caption', caption.slice(0, 1024));
+        formData.append('photo', new Blob([new Uint8Array(singleWebp)], { type: 'image/webp' }), 'product.webp');
+
+        const singleRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        const singleData = await singleRes.json();
+        if (singleData.ok) {
+          return { success: true, messageId: singleData.result?.message_id };
+        }
+      }
+
+      // بديل مباشر للصورة الواحدة
       const photoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: channelId,
-          photo: product.image,
+          photo: singleImageUrl,
           caption: caption.slice(0, 1024),
         }),
       });
@@ -336,6 +458,7 @@ export async function publishProductToTelegramChannel(product: {
       }
     }
 
+    // 3. كحل أخير إذا لم تتوفر صور: إرسال الرسالة النصية
     const msgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

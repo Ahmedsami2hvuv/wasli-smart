@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getVaultBotToken } from '@/lib/telegram/vault';
 
 export const dynamic = 'force-dynamic';
-
-const VAULT_BOT_TOKEN = '8862218858:AAHPyAOmL4_Y1R3um05z1CXbNd1UmdM-wk4';
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,6 +12,11 @@ export async function POST(req: NextRequest) {
       const chatId = message.chat.id;
       const text = message.text || '';
       const firstName = message.from?.first_name || 'صديقنا';
+      const botToken = getVaultBotToken();
+
+      if (!botToken) {
+        return NextResponse.json({ ok: false, error: 'رمز بوت المستودع غير محدد' }, { status: 500 });
+      }
 
       if (text.startsWith('/start')) {
         const welcomeMessage = [
@@ -28,7 +32,7 @@ export async function POST(req: NextRequest) {
           'البوت مربوط وجاهز للعمل.'
         ].join('\n');
 
-        await fetch(`https://api.telegram.org/bot${VAULT_BOT_TOKEN}/sendMessage`, {
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

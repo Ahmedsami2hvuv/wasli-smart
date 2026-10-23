@@ -138,12 +138,13 @@ export async function POST(request: NextRequest) {
     const platformProfit = wholesalePrice - supplierCost;
     const merchantProfitRange = `${minPrice - wholesalePrice} - ${maxPrice - wholesalePrice}`;
 
-    // نشر المنتج المستورد فوراً في قناة تيليجرام للمسوقين
+    // نشر المنتج المستورد فوراً في قناة تيليجرام للمسوقين ككتلة صور مجمعة WebP
     let telegramResult = null;
     try {
       telegramResult = await publishProductToTelegramChannel({
         name: product.name,
         image: primaryImage,
+        images: images && images.length > 0 ? images : [primaryImage],
         wholesalePriceIqd: wholesalePrice,
         minPriceIqd: minPrice,
         maxPriceIqd: maxPrice,

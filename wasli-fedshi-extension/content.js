@@ -192,19 +192,40 @@
         videoUrl = videoEl.getAttribute('src') || videoEl.src || '';
       }
 
-      // 6. استخراج صور المنتج عالية الدقة
+      // 6. استخراج كافة صور المنتج عالية الدقة من المعرض والشرائح والأزرار
       const images = [];
-      const allImgEls = Array.from(document.querySelectorAll('main img, .swiper img, button img'));
-      allImgEls.forEach(img => {
+      const imageCandidates = Array.from(document.querySelectorAll('main img, .swiper-slide img, [role="tabpanel"] img, [aria-roledescription="slide"] img, button img, img[alt]'));
+      
+      imageCandidates.forEach(img => {
         let src = img.getAttribute('src') || img.src || '';
-        // استخراج الرابط النظيف إذا كان يمر عبر CDN فدشي
-        if (src.includes('https://prod-media.fedshi.com/product_images/')) {
-          const directMatch = src.match(/(https:\/\/prod-media\.fedshi\.com\/product_images\/[^\s&?]+)/);
-          if (directMatch && directMatch[1]) {
-            src = directMatch[1];
-          }
+        if (!src) return;
+
+        // إذا كان الرابط يمر عبر Next.js Image Optimizer: _next/image?url=...
+        if (src.includes('_next/image') && src.includes('url=')) {
+          try {
+            const rawParam = src.split('url=')[1].split('&')[0];
+            const decoded = decodeURIComponent(rawParam);
+            if (decoded && (decoded.startsWith('http://') || decoded.startsWith('https://'))) {
+              src = decoded;
+            }
+          } catch (e) {}
         }
-        if (src && !src.endsWith('.svg') && !images.includes(src)) {
+
+        // استخراج الرابط المباشر من CDN فدشي
+        if (src.includes('prod-media.fedshi.com/product_images/')) {
+          const m = src.match(/(https:\/\/prod-media\.fedshi\.com\/product_images\/[A-Za-z0-9._-]+)/);
+          if (m && m[1]) src = m[1];
+        }
+
+        // استبعاد الأيقونات الصغيرة ورموز SVG
+        if (
+          src &&
+          !src.endsWith('.svg') &&
+          !src.includes('icon') &&
+          !src.includes('logo') &&
+          !images.includes(src) &&
+          (src.includes('fedshi.com') || src.includes('product') || src.startsWith('http'))
+        ) {
           images.push(src);
         }
       });
@@ -322,7 +343,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">مورد: فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.0.7</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.0.8</span>
           </div>
           <button type="button" class="wasli-close-btn" id="wasli-modal-close">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

@@ -134,7 +134,7 @@ function MerchantDashboardContent() {
           found = {
             id: `store-${code}`,
             name: 'متجري الإلكتروني',
-            ownerName: 'صاحب المتجر',
+            ownerName: 'التاجر',
             slug: `store-${code}`,
             code: code,
             description: 'متجر إلكتروني معتمد للتجارة المباشرة والتوصيل السريع لكافة المحافظات',
@@ -283,7 +283,7 @@ function MerchantDashboardContent() {
         found = {
           id: `store-${extractedCode}`,
           name: 'متجري الإلكتروني',
-          ownerName: 'صاحب المتجر',
+          ownerName: 'التاجر',
           slug: `store-${extractedCode}`,
           code: extractedCode,
           description: 'متجر إلكتروني معتمد للتجارة المباشرة والتوصيل السريع لكافة المحافظات',
@@ -368,7 +368,7 @@ function MerchantDashboardContent() {
 
   const handleNativeShare = async () => {
     if (!currentStore) return;
-    const text = `تفضل بزيارة متجري الإلكتروني "${currentStore.name}" على منصة وصلي للتسوق بأسعار مميزة وتوصيل سريع!`;
+    const text = `تفضل بزيارة متجري الإلكتروني "${currentStore.name}" للتسوق بأسعار مميزة وتوصيل سريع ودفع عند الاستلام!`;
     if (navigator.share) {
       try {
         await navigator.share({
@@ -509,7 +509,7 @@ function MerchantDashboardContent() {
               <Store className="w-8 h-8" />
             </div>
             <h1 className="text-2xl font-black text-slate-900 mb-2">
-              دخول حساب التاجر
+              دخول صفحة التاجر
             </h1>
             <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
               يرجى إدخال رابط متجرك الإلكتروني أو رمزه لفتح لوحة التحكم الخاصة بك ومتابعة أرباحك
@@ -901,7 +901,7 @@ function MerchantDashboardContent() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    اسم صاحب المتجر / المسوّق
+                    اسم التاجر
                   </label>
                   <div className="relative">
                     <input

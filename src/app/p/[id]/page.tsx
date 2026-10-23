@@ -53,7 +53,20 @@ function ProductDetailContent() {
           const foundStore = storeData.stores?.find(
             (s: any) => s.code?.toLowerCase() === storeRef.toLowerCase() || s.slug?.toLowerCase() === storeRef.toLowerCase()
           );
-          if (foundStore) setStore(foundStore);
+          if (foundStore) {
+            setStore(foundStore);
+            // جلب سعر التاجر المخصص للمنتج إن وجد
+            try {
+              const spRes = await fetch(`/api/stores/products?storeCode=${foundStore.code || storeRef}`);
+              const spData = await spRes.json();
+              if (spData.success && spData.products) {
+                const spFound = spData.products.find((p: any) => p.id === productId || p.slug === productId);
+                if (spFound) {
+                  setProduct(spFound);
+                }
+              }
+            } catch (e) {}
+          }
         }
       } catch (err) {
         console.error('خطأ في تحميل تفاصيل المنتج:', err);
