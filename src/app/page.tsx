@@ -406,7 +406,7 @@ export default function HomePage() {
                 </div>
 
                 <div className="p-4 rounded-2xl bg-brand-50/70 border border-brand-100 text-xs text-brand-900 leading-relaxed">
-                  <strong>ملاحظة:</strong> يمكنك إضافة عشرات المنتجات المتنوعة إلى متجرك والبيع لأقاربك وأصدقائك ومتابعيك على مواقع التواصل بدون أي حدود.
+                  <strong>ملاحظة:</strong> آلاف المنتجات المتنوعة ستضاف إلى متجرك بشكل تلقائي وعليك البيع لأقاربك وأصدقائك ومتابعيك على مواقع التواصل بدون أي حدود.
                 </div>
 
               </div>
