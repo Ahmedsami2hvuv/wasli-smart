@@ -241,7 +241,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-lg font-black text-slate-900 mb-2">أنشئ متجرك مجاناً</h3>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                ادخل اسمك واسم متجرك ورقم هاتفك، وخلال دقيقة واحدة سيكون لديك متجر إلكتروني متكامل برابط مخصص وباسمك الخاص.
+                ادخل اسمك واسم متجرك ورقم هاتفك، وخلال دقيقة واحدة سيكون لديك متجر إلكتروني متكامل بكل منتجاته برابط مخصص وباسمك الخاص.
               </p>
               <div className="mt-4 pt-4 border-t border-slate-200/60 text-xs font-bold text-brand-700 flex items-center gap-1">
                 <span>رابط خاص بك تماماً</span>
@@ -283,7 +283,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-lg font-black text-slate-900 mb-2">انشر متجرك واستلم أرباحك</h3>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                شارك رابط متجرك على تيك توك، انستغرام، أو واتساب. الزبون يطلب، ونحن نجهز ونوصل الطلب لبابه، وأرباحك تتحول لمحفظتك فوراً.
+                شارك رابط متجرك على تيك توك، انستغرام، أو واتساب. الزبون يطلب، ونحن نجهز ونوصل الطلب لبابه، وأرباحك تتحول لمحفظتك فوراً عند استلام الطلب من قبل الزبون .
               </p>
               <div className="mt-4 pt-4 border-t border-slate-200/60 text-xs font-bold text-emerald-700 flex items-center gap-1">
                 <span>توصيل سريع ودفع عند الاستلام</span>
