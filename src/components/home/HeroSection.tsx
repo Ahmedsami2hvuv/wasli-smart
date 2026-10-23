@@ -40,7 +40,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             {/* وسم ترحيبي مميز */}
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-skybrand-50 border border-skybrand-200 text-skybrand-800 text-xs font-semibold shadow-sm">
               <span className="w-2 h-2 rounded-full bg-skybrand-500 animate-ping" />
-              <span>المنصة الرائدة في قضاء أبي الخصيب والبصرة</span>
+              <span>المنصة الرائدة للتسوق والتوصيل في عموم العراق</span>
             </div>
 
             {/* العنوان الرئيسي العريض */}
@@ -51,7 +51,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
             {/* الوصف التوضيحي البسيط */}
             <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl font-normal">
-              من تمور البرحي الفاخرة وحلويات نهر خوز في أبي الخصيب، إلى أشهى وجبات الكباب والسمك المسكوف والاحتياجات اليومية. كل ما تريده يصلك طازجاً، دافئاً، وبأقل تكلفة توصيل.
+              من أشهى المأكولات والمطاعم والمنتجات المحلية، إلى أحدث الإلكترونيات والاحتياجات اليومية. كل ما تريده يصلك طازجاً، دافئاً، وبأقل تكلفة توصيل لكافة محافظات العراق.
             </p>
 
             {/* شريط الإجراءات والبحث الفوري */}
@@ -129,19 +129,19 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   </span>
                 </div>
 
-                {/* صورة ترويجية لمتاجر أبي الخصيب النهرية والتمور */}
+                {/* صورة ترويجية للمتاجر والمنتجات */}
                 <div className="mt-4 relative rounded-2xl overflow-hidden aspect-[16/10] group">
                   <img
                     src="https://images.unsplash.com/photo-1596797882870-8c33deeac224?w=600&auto=format&fit=crop&q=80"
-                    alt="تمور وبساتين أبي الخصيب"
+                    alt="منتجات وتسوق عراقي فاخر"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent flex flex-col justify-end p-4">
                     <span className="px-2 py-0.5 rounded-md bg-accent-500 text-slate-950 text-[10px] font-black w-fit mb-1">
                       منتج اليوم الحصري
                     </span>
-                    <h3 className="text-white font-bold text-base">تمر برحي أبي الخصيب الفاخر</h3>
-                    <p className="text-slate-200 text-xs mt-0.5">طازج ومقطوف من نخيل البصرة العريقة</p>
+                    <h3 className="text-white font-bold text-base">تمر برحي وخيرات العراق الفاخرة</h3>
+                    <p className="text-slate-200 text-xs mt-0.5">طازج ومختار من أجود خيرات العراق</p>
                   </div>
                 </div>
 
@@ -152,8 +152,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       <Truck className="w-4 h-4" />
                     </div>
                     <div>
-                      <div className="text-xs font-bold text-slate-900">مندوبو الخصيب جاهزون</div>
-                      <div className="text-[11px] text-slate-500">توصيل حراري مخصص للأطعمة</div>
+                      <div className="text-xs font-bold text-slate-900">مندوبو وصلي جاهزون في كل العراق</div>
+                      <div className="text-[11px] text-slate-500">توصيل سريع ومباشر لباب بيتك</div>
                     </div>
                   </div>
                   <span className="text-xs font-extrabold text-brand-700 bg-brand-100/60 px-2.5 py-1 rounded-lg">
@@ -169,7 +169,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   4.9
                 </div>
                 <div>
-                  <div className="text-xs font-black text-slate-900">تقييم ممتاز في البصرة</div>
+                  <div className="text-xs font-black text-slate-900">تقييم ممتاز في عموم المحافظات</div>
                   <div className="text-[10px] text-slate-500">أكثر من 1,200 زبون سعيد هذا الشهر</div>
                 </div>
               </div>

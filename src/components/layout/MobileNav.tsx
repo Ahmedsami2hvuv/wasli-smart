@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Home, Store, Compass, ShoppingBag, MapPin } from 'lucide-react';
+import { Home, Store, Compass, ShoppingBag, Sparkles } from 'lucide-react';
 
 interface MobileNavProps {
   cartCount: number;
@@ -31,19 +31,19 @@ export const MobileNav: React.FC<MobileNavProps> = ({
           <span className="text-[10px]">الرئيسية</span>
         </button>
 
-        {/* قسم أبي الخصيب */}
+        {/* قسم المتاجر المميزة */}
         <button
           onClick={() => {
-            onTabChange('abi-alkhaseeb');
-            const el = document.getElementById('abi-alkhaseeb');
+            onTabChange('featured');
+            const el = document.getElementById('featured-stores') || document.getElementById('stores');
             if (el) el.scrollIntoView({ behavior: 'smooth' });
           }}
           className={`flex flex-col items-center justify-center gap-1 transition-colors relative ${
-            activeTab === 'abi-alkhaseeb' ? 'text-brand-700 font-bold' : 'text-slate-500 hover:text-slate-800'
+            activeTab === 'featured' ? 'text-brand-700 font-bold' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
-          <MapPin className="w-5 h-5 text-skybrand-600" />
-          <span className="text-[10px]">أبي الخصيب</span>
+          <Sparkles className="w-5 h-5 text-skybrand-600" />
+          <span className="text-[10px]">المميزة</span>
           <span className="absolute top-1 right-5 w-2 h-2 rounded-full bg-accent-500" />
         </button>
 

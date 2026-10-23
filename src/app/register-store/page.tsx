@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Store, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Share2, User, Phone, MapPin } from 'lucide-react';
+import { Store, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Share2, User, Phone, MapPin, Copy, Check, Lock } from 'lucide-react';
 import Link from 'next/link';
 import { IRAQ_GOVERNORATES } from '@/data/iraqCities';
 
@@ -15,6 +15,40 @@ export default function RegisterStorePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [createdStore, setCreatedStore] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [copiedInfo, setCopiedInfo] = useState(false);
+
+  const handleCopyStoreInfo = async () => {
+    if (!createdStore) return;
+
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://wasli-smart.vercel.app';
+    const storeUrl = `${origin}/s/${createdStore.code}`;
+    const dashboardUrl = `${origin}/merchant?storeCode=${createdStore.code}`;
+
+    const textToCopy = `معلومات متجري في منصة وصلي:
+- اسم صاحب المتجر: ${createdStore.ownerName || 'غير محدد'}
+- اسم المتجر: ${createdStore.name}
+- المحافظة: ${createdStore.city}
+- رقم الهاتف: ${createdStore.phone}
+- رمز المتجر الفريد: ${createdStore.code}
+- رابط المتجر المباشر: ${storeUrl}
+- رابط لوحة إدارة متجري: ${dashboardUrl}`;
+
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(textToCopy);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = textToCopy;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopiedInfo(true);
+    } catch (err) {
+      console.error('فشل في نسخ المعلومات:', err);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -254,18 +288,69 @@ export default function RegisterStorePage() {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Link
-                href={`/merchant?storeCode=${createdStore.code}`}
-                className="flex-1 py-3.5 px-6 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-bold text-sm shadow-md shadow-brand-700/20 transition-all text-center"
-              >
-                الدخول إلى لوحة إدارة متجري
-              </Link>
+            {/* بلوك التنبيه بعد نسخ المعلومات */}
+            {copiedInfo && (
+              <div className="bg-amber-50/90 border-2 border-amber-300/80 rounded-2xl p-4 sm:p-5 text-right shadow-sm mb-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 mt-0.5">
+                    <ShieldCheck className="w-5 h-5 text-amber-700" />
+                  </div>
+                  <div className="space-y-1 flex-1">
+                    <div className="font-bold text-sm sm:text-base text-amber-950 flex items-center justify-between">
+                      <span>تم نسخ معلوماتك بنجاح</span>
+                      <span className="text-[11px] font-bold bg-amber-200/70 text-amber-900 px-2.5 py-0.5 rounded-full">
+                        تنبيه أمان
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-amber-900 leading-relaxed font-semibold">
+                      لقد قمت بنسخ كل معلوماتك، عليك بلصقها في مكان آمن (مثلاً في التيليجرام أو الواتساب) لتعود إليها، ولا تعطيها لشخص آخر.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* زر الدخول إلى لوحة إدارة متجري */}
+                <Link
+                  href={`/merchant?storeCode=${createdStore.code}`}
+                  className="w-full py-4 px-6 rounded-xl bg-brand-700 hover:bg-brand-800 active:bg-brand-900 text-white font-bold text-sm shadow-md shadow-brand-700/25 transition-all flex items-center justify-center gap-2 cursor-pointer text-center"
+                >
+                  <Store className="w-4 h-4 text-accent-400" />
+                  <span>الدخول إلى لوحة إدارة متجري</span>
+                </Link>
+
+                {/* زر نسخ معلوماتي */}
+                <button
+                  type="button"
+                  onClick={handleCopyStoreInfo}
+                  className={`w-full py-4 px-6 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm ${
+                    copiedInfo
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
+                      : 'bg-slate-900 hover:bg-slate-800 text-white shadow-slate-900/20'
+                  }`}
+                >
+                  {copiedInfo ? (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-200" />
+                      <span>تم نسخ معلوماتي بنجاح</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 text-slate-300" />
+                      <span>نسخ معلوماتي</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* زر معاينة صفحة المتجر */}
               <Link
                 href={`/s/${createdStore.code}`}
-                className="py-3.5 px-6 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-sm transition-all text-center"
+                className="w-full py-3 px-6 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900 font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 text-center"
               >
-                معاينة صفحة المتجر
+                <span>معاينة صفحة المتجر</span>
               </Link>
             </div>
           </div>

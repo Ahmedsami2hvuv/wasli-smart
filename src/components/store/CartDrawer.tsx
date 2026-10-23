@@ -2,18 +2,25 @@
 
 import React, { useState } from 'react';
 import { 
+  ShoppingBag, 
   X, 
   Trash2, 
   Plus, 
   Minus, 
-  ShoppingBag, 
   ArrowLeft, 
   CheckCircle2, 
   MapPin, 
+  Clock, 
   ShieldCheck 
 } from 'lucide-react';
-import { CartItem } from '@/types';
+import { Product } from '@/types';
 import { formatIqd } from '@/lib/utils';
+
+export interface CartItem {
+  product: Product;
+  quantity: number;
+  storeCode?: string;
+}
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -63,9 +70,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           storeIdentifier: items[0]?.storeCode || 'platform',
           customerName: customerName.trim(),
           customerPhone: customerPhone.trim(),
-          governorate: 'البصرة',
-          city: selectedLocation || 'أبي الخصيب',
-          address: selectedLocation || 'البصرة',
+          governorate: 'العراق',
+          city: selectedLocation || 'العراق',
+          address: selectedLocation || 'العراق',
           deliveryNotes: orderNotes.trim(),
           items: items.map(i => ({
             productId: i.product.id,
@@ -79,11 +86,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       if (data.success && data.order) {
         setCreatedOrderNumber(data.order.orderNumber);
         setOrderPlaced(true);
+        onClearCart();
       } else {
-        setOrderError(data.message || 'حدث خطأ أثناء تسجيل الطلب');
+        setOrderError(data.message || 'حدث خطأ أثناء حفظ الطلب، يرجى المحاولة ثانية');
       }
-    } catch (err: any) {
-      setOrderError('تعذر الاتصال بالخادم، يرجى المحاولة ثانية');
+    } catch (err) {
+      setOrderError('تعذر الاتصال بالخادم، يرجى المحاولة مرة أخرى');
     } finally {
       setIsSubmitting(false);
     }
@@ -91,20 +99,22 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   const handleResetAfterSuccess = () => {
     setOrderPlaced(false);
-    onClearCart();
+    setCustomerName('');
+    setCustomerPhone('');
+    setOrderNotes('');
     onClose();
   };
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
       {/* خلفية معتمة */}
-      <div 
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+      <div
+        className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
         onClick={onClose}
       />
 
-      <div className="fixed inset-y-0 left-0 max-w-full flex">
-        <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col">
+      <div className="fixed inset-y-0 left-0 max-w-full flex pl-10">
+        <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col border-r border-slate-200 animate-in slide-in-from-left duration-300">
           
           {/* رأس السلة */}
           <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
@@ -176,7 +186,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </div>
                 <h4 className="font-bold text-base text-slate-800">سلتك فارغة حالياً</h4>
                 <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                  تصفح متاجر أبي الخصيب والبصرة واختر أشهى المأكولات والمنتجات لإضافتها للسلة.
+                  تصفح المتاجر العراقية واختر أفضل المنتجات لإضافتها للسلة.
                 </p>
                 <button
                   onClick={onClose}
@@ -262,7 +272,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     <label className="block text-[11px] font-medium text-slate-600 mb-1">ملاحظات إضافية للمندوب أو المتجر</label>
                     <textarea
                       rows={2}
-                      placeholder="مثال: قرب مسجد التقوى، خبز حار، تمر خفيف الحلاوة..."
+                      placeholder="مثال: قرب المسجد، الشارع التجاري، الطابق الثاني..."
                       value={orderNotes}
                       onChange={(e) => setOrderNotes(e.target.value)}
                       className="w-full p-2.5 rounded-xl border border-slate-200 text-xs focus:border-skybrand-500 focus:ring-1 focus:ring-skybrand-500 outline-none resize-none"

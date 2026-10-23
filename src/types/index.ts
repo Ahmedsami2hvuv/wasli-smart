@@ -9,6 +9,7 @@ export type CategoryId =
   | 'beauty'
   | 'home'
   | 'perfumes' 
+  | 'iraq-special'
   | 'abi-alkhaseeb-special';
 
 export interface Category {
@@ -33,7 +34,7 @@ export interface Store {
   categoryId?: CategoryId;
   categoryName?: string;
   location?: string;
-  district?: string; // مثل "أبي الخصيب"، "الجبيلة"، "العشار"
+  district?: string; // مثل "المنصور"، "الكرادة"، "العشار"
   city?: string;
   phone?: string;
   isAbiAlkhaseeb?: boolean;
@@ -72,6 +73,7 @@ export interface ProductImage {
 export interface Product {
   id: string;
   storeId?: string;
+  storeCode?: string;
   storeName?: string;
   name: string;
   slug?: string;

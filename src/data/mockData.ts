@@ -2,16 +2,16 @@ import { Category, Store, Product } from '@/types';
 
 export const CATEGORIES: Category[] = [
   {
-    id: 'abi-alkhaseeb-special',
-    name: 'متاجر أبي الخصيب',
-    description: 'تمور فاخرة، منتجات نخل البصرة، والمتاجر المحلية العريقة',
+    id: 'iraq-special',
+    name: 'منتجات عراقية مميزة',
+    description: 'تمور فاخرة، منتجات محلية، ومتاجر عراقية عريقة ومختارة',
     iconName: 'Palmtree',
-    badge: 'منطقة خاصة',
+    badge: 'مختارة',
   },
   {
     id: 'restaurants',
     name: 'مطاعم ومأكولات',
-    description: 'مشاوي، مأكولات بحرية بصرية، وجبات سريعة وشعبية',
+    description: 'مشاوي، مأكولات بحرية، وجبات سريعة وشعبية من أفضل مطاعم العراق',
     iconName: 'Utensils',
   },
   {
@@ -23,13 +23,13 @@ export const CATEGORIES: Category[] = [
   {
     id: 'sweets',
     name: 'حلويات ومعجنات',
-    description: 'كليجة عراقية، بقلاوة، حلاوة نهر خوز وحلويات شرقية',
+    description: 'كليجة عراقية، بقلاوة، وحلويات شرقية وغربية طازجة',
     iconName: 'Cake',
   },
   {
     id: 'coffee',
     name: 'مقاهي ومشروبات',
-    description: 'قهوة مختصة، شاي عراقي مخدر، ومشروبات باردة',
+    description: 'قهوة مختصة، شاي عراقي مخدر، ومشروبات باردة ومنعشة',
     iconName: 'Coffee',
   },
   {
@@ -53,7 +53,7 @@ export const PRODUCTS: Product[] = [];
 export const FEATURES = [
   {
     title: 'توصيل محلي فائق السرعة',
-    description: 'مناديبنا في أبي الخصيب وعموم البصرة يصلون لباب بيتك بأقصر وقت ممكن وبأعلى عناية بطلباتك.',
+    description: 'مناديبنا في عموم محافظات العراق يصلون لباب بيتك بأقصر وقت ممكن وبأعلى عناية بطلباتك.',
     iconName: 'Zap',
   },
   {

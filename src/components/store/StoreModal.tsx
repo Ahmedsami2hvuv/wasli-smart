@@ -3,36 +3,37 @@
 import React from 'react';
 import { 
   X, 
-  Star, 
   MapPin, 
   Clock, 
-  ShieldCheck, 
-  Palmtree, 
-  Store as StoreIcon,
-  ShoppingBag
+  Truck, 
+  Star, 
+  Phone, 
+  ShoppingBag, 
+  Plus, 
+  Sparkles,
+  Info 
 } from 'lucide-react';
 import { Store, Product } from '@/types';
-import { ProductCard } from '@/components/home/ProductCard';
 import { formatIqd } from '@/lib/utils';
 
 interface StoreModalProps {
   store: Store | null;
+  isOpen: boolean;
   onClose: () => void;
   products: Product[];
   onAddToCart: (product: Product) => void;
-  cartProductIds: string[];
 }
 
 export const StoreModal: React.FC<StoreModalProps> = ({
   store,
+  isOpen,
   onClose,
   products,
   onAddToCart,
-  cartProductIds,
 }) => {
-  if (!store) return null;
+  if (!isOpen || !store) return null;
 
-  const storeProducts = products.filter(p => p.storeId === store.id);
+  const storeProducts = products.filter(p => p.storeId === store.id || p.storeCode === store.code);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -67,16 +68,14 @@ export const StoreModal: React.FC<StoreModalProps> = ({
                 <span className="px-3 py-1 rounded-full bg-skybrand-500/90 text-white text-xs font-bold">
                   {store.categoryName}
                 </span>
-                {store.isAbiAlkhaseeb && (
-                  <span className="px-3 py-1 rounded-full bg-emerald-600/95 text-white text-xs font-bold flex items-center gap-1">
-                    <Palmtree className="w-3.5 h-3.5" />
-                    متجر في أبي الخصيب
-                  </span>
-                )}
+                <span className="px-3 py-1 rounded-full bg-emerald-600/95 text-white text-xs font-bold flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  متجر عراقي معتمد
+                </span>
               </div>
 
               <h2 className="text-2xl sm:text-3xl font-black">{store.name}</h2>
-              <p className="text-xs sm:text-sm text-slate-200 max-w-xl">{store.tagline}</p>
+              <p className="text-xs sm:text-sm text-slate-200 max-w-xl">{store.tagline || store.description}</p>
             </div>
           </div>
 
@@ -85,44 +84,70 @@ export const StoreModal: React.FC<StoreModalProps> = ({
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-1.5 font-bold text-slate-800">
                 <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-                <span>{store.rating} ({store.reviewsCount} تقييم)</span>
+                <span>{store.rating || 4.9} ({store.reviewsCount || 20} تقييم)</span>
               </div>
               <div className="flex items-center gap-1.5 text-slate-600">
                 <Clock className="w-4 h-4 text-skybrand-600" />
-                <span>التوصيل: {store.deliveryTimeMinutes}</span>
+                <span>التوصيل: {store.deliveryTimeMinutes || '30-45 دقيقة'}</span>
               </div>
-              <div className="text-slate-600">
-                أجرة التوصيل: <span className="font-bold text-slate-900">{formatIqd(store.deliveryFeeIqd || 4000)}</span>
+              <div className="flex items-center gap-1.5 text-slate-600">
+                <Truck className="w-4 h-4 text-brand-600" />
+                <span>أجور التوصيل: {formatIqd(store.deliveryFeeIqd || 4000)}</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 text-slate-600">
-              <MapPin className="w-4 h-4 text-red-500" />
-              <span>{store.location}</span>
+            <div className="flex items-center gap-1.5 text-slate-500">
+              <MapPin className="w-4 h-4 text-slate-400" />
+              <span>{store.location || 'العراق'}</span>
             </div>
           </div>
 
           {/* قائمة منتجات هذا المتجر */}
-          <div className="p-4 sm:p-6 max-h-[50vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-base text-slate-900">قائمة منتجات المتجر</h3>
-              <span className="text-xs text-slate-500">{storeProducts.length} متوفر حالياً</span>
+          <div className="p-4 sm:p-8 max-h-[55vh] overflow-y-auto space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="font-black text-lg text-slate-900">منتجات المتجر المتوفرة</h3>
+              <span className="text-xs text-slate-500 font-medium">{storeProducts.length} منتج</span>
             </div>
 
             {storeProducts.length === 0 ? (
-              <div className="py-12 text-center text-slate-400">
-                <ShoppingBag className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                <p className="text-xs">يتم تحديث قائمة المنتجات لهذا المتجر حالياً</p>
+              <div className="py-12 text-center space-y-3">
+                <ShoppingBag className="w-12 h-12 text-slate-300 mx-auto" />
+                <p className="text-sm text-slate-500">جاري تحديث قائمة منتجات هذا المتجر حالياً.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {storeProducts.map((product) => (
-                  <ProductCard
+                  <div
                     key={product.id}
-                    product={product}
-                    onAddToCart={onAddToCart}
-                    isInCart={cartProductIds.includes(product.id)}
-                  />
+                    className="p-3 rounded-2xl border border-slate-200 hover:border-brand-300 transition-all bg-white flex flex-col justify-between space-y-3 group"
+                  >
+                    <div className="relative aspect-video rounded-xl overflow-hidden bg-slate-100">
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
+
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-900 line-clamp-1">{product.name}</h4>
+                      <p className="text-xs text-slate-500 line-clamp-2 mt-1">{product.description}</p>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                      <span className="font-black text-sm text-brand-700">
+                        {formatIqd(product.priceIqd)}
+                      </span>
+
+                      <button
+                        onClick={() => onAddToCart(product)}
+                        className="p-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white transition-colors flex items-center gap-1 text-xs font-bold"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>إضافة</span>
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}

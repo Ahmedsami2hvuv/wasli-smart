@@ -88,7 +88,7 @@ export const CategorySlider: React.FC<CategorySliderProps> = ({
           {/* قائمة التصنيفات */}
           {CATEGORIES.map((cat) => {
             const isSelected = selectedCategory === cat.id;
-            const isSpecial = cat.id === 'abi-alkhaseeb-special';
+            const isSpecial = cat.id === 'iraq-special' || cat.id === 'abi-alkhaseeb-special';
 
             return (
               <button
@@ -102,7 +102,7 @@ export const CategorySlider: React.FC<CategorySliderProps> = ({
                     : 'bg-slate-50 hover:bg-slate-100/80 text-slate-700 border-slate-200/80 hover:border-slate-300'
                 }`}
               >
-                {/* شارة التميز لأبي الخصيب */}
+                {/* شارة التميز */}
                 {isSpecial && !isSelected && (
                   <span className="absolute -top-2 px-1.5 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-black">
                     مميز

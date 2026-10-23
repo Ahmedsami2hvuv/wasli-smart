@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { 
   Store, 
   Share2, 
@@ -15,13 +15,18 @@ import {
   Plus,
   Clock,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  LogOut,
+  Sparkles,
+  Link as LinkIcon,
+  ArrowLeft
 } from 'lucide-react';
 import Link from 'next/link';
 import { Store as StoreType, Order } from '@/types';
 
 function MerchantDashboardContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const urlStoreCode = searchParams.get('storeCode');
 
   const [currentStore, setCurrentStore] = useState<StoreType | null>(null);
@@ -29,17 +34,23 @@ function MerchantDashboardContent() {
   const [loading, setLoading] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  // حالة تسجيل الدخول برابط المتجر إذا لم يتم تحديد متجر
+  const [storeInput, setStoreInput] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
   useEffect(() => {
     async function initMerchant() {
       try {
         setLoading(true);
-        // التحقق من المتجر من التخزين المحلي أو الرابط
         let code = urlStoreCode;
         if (!code && typeof window !== 'undefined') {
           const saved = localStorage.getItem('wasli_current_store');
           if (saved) {
-            const parsed = JSON.parse(saved);
-            code = parsed.code;
+            try {
+              const parsed = JSON.parse(saved);
+              code = parsed.code;
+            } catch (e) {}
           }
         }
 
@@ -53,19 +64,19 @@ function MerchantDashboardContent() {
           );
         }
 
-        // إذا لم يعثر على متجر مخصص، نأخذ أول متجر نشط كتجربة للمسوّق
-        if (!found && storeData.stores && storeData.stores.length > 0) {
-          found = storeData.stores[0];
-        }
-
         if (found) {
           setCurrentStore(found);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('wasli_current_store', JSON.stringify(found));
+          }
           // جلب طلبات هذا المتجر
           const ordersRes = await fetch(`/api/orders?storeId=${found.id}`);
           const ordersData = await ordersRes.json();
           if (ordersData.success && ordersData.orders) {
             setOrders(ordersData.orders);
           }
+        } else {
+          setCurrentStore(null);
         }
       } catch (err) {
         console.error('خطأ في تحميل بيانات لوحة التاجر:', err);
@@ -76,6 +87,83 @@ function MerchantDashboardContent() {
 
     initMerchant();
   }, [urlStoreCode]);
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+
+    const rawInput = storeInput.trim();
+    if (!rawInput) {
+      setLoginError('يرجى إدخال رابط متجرك أو رمزه للدخول');
+      return;
+    }
+
+    let extractedCode = rawInput;
+    if (extractedCode.includes('/s/')) {
+      const parts = extractedCode.split('/s/');
+      extractedCode = parts[1].split('/')[0].split('?')[0].trim();
+    } else if (extractedCode.startsWith('http://') || extractedCode.startsWith('https://')) {
+      const parts = extractedCode.split('/');
+      extractedCode = parts[parts.length - 1].split('?')[0].trim();
+    }
+
+    setIsLoggingIn(true);
+
+    try {
+      const res = await fetch('/api/stores');
+      const data = await res.json();
+
+      if (data && data.stores) {
+        const queryLower = extractedCode.toLowerCase();
+        const rawLower = rawInput.toLowerCase();
+
+        const found = data.stores.find((s: any) => {
+          const sCode = (s.code || '').toLowerCase();
+          const sSlug = (s.slug || '').toLowerCase();
+          const sPhone = (s.phone || '').trim();
+          const sName = (s.name || '').toLowerCase();
+
+          return (
+            sCode === queryLower ||
+            sSlug === queryLower ||
+            sCode === rawLower ||
+            (sPhone && sPhone === rawInput) ||
+            sName === rawLower
+          );
+        });
+
+        if (found) {
+          setCurrentStore(found);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('wasli_current_store', JSON.stringify(found));
+          }
+          // جلب الطلبات
+          const ordersRes = await fetch(`/api/orders?storeId=${found.id}`);
+          const ordersData = await ordersRes.json();
+          if (ordersData.success && ordersData.orders) {
+            setOrders(ordersData.orders);
+          }
+          return;
+        }
+      }
+
+      setLoginError('لم يتم العثور على متجر مطابق لهذا الرابط. يرجى التأكد من الرابط أو إنشاء متجر جديد مجاناً.');
+    } catch (err) {
+      setLoginError('حدث خطأ أثناء محاولة الدخول، يرجى المحاولة مرة أخرى.');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('wasli_current_store');
+    }
+    setCurrentStore(null);
+    setOrders([]);
+    setStoreInput('');
+    router.push('/merchant');
+  };
 
   const storeUrl = typeof window !== 'undefined' && currentStore 
     ? `${window.location.origin}/s/${currentStore.code}`
@@ -120,8 +208,93 @@ function MerchantDashboardContent() {
     );
   }
 
+  // إذا لم يكن هناك متجر مسجل، نظهر شاشة طلب رابط المتجر
+  if (!currentStore) {
+    return (
+      <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center" dir="rtl">
+        <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-10 shadow-xl border border-slate-200/80">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-gradient-to-tr from-brand-700 to-skybrand-500 rounded-2xl flex items-center justify-center text-white mx-auto shadow-md shadow-brand-700/20 mb-4">
+              <Store className="w-8 h-8" />
+            </div>
+            <h1 className="text-2xl font-black text-slate-900 mb-2">
+              دخول حساب التاجر
+            </h1>
+            <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
+              يرجى إدخال رابط متجرك الإلكتروني أو رمزه لفتح لوحة التحكم الخاصة بك ومتابعة أرباحك
+            </p>
+          </div>
+
+          <form onSubmit={handleLoginSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-2">
+                رابط متجرك أو رمز المتجر:
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={storeInput}
+                  onChange={(e) => {
+                    setStoreInput(e.target.value);
+                    if (loginError) setLoginError('');
+                  }}
+                  placeholder="مثال: wasli-smart.vercel.app/s/your-store أو الرمز"
+                  className="w-full pl-4 pr-10 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm outline-none transition-all placeholder:text-slate-400 text-left dir-ltr"
+                />
+                <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
+                  <LinkIcon className="w-4 h-4" />
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1.5 leading-normal">
+                يمكنك لصق رابط متجرك كاملاً أو كتابة رمز المتجر الخاص بك.
+              </p>
+            </div>
+
+            {loginError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{loginError}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className="w-full py-3.5 px-4 rounded-xl bg-brand-700 hover:bg-brand-800 active:bg-brand-900 text-white font-black text-sm shadow-md shadow-brand-700/20 transition-all flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
+            >
+              {isLoggingIn ? (
+                <span>جاري التحقق والدخول...</span>
+              ) : (
+                <>
+                  <span>دخول لحسابي</span>
+                  <ArrowLeft className="w-4 h-4" />
+                </>
+              )}
+            </button>
+
+            <div className="pt-4 border-t border-slate-100 text-center space-y-3">
+              <p className="text-xs text-slate-500">ليس لديك متجر بعد؟</p>
+              <Link
+                href="/register-store"
+                className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-colors"
+              >
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                <span>أنشئ متجرك مجاناً في دقيقة واحدة</span>
+              </Link>
+              <div>
+                <Link href="/" className="text-xs text-slate-400 hover:text-slate-600">
+                  العودة للصفحة الرئيسية
+                </Link>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8" dir="rtl">
       <div className="max-w-6xl mx-auto space-y-8">
         {/* الترويسة ومعلومات المتجر */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md flex flex-col sm:flex-row items-center justify-between gap-6">
@@ -144,7 +317,7 @@ function MerchantDashboardContent() {
             </div>
           </div>
 
-          {/* أزرار المشاركة والمعاينة */}
+          {/* أزرار المشاركة والمعاينة والخروج */}
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={handleNativeShare}
@@ -168,6 +341,14 @@ function MerchantDashboardContent() {
               <ExternalLink className="w-4 h-4 text-slate-500" />
               <span>فتح المتجر</span>
             </Link>
+            <button
+              onClick={handleLogout}
+              className="py-2.5 px-3 bg-red-50 hover:bg-red-100 text-red-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+              title="تسجيل الخروج أو الدخول بمتجر آخر"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>تبديل الحساب</span>
+            </button>
           </div>
         </div>
 
@@ -179,7 +360,7 @@ function MerchantDashboardContent() {
             </div>
             <div>
               <div className="text-xs text-skybrand-200 font-medium">رابط متجرك الحصري للمشاركة على واتساب ومنصات التواصل:</div>
-              <div className="font-mono text-sm font-bold text-white break-all select-all mt-0.5">
+              <div className="font-mono text-sm font-bold text-white break-all select-all mt-0.5" dir="ltr">
                 {storeUrl}
               </div>
             </div>
@@ -315,7 +496,6 @@ function MerchantDashboardContent() {
     </div>
   );
 }
-
 
 export default function MerchantDashboardPage() {
   return (

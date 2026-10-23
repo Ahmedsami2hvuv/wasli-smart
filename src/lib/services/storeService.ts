@@ -38,7 +38,7 @@ export async function getAllStores(): Promise<Store[]> {
           description: item.description,
           logoUrl: item.logo_url || '/images/store-default.png',
           bannerUrl: item.banner_url,
-          city: item.city || 'البصرة',
+          city: item.city || 'العراق',
           phone: item.phone,
           status: item.status,
           totalSales: Number(item.total_sales || 0),
@@ -50,10 +50,10 @@ export async function getAllStores(): Promise<Store[]> {
           deliveryFeeIqd: 4000,
           deliveryTimeMinutes: '30-45 دقيقة',
           isOpen: true,
-          isAbiAlkhaseeb: item.city?.includes('أبي الخصيب') || false,
+          isAbiAlkhaseeb: false,
           image: item.logo_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80',
-          location: item.city || 'البصرة',
-          district: item.city || 'المركز',
+          location: item.city || 'العراق',
+          district: item.city || 'العراق',
         }));
       }
     } catch (e) {
@@ -104,7 +104,7 @@ export async function createNewStore(params: {
     slug: slug,
     code: code,
     description: params.description || `متجر ${params.name} المعتمد على منصة وصلي للتوصيل السريع`,
-    city: params.city || 'البصرة',
+    city: params.city || 'العراق',
     phone: params.phone,
     status: 'active',
     totalSales: 0,
@@ -116,11 +116,11 @@ export async function createNewStore(params: {
     deliveryFeeIqd: 4000,
     deliveryTimeMinutes: '30-45 دقيقة',
     isOpen: true,
-    isAbiAlkhaseeb: params.city?.includes('أبي الخصيب') || false,
+    isAbiAlkhaseeb: false,
     image: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80',
     logoUrl: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80',
-    location: params.city || 'البصرة',
-    district: params.city || 'البصرة',
+    location: params.city || 'العراق',
+    district: params.city || 'العراق',
     createdAt: new Date().toISOString(),
   };
 

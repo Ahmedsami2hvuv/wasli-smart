@@ -34,12 +34,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [locationMenuOpen, setLocationMenuOpen] = useState(false);
 
   const locations = [
-    'أبي الخصيب - المركز',
-    'أبي الخصيب - باب سليمان',
-    'أبي الخصيب - نهر خوز',
-    'البصرة - العشار',
-    'البصرة - الجبيلة',
-    'البصرة - الطويسة',
+    'بغداد - الكرخ والرصافة',
+    'البصرة - عموم المحافظة',
+    'أربيل - كردستان',
+    'النجف وكربلاء',
+    'نينوى والموصل',
+    'كافة محافظات العراق',
   ];
 
   return (
@@ -48,7 +48,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="bg-gradient-to-r from-brand-800 via-brand-700 to-skybrand-600 text-white text-xs py-1.5 px-4 text-center font-medium shadow-sm">
         <div className="max-w-7xl mx-auto flex items-center justify-center gap-2">
           <Sparkles className="w-3.5 h-3.5 text-accent-400 shrink-0" />
-          <span>أهلاً بكم في منصة وصلي | خدمة التوصيل الأسرع لقضاء أبي الخصيب وعموم البصرة</span>
+          <span>أهلاً بكم في منصة وصلي | خدمة التوصيل الأسرع والتجارة الذكية في عموم العراق</span>
         </div>
       </div>
 
@@ -116,7 +116,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="relative w-full">
               <input
                 type="text"
-                placeholder="ابحث عن متجر، منتج، كليجة، تمر برحي..."
+                placeholder="ابحث عن متجر، منتج، كليجة، عطور..."
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
                 className="w-full h-11 pr-11 pl-4 rounded-xl bg-slate-100/90 hover:bg-slate-100 focus:bg-white text-slate-800 placeholder-slate-400 text-sm border border-slate-200/80 focus:border-skybrand-500 focus:ring-4 focus:ring-skybrand-500/15 outline-none transition-all duration-200"
@@ -191,7 +191,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="relative w-full">
             <input
               type="text"
-              placeholder="ابحث عن متجر، منتج، كليجة، تمر برحي..."
+              placeholder="ابحث عن متجر، منتج، كليجة، عطور..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               className="w-full h-10 pr-10 pl-4 rounded-xl bg-slate-100 text-slate-800 placeholder-slate-400 text-sm border border-slate-200 focus:border-skybrand-500 focus:ring-2 focus:ring-skybrand-500/20 outline-none"
@@ -234,11 +234,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               لوحة إدارة المنصة
             </a>
             <a
-              href="#abi-alkhaseeb"
+              href="#featured-stores"
               onClick={() => setMobileMenuOpen(false)}
               className="block px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100"
             >
-              متاجر قضاء أبي الخصيب
+              المتاجر العراقية المميزة
             </a>
             <a
               href="#categories"
@@ -253,13 +253,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="block px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100"
             >
               جميع المتاجر المحلية
-            </a>
-            <a
-              href="#products"
-              onClick={() => setMobileMenuOpen(false)}
-              className="block px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100"
-            >
-              المنتجات الأكثر طلباً
             </a>
             <a
               href="#features"

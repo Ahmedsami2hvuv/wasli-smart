@@ -24,8 +24,8 @@ function CheckoutContent() {
   const [cartData, setCartData] = useState<any>(null);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [governorate, setGovernorate] = useState('البصرة');
-  const [city, setCity] = useState('أبي الخصيب');
+  const [governorate, setGovernorate] = useState('بغداد');
+  const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -59,8 +59,8 @@ function CheckoutContent() {
       return;
     }
 
-    if (!customerName.trim() || !customerPhone.trim() || !address.trim()) {
-      setErrorMsg('يرجى إكمال الاسم ورقم الهاتف والعنوان بالتفصيل');
+    if (!customerName.trim() || !customerPhone.trim() || !address.trim() || !city.trim()) {
+      setErrorMsg('يرجى إكمال الاسم ورقم الهاتف والمنطقة والعنوان بالتفصيل');
       return;
     }
 
@@ -77,7 +77,7 @@ function CheckoutContent() {
           customerName: customerName.trim(),
           customerPhone: customerPhone.trim(),
           governorate,
-          city,
+          city: city.trim(),
           address: address.trim(),
           deliveryNotes: deliveryNotes.trim(),
           items: items.map((i: any) => ({
@@ -120,7 +120,7 @@ function CheckoutContent() {
           إتمام الطلب وتأكيد التوصيل
         </h1>
         <p className="text-slate-600 text-sm mb-8">
-          أدخل بياناتك لتوصيل الطلب مباشرة إلى باب منزلك مع الدفع نقداً عند الاستلام.
+          أدخل بياناتك لتوصيل الطلب مباشرة إلى باب منزلك مع الدفع نقداً عند الاستلام في أي مكان بالعراق.
         </p>
 
         {errorMsg && (
@@ -182,14 +182,24 @@ function CheckoutContent() {
                     onChange={(e) => setGovernorate(e.target.value)}
                     className="w-full px-3 py-3 rounded-xl border border-slate-300 text-sm text-slate-900 outline-none bg-white"
                   >
-                    <option value="البصرة">البصرة</option>
                     <option value="بغداد">بغداد</option>
-                    <option value="ميسان">ميسان</option>
-                    <option value="ذي قار">ذي قار</option>
+                    <option value="البصرة">البصرة</option>
+                    <option value="أربيل">أربيل</option>
                     <option value="النجف">النجف</option>
                     <option value="كربلاء">كربلاء</option>
+                    <option value="نينوى">نينوى</option>
+                    <option value="كركوك">كركوك</option>
                     <option value="بابل">بابل</option>
-                    <option value="أخرى">محافظة أخرى</option>
+                    <option value="الأنبار">الأنبار</option>
+                    <option value="ذي قار">ذي قار</option>
+                    <option value="ميسان">ميسان</option>
+                    <option value="المثنى">المثنى</option>
+                    <option value="القادسية">القادسية (الديوانية)</option>
+                    <option value="واسط">واسط</option>
+                    <option value="ديالى">ديالى</option>
+                    <option value="صلاح الدين">صلاح الدين</option>
+                    <option value="السليمانية">السليمانية</option>
+                    <option value="دهوك">دهوك</option>
                   </select>
                 </div>
 
@@ -200,7 +210,7 @@ function CheckoutContent() {
                   <input
                     type="text"
                     required
-                    placeholder="مثال: أبي الخصيب - نهر خوز"
+                    placeholder="مثال: المنصور، أو الكرادة، أو العشار"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm text-slate-900 outline-none focus:border-brand-600"
@@ -215,7 +225,7 @@ function CheckoutContent() {
                 <input
                   type="text"
                   required
-                  placeholder="مثال: قرب جامع باب سليمان، الشارع العام، دار رقم..."
+                  placeholder="مثال: قرب ساحة النسور / الشارع العام، دار رقم..."
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm text-slate-900 outline-none focus:border-brand-600"

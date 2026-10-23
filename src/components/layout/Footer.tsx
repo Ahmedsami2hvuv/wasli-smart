@@ -22,7 +22,7 @@ export const Footer: React.FC = () => {
             </div>
 
             <p className="text-sm text-slate-400 leading-relaxed max-w-sm">
-              «وصلي» منصة عراقية صُممت لتقريب المسافات وربط الزبائن بأفضل المتاجر المحلية والمطاعم وبساتين قضاء أبي الخصيب ومحافظة البصرة، لتجربة شراء سهلة وسريعة وموثوقة.
+              «وصلي» منصة عراقية صُممت لتقريب المسافات وربط الزبائن بأفضل المتاجر المحلية والمطاعم والمنتجات في عموم العراق، لتجربة شراء سهلة وسريعة وموثوقة.
             </p>
 
             <div className="flex items-center gap-3 pt-2">
@@ -42,13 +42,13 @@ export const Footer: React.FC = () => {
             <h4 className="text-white text-sm font-bold tracking-wide uppercase">أقسام التسوق</h4>
             <ul className="space-y-2 text-xs">
               <li>
-                <a href="#abi-alkhaseeb" className="hover:text-skybrand-400 transition-colors flex items-center justify-between">
-                  <span>متاجر أبي الخصيب</span>
-                  <span className="text-[10px] bg-brand-900/80 text-skybrand-300 px-1.5 py-0.5 rounded">خاص</span>
+                <a href="#stores" className="hover:text-skybrand-400 transition-colors flex items-center justify-between">
+                  <span>المتاجر الأكثر طلباً</span>
+                  <span className="text-[10px] bg-brand-900/80 text-skybrand-300 px-1.5 py-0.5 rounded">مميز</span>
                 </a>
               </li>
               <li>
-                <a href="#stores" className="hover:text-skybrand-400 transition-colors">مطاعم ومأكولات بحرية</a>
+                <a href="#stores" className="hover:text-skybrand-400 transition-colors">مطاعم ومأكولات شرقية</a>
               </li>
               <li>
                 <a href="#stores" className="hover:text-skybrand-400 transition-colors">حلويات وكليجة عراقية</a>
@@ -71,23 +71,23 @@ export const Footer: React.FC = () => {
             <ul className="space-y-2 text-xs text-slate-400">
               <li className="flex items-center gap-1.5 text-slate-300">
                 <MapPin className="w-3.5 h-3.5 text-skybrand-400 shrink-0" />
-                <span>قضاء أبي الخصيب (المركز ونهر خوز)</span>
+                <span>بغداد (الرصافة والكرخ)</span>
               </li>
               <li className="flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                <span>منطقة باب سليمان ومحيلة</span>
+                <span>البصرة وعموم أحيائها</span>
               </li>
               <li className="flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                <span>البصرة - منطقة العشار</span>
+                <span>أربيل وإقليم كردستان</span>
               </li>
               <li className="flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                <span>البصرة - الجبيلة والبراضعية</span>
+                <span>النجف الأشرف وكربلاء المقدسة</span>
               </li>
               <li className="flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                <span>طريق السراجي ومناطق الكورنيش</span>
+                <span>كافة محافظات العراق (18 محافظة)</span>
               </li>
             </ul>
           </div>
@@ -96,26 +96,29 @@ export const Footer: React.FC = () => {
           <div className="space-y-3">
             <h4 className="text-white text-sm font-bold tracking-wide uppercase">أصحاب المتاجر</h4>
             <p className="text-xs text-slate-400 leading-relaxed">
-              هل تمتلك متجراً، مطعماً، أو بستان تمور في أبي الخصيب أو البصرة؟ انضم لعائلة «وصلي» وزد مبيعاتك اليوم.
+              هل تمتلك متجراً، مطعماً، أو منتجات مميزة في العراق؟ انضم لعائلة «وصلي» وزد مبيعاتك وأرباحك اليوم.
             </p>
-            <button className="w-full mt-2 px-3 py-2.5 rounded-xl bg-gradient-to-r from-skybrand-600 to-brand-600 hover:from-skybrand-500 hover:to-brand-500 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md">
-              <span>تسجيل متجرك الآن</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="pt-2">
+              <a
+                href="/register-store"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-accent-400 hover:text-accent-300 transition-colors group"
+              >
+                <span>سجل متجرك الآن مجاناً</span>
+                <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              </a>
+            </div>
           </div>
 
         </div>
 
-        {/* الشريط السفلي وحقوق الملكية */}
+        {/* حقوق النشر والاعتزاز بالهوية */}
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-          <div className="flex items-center gap-1">
-            <span>جميع الحقوق محفوظة لمنصة «وصلي» العراقية &copy; {new Date().getFullYear()}</span>
+          <div className="flex items-center gap-1.5">
+            <span>صُنع بفخر لأبناء</span>
+            <span className="text-slate-300 font-bold">العراق</span>
           </div>
 
-          <div className="flex items-center gap-1.5 text-slate-400">
-            <span>صُنع بعناية وفخر لخدمة أهلنا في البصرة والعراق</span>
-            <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500 shrink-0" />
-          </div>
+          <p>© {new Date().getFullYear()} منصة وصلي (Wasli). جميع الحقوق محفوظة.</p>
         </div>
       </div>
     </footer>

@@ -202,11 +202,9 @@ export default function PublicStorePage() {
                 <span className="bg-skybrand-500/20 text-skybrand-200 text-xs px-2.5 py-0.5 rounded-full font-medium border border-skybrand-400/30">
                   متجر معتمد على وصلي
                 </span>
-                {store?.isAbiAlkhaseeb && (
-                  <span className="bg-accent-500/20 text-accent-300 text-xs px-2.5 py-0.5 rounded-full font-semibold border border-accent-400/30">
-                    أبي الخصيب والبصرة
-                  </span>
-                )}
+                <span className="bg-emerald-500/20 text-emerald-300 text-xs px-2.5 py-0.5 rounded-full font-semibold border border-emerald-400/30">
+                  توصيل لكافة محافظات العراق
+                </span>
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-black mb-2 text-white">
@@ -220,7 +218,7 @@ export default function PublicStorePage() {
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 text-xs text-slate-300">
                 <div className="flex items-center gap-1.5">
                   <MapPin className="w-4 h-4 text-skybrand-400" />
-                  <span>{store?.city || 'البصرة - أبي الخصيب'}</span>
+                  <span>{store?.city || 'توصيل لجميع محافظات العراق'}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Clock className="w-4 h-4 text-accent-400" />

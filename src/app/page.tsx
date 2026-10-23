@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import MerchantLoginModal from '@/components/merchant/MerchantLoginModal';
 import { 
   Store, 
   Sparkles, 
@@ -34,6 +35,9 @@ export default function HomePage() {
   
   // حالة الأسئلة الشائعة
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  // حالة نافذة تسجيل دخول التاجر
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
   // حساب الأرباح
   const unitProfit = Math.max(0, sellingPrice - wholesaleCost);
@@ -103,12 +107,13 @@ export default function HomePage() {
 
           {/* أزرار الإجراء */}
           <div className="flex items-center gap-3">
-            <Link
-              href="/merchant"
-              className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 transition-colors"
+            <button
+              type="button"
+              onClick={() => setIsLoginModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 transition-colors cursor-pointer"
             >
               <span>دخول التاجر</span>
-            </Link>
+            </button>
 
             <Link
               href="/register-store"
@@ -596,12 +601,13 @@ export default function HomePage() {
               <ArrowLeft className="w-5 h-5 text-brand-700" />
             </Link>
 
-            <Link
-              href="/merchant"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-brand-900/40 hover:bg-brand-900/60 text-white font-bold text-sm border border-white/20 transition-colors"
+            <button
+              type="button"
+              onClick={() => setIsLoginModalOpen(true)}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-brand-900/40 hover:bg-brand-900/60 text-white font-bold text-sm border border-white/20 transition-colors cursor-pointer"
             >
               <span>تسجيل دخول التاجر</span>
-            </Link>
+            </button>
           </div>
 
         </div>
@@ -623,7 +629,13 @@ export default function HomePage() {
 
           <div className="flex items-center gap-6 font-semibold">
             <Link href="/register-store" className="hover:text-white transition-colors">إنشاء متجر</Link>
-            <Link href="/merchant" className="hover:text-white transition-colors">لوحة التاجر</Link>
+            <button
+              type="button"
+              onClick={() => setIsLoginModalOpen(true)}
+              className="hover:text-white transition-colors cursor-pointer"
+            >
+              لوحة التاجر
+            </button>
             <Link href="/waahhlstor" className="hover:text-white transition-colors">لوحة الإدارة</Link>
           </div>
 
@@ -633,6 +645,12 @@ export default function HomePage() {
 
         </div>
       </footer>
+
+      {/* نافذة تسجيل دخول التاجر بالرابط */}
+      <MerchantLoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+      />
 
     </div>
   );
