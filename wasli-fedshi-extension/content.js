@@ -112,91 +112,72 @@
         }
       }
 
-      // 3. تطبيق معادلة أرباح منصة وصلي بدقة تامة وبحد أقصى للربح 3,000 د.ع:
+      // 3. تطبيق معادلة أرباح منصة وصلي المعتمدة (ربح 3,000 د.ع ثابت للمدير):
       // تكلفة فدشي عليك كمدير (مثال: 67,750 د.ع)
       const costOnYou = fedshiWholesale || 67750;
 
-      // تحديد سعر جملة وصلي للمسوق:
-      // إذا كان الحد الأدنى المقترح من فدشي واضحاً (مثل 70,000 د.ع):
-      let wasliWholesale = 0;
-      if (minSuggested && minSuggested > costOnYou) {
-        wasliWholesale = minSuggested; // 70,000 د.ع
-      } else if (fedshiProfit > 0) {
-        wasliWholesale = costOnYou + fedshiProfit;
-      } else {
-        // افتراض إضافة 3,000 د.ع كربح صافي كما طلب المدير
-        wasliWholesale = costOnYou + 3000;
-      }
+      // ربحك الصافي كمدير منصة وصلي = 3,000 د.ع ثابت
+      const wasliProfit = 3000;
 
-      // ربح المنصة الصافي = سعر جملة وصلي - تكلفة فدشي عليك
-      let wasliProfit = wasliWholesale - costOnYou;
-
-      // التأكد من أن ربح المدير لا يقل عن ربح فدشي ولا يكون صفراً (إذا كان صفراً يضبط على 3,000 د.ع)
-      if (wasliProfit <= 0) {
-        wasliProfit = 3000;
-        wasliWholesale = costOnYou + 3000;
-      }
+      // سعر جملة وصلي لمسوقك = التكلفة + 3,000 د.ع (مثال: 67,750 + 3,000 = 70,750 د.ع)
+      const wasliWholesale = costOnYou + wasliProfit;
 
       // حدود بيع الزبون لصاحب المتجر (المسوق):
-      // الحد الأدنى: 80,000 د.ع (أو جملة وصلي + 10,000)
-      const wasliMinPrice = (minSuggested && minSuggested >= 70000) ? 80000 : (wasliWholesale + 10000);
+      // الحد الأدنى: 80,000 د.ع (أو 70,750 + 10,000 = 80,750 د.ع)
+      const wasliMinPrice = (minSuggested && minSuggested >= 70000) ? (wasliWholesale + 10000) : (wasliWholesale + 10000);
       // الحد الأعلى: 90,000 د.ع (المقترح في فدشي)
-      const wasliMaxPrice = maxSuggested || (wasliMinPrice + 10000);
+      const wasliMaxPrice = maxSuggested || (wasliWholesale + 20000);
 
-      // 5. استخراج اسم المنتج الحقيقي (مثل: "اوتي نورفا من ليبرونيك")
+      // 4. استخراج اسم المنتج الحقيقي بدقة (استبعاد "احصائيات المنتج")
       let title = '';
 
-      // البحث عن العنوان الرئيسي للمنتج: عنصر نصي بارز بخط كبير يسبق رقم المنتج وسعر الجملة
-      const ignoredExact = ['Fedshi', 'فدشي', 'الرئيسية', 'المتجر', 'سعر الجملة', 'رقم المنتج', 'الربح', 'اضف الى السلة', 'تحميل الصور'];
-      const ignoredSubstrings = ['الأرباح', 'دليل التاجر', 'تسجيل الخروج', 'الإعدادات', 'المحفظة', 'أبو '];
-
-      // فحص العناوين المرجحة في الصفحة
-      const titleCandidates = Array.from(document.querySelectorAll('h1, h2, h3, div, span, p')).filter(el => {
-        // التأكد من أنه عنصر ورقة (Leaf) أو لا يحوي أبناء كبار
-        if (el.children.length > 2) return false;
-        const t = (el.textContent || '').trim();
-        if (t.length < 5 || t.length > 90) return false;
-        if (ignoredExact.includes(t)) return false;
-        if (ignoredSubstrings.some(sub => t.includes(sub))) return false;
-        if (extractRealisticPrice(t) > 0) return false; // ليس سعراً
-        return true;
-      });
-
-      // اختيار العنصر ذو حجم الخط الأكبر والبارز (Font Size >= 18px أو Font Weight >= 700)
-      let bestCandidate = null;
-      let maxScore = 0;
-
-      for (const el of titleCandidates) {
-        const style = window.getComputedStyle(el);
-        const fSize = parseFloat(style.fontSize) || 14;
-        const isBold = (style.fontWeight === 'bold' || parseInt(style.fontWeight, 10) >= 600);
-        
-        let score = fSize + (isBold ? 6 : 0);
-        // أفضلية للعنصر الذي يقع في الجزء العلوي للمنتج
-        const rect = el.getBoundingClientRect();
-        if (rect.top > 50 && rect.top < 600) {
-          score += 10;
-        }
-
-        if (score > maxScore) {
-          maxScore = score;
-          bestCandidate = el;
+      // أ) من مسار التنقل (Breadcrumb) - الخيار الأكثر دقة في فدشي مثل "المتجر > اوتي نورفا من ليبرونيك"
+      const breadcrumbLinks = Array.from(document.querySelectorAll('nav a, ol li, ul li, [class*="breadcrumb"] *, div[class*="breadcrumb"]'));
+      for (let i = breadcrumbLinks.length - 1; i >= 0; i--) {
+        const t = (breadcrumbLinks[i].textContent || '').trim();
+        if (t.length > 5 && !t.includes('المتجر') && !t.includes('الرئيسية') && !t.includes('فدشي') && !t.includes('احصائيات')) {
+          title = t;
+          break;
         }
       }
 
-      if (bestCandidate) {
-        title = bestCandidate.textContent.trim();
-      }
+      // ب) فحص العناصر النصية البارزة في أعلى الصفحة مع استبعاد الاحصائيات
+      if (!title) {
+        const ignoredExact = ['Fedshi', 'فدشي', 'الرئيسية', 'المتجر', 'سعر الجملة', 'رقم المنتج', 'الربح', 'اضف الى السلة', 'تحميل الصور', 'احصائيات المنتج'];
+        const ignoredSubstrings = ['الأرباح', 'دليل التاجر', 'تسجيل الخروج', 'الإعدادات', 'المحفظة', 'أبو ', 'احصائيات', 'أداء المنتج'];
 
-      // إذا لم نجده، نجرب مسار التنقل (Breadcrumb)
-      if (!title || title === 'Fedshi') {
-        const breadcrumbLinks = Array.from(document.querySelectorAll('nav a, ol li, ul li, [class*="breadcrumb"] *'));
-        for (let i = breadcrumbLinks.length - 1; i >= 0; i--) {
-          const t = (breadcrumbLinks[i].textContent || '').trim();
-          if (t.length > 5 && !ignoredExact.includes(t) && !t.includes('الرئيسية')) {
-            title = t;
-            break;
+        const titleCandidates = Array.from(document.querySelectorAll('h1, h2, h3, div, span, p')).filter(el => {
+          if (el.children.length > 2) return false;
+          const t = (el.textContent || '').trim();
+          if (t.length < 5 || t.length > 90) return false;
+          if (ignoredExact.includes(t)) return false;
+          if (ignoredSubstrings.some(sub => t.includes(sub))) return false;
+          if (extractRealisticPrice(t) > 0) return false;
+          return true;
+        });
+
+        let bestCandidate = null;
+        let maxScore = 0;
+
+        for (const el of titleCandidates) {
+          const style = window.getComputedStyle(el);
+          const fSize = parseFloat(style.fontSize) || 14;
+          const isBold = (style.fontWeight === 'bold' || parseInt(style.fontWeight, 10) >= 600);
+          
+          let score = fSize + (isBold ? 6 : 0);
+          const rect = el.getBoundingClientRect();
+          if (rect.top > 50 && rect.top < 450) {
+            score += 15;
           }
+
+          if (score > maxScore) {
+            maxScore = score;
+            bestCandidate = el;
+          }
+        }
+
+        if (bestCandidate) {
+          title = bestCandidate.textContent.trim();
         }
       }
 
@@ -248,43 +229,51 @@
         videoUrl = videoEl.src || videoEl.getAttribute('src') || '';
       }
 
-      // 9. استخراج الوصف الترويجي والمواصفات الفنية
+      // 8. استخراج المواصفات الفنية والوصف الترويجي بدقة متناهية
       let promoDescription = '';
       let specifications = '';
 
-      for (const el of allElements) {
-        const text = (el.textContent || '').trim();
-        // أ) الوصف الترويجي
-        if (!promoDescription && (text === 'الوصف الترويجي' || text.startsWith('الوصف الترويجي') || text === 'النص الترويجي' || text === 'الوصف التسويقي')) {
-          const sibling = el.nextElementSibling;
-          if (sibling) {
-            const content = (sibling.innerText || sibling.textContent || '').trim();
-            if (content.length > 15 && !content.includes('المواصفات')) {
-              promoDescription = content;
-            }
-          }
-        }
+      // البحث عن تبويب "وصف ترويجي" وتبويب "المواصفات"
+      const tabButtons = Array.from(document.querySelectorAll('button, div[role="tab"], a, span')).filter(el => {
+        const t = (el.textContent || '').trim();
+        return t === 'وصف ترويجي' || t === 'المواصفات';
+      });
 
-        // ب) المواصفات الفنية
-        if (!specifications && (text === 'المواصفات' || text.startsWith('المواصفات') || text === 'المواصفات الفنية')) {
-          const sibling = el.nextElementSibling;
-          if (sibling) {
-            const content = (sibling.innerText || sibling.textContent || '').trim();
-            if (content.length > 10) {
-              specifications = content;
-            }
-          }
+      // فحص النصوص التفصيلية أسفل التبويبات مع استبعاد نصوص الأزرار والأسعار
+      const contentParagraphs = Array.from(document.querySelectorAll('div, p')).filter(el => {
+        if (el.children.length > 3) return false;
+        const t = (el.textContent || '').trim();
+        return t.length > 50 && 
+               !t.includes('الربح:') && 
+               !t.includes('سعر الزبون المقترح') && 
+               !t.includes('متبقية') && 
+               !t.includes('سعر الجملة') && 
+               !t.includes('رابط الفايلز') && 
+               !t.includes('احصائيات المنتج');
+      });
+
+      if (contentParagraphs.length > 0) {
+        // ترتيب الفقرات بحسب طول النص
+        contentParagraphs.sort((a, b) => b.textContent.trim().length - a.textContent.trim().length);
+        const fullProductText = contentParagraphs[0].innerText || contentParagraphs[0].textContent || '';
+
+        // تقسيم النص إلى وصف ترويجي ومواصفات إذا وجد
+        if (fullProductText.includes('المميزات:') || fullProductText.includes('الاستخدامات:') || fullProductText.includes('المواصفات:')) {
+          const parts = fullProductText.split(/(?:المميزات:|الاستخدامات:|المواصفات:)/);
+          promoDescription = parts[0].trim();
+          specifications = fullProductText.replace(parts[0], '').trim();
+        } else {
+          promoDescription = fullProductText.trim();
+          specifications = fullProductText.trim();
         }
       }
 
-      // إذا لم يتم العثور على الوصف الترويجي بشكل منفصل، نبحث في فقرات الوصف السفلية
-      if (!promoDescription) {
-        const descSections = Array.from(document.querySelectorAll('p, div')).filter(p => {
-          const t = (p.textContent || '').trim();
-          return t.length > 40 && t.length < 600 && !t.includes('الأرباح') && !t.includes('سعر الجملة') && !t.includes('فدشي');
-        });
-        if (descSections.length > 0) {
-          promoDescription = descSections[0].textContent.trim();
+      // محاولة خاصة لتبويب "وصف ترويجي" إذا كان هناك عنصر يحمل هذا النص
+      const promoTab = tabButtons.find(b => (b.textContent || '').trim() === 'وصف ترويجي');
+      if (promoTab && promoTab.nextElementSibling) {
+        const pText = (promoTab.nextElementSibling.innerText || '').trim();
+        if (pText.length > 30 && !pText.includes('الربح:')) {
+          promoDescription = pText;
         }
       }
 
@@ -347,7 +336,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">مورد: فدشي</span>
-            <span class="wasli-badge-source" style="background: #e2e8f0; color: #334155;">إصدار 1.0.3</span>
+            <span class="wasli-badge-source" style="background: #e2e8f0; color: #334155;">إصدار 1.0.4</span>
           </div>
           <button type="button" class="wasli-close-btn" id="wasli-modal-close">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
