@@ -1,4 +1,4 @@
-// سكربت المحتوى الذكي لاستخراج منتجات فدشي - منصة وصلي
+// سكربت المحتوى الذكي لاستخراج منتجات فدشي - منصة وصلي (إصدار 1.0.5)
 (function () {
   'use strict';
 
@@ -14,31 +14,82 @@
     });
   }
 
-  // تنظيف واستخراج المبالغ المالية الواقعية بالدينار العراقي
-  function extractRealisticPrice(text) {
-    if (!text) return 0;
-    // استخراج المبالغ المنطقية فقط (بين 500 دينار و 5,000,000 دينار)
-    const matches = text.match(/(\d{1,3}(?:,\d{3})+|\b\d{4,7}\b)/g);
-    if (!matches) return 0;
-    
-    for (const m of matches) {
-      const num = parseInt(m.replace(/,/g, ''), 10);
-      if (num >= 500 && num <= 5000000) {
-        return num;
-      }
-    }
-    return 0;
+  // تنظيف الأرقام واستخراج المبالغ بالدينار العراقي
+  function cleanNum(str) {
+    if (!str) return 0;
+    const c = String(str).replace(/,/g, '').replace(/[^\d]/g, '');
+    return c ? parseInt(c, 10) : 0;
   }
 
-  // تنظيف الأرقام العادية
-  function parseIqdNumber(text) {
-    return extractRealisticPrice(text);
+  // الكلمات المحظورة التي لا يمكن أن تكون اسماً للمنتج
+  const FORBIDDEN_TITLES = [
+    'المتجر', 'الرئيسية', 'المزودين', 'الموردين', 'فدشي', 'fedshi',
+    'احصائيات', 'احصائيات المنتج', 'أداء المنتج', 'لوحة التحكم',
+    'حسابي', 'السلة', 'المحفظة', 'الطلبات', 'سعر الجملة', 'رقم المنتج',
+    'رقم نوع المنتج', 'الربح', 'سعر الزبون المقترح', 'اضف الى السلة',
+    'تحميل الصور', 'المواصفات', 'وصف ترويجي', 'دليل التاجر'
+  ];
+
+  function isValidTitle(t) {
+    if (!t || typeof t !== 'string') return false;
+    const clean = t.trim();
+    if (clean.length < 4 || clean.length > 130) return false;
+    if (cleanNum(clean) > 0 && clean.length < 15) return false; // إذا كان مجرد سعر
+    for (const forbidden of FORBIDDEN_TITLES) {
+      if (clean.toLowerCase() === forbidden.toLowerCase()) return false;
+    }
+    if (clean.includes('احصائيات') || clean.includes('المزودين') || clean.includes('سعر الجملة')) return false;
+    return true;
+  }
+
+  // محاولة النقر البرمجي على تبويب معين ثم قراءة محتواه
+  function readTabContent(tabName) {
+    try {
+      const allTabs = Array.from(document.querySelectorAll('button, [role="tab"], div, a, span'));
+      const targetTab = allTabs.find(el => {
+        const text = (el.textContent || '').trim();
+        return text === tabName;
+      });
+
+      if (!targetTab) return '';
+
+      // النقر على التبويب لتنشيطه
+      targetTab.click();
+
+      // البحث عن الحاوية أو الفقرة التي تلي التبويب أو حاوية التبويبات
+      let container = targetTab.closest('[role="tablist"]')?.parentElement || targetTab.parentElement?.parentElement;
+      if (!container) container = targetTab.parentElement;
+
+      // جمع النصوص المفيدة وتجاهل نصوص الأزرار والأسعار
+      const paragraphs = Array.from(container.querySelectorAll('p, div, li')).filter(p => {
+        const t = (p.textContent || '').trim();
+        return t.length > 30 &&
+               !t.includes('سعر الجملة') &&
+               !t.includes('سعر الزبون') &&
+               !t.includes('الربح:') &&
+               !t.includes('اضف الى السلة') &&
+               !t.includes('احصائيات');
+      });
+
+      if (paragraphs.length > 0) {
+        // نأخذ أطول نص متماسك
+        paragraphs.sort((a, b) => (b.innerText || b.textContent || '').length - (a.innerText || a.textContent || '').length);
+        return (paragraphs[0].innerText || paragraphs[0].textContent || '').trim();
+      }
+
+      return '';
+    } catch (e) {
+      console.warn('تعذر قراءة محتوى تبويب:', tabName, e);
+      return '';
+    }
   }
 
   // استخراج تفاصيل المنتج من صفحة فدشي الحالية بدقة متناهية
   function extractFedshiProductDetails() {
     try {
       const allElements = Array.from(document.querySelectorAll('*'));
+      const pageText = (document.body.innerText || '')
+        .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' '); // توحيد المسافات
 
       // 1. كود المنتج ورقم نوع المنتج
       let productCode = '';
@@ -62,24 +113,30 @@
         }
       }
 
-      // 2. استخراج الأسعار ونطاقات الأرباح من الصفحة بدقة فائقة
-      const pageText = (document.body.innerText || '')
-        .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' '); // توحيد جميع أنواع المسافات
-
-      const cleanNum = (str) => {
-        if (!str) return 0;
-        const c = str.replace(/,/g, '').replace(/[^\d]/g, '');
-        return c ? parseInt(c, 10) : 0;
-      };
-
+      // 2. استخراج الأسعار ونطاقات الأرباح من فدشي
       // أ) سعر الجملة في فدشي (تكلفة فدشي عليك)
       let fedshiWholesale = 0;
-      const wm = pageText.match(/سعر الجملة[\s\S]{0,30}?(\d{1,3}(?:,\d{3})+|\d{4,6})/);
+      const wm = pageText.match(/سعر الجملة[\s\S]{0,35}?(\d{1,3}(?:,\d{3})+|\d{4,7})/);
       if (wm && wm[1]) {
         fedshiWholesale = cleanNum(wm[1]);
       }
 
-      // ب) الربح في فدشي
+      // إذا لم يتوفر من النص العام نبحث في العناصر
+      if (!fedshiWholesale) {
+        for (const el of allElements) {
+          const t = (el.textContent || '').trim();
+          if (t === 'سعر الجملة' || t.startsWith('سعر الجملة:')) {
+            const nextT = (el.nextElementSibling ? el.nextElementSibling.textContent : '') || t;
+            const num = cleanNum(nextT);
+            if (num >= 1000) {
+              fedshiWholesale = num;
+              break;
+            }
+          }
+        }
+      }
+
+      // ب) ربح فدشي
       let fedshiProfit = 0;
       const pm = pageText.match(/الربح[\s\S]{0,30}?(\d{1,3}(?:,\d{3})+|\d{3,6})/);
       if (pm && pm[1]) {
@@ -89,99 +146,145 @@
       // ج) سعر الزبون المقترح في فدشي (الحد الأدنى والحد الأعلى)
       let minSuggested = 0;
       let maxSuggested = 0;
-      const sm = pageText.match(/سعر الزبون المقترح[\s\S]{0,40}?(\d{1,3}(?:,\d{3})+|\d{4,6})\s*[-–—]\s*(\d{1,3}(?:,\d{3})+|\d{4,6})/);
+
+      // مطابقة نمط "سعر الزبون المقترح: 80,000 - 90,000" أو "80,000 إلى 90,000"
+      const sm = pageText.match(/سعر الزبون المقترح[\s\S]{0,50}?(\d{1,3}(?:,\d{3})+|\d{4,7})[\s\S]{1,10}?(\d{1,3}(?:,\d{3})+|\d{4,7})/);
       if (sm && sm[1] && sm[2]) {
-        minSuggested = cleanNum(sm[1]);
-        maxSuggested = cleanNum(sm[2]);
+        const val1 = cleanNum(sm[1]);
+        const val2 = cleanNum(sm[2]);
+        if (val1 >= 1000 && val2 >= 1000) {
+          minSuggested = Math.min(val1, val2);
+          maxSuggested = Math.max(val1, val2);
+        }
       }
 
-      // فحص إضافي عبر عناصر DOM إذا لم يلتقطه النص العام
-      if (!minSuggested || !maxSuggested) {
-        const allDom = Array.from(document.querySelectorAll('*'));
-        for (const el of allDom) {
+      // فحص إضافي عبر عناصر DOM إذا لم يتم استخراجها أو كانت غير منطقية
+      if (!maxSuggested || (fedshiWholesale > 0 && maxSuggested < fedshiWholesale)) {
+        for (const el of allElements) {
           const t = (el.textContent || '').trim();
           if (t.includes('سعر الزبون المقترح') || t.includes('المقترح')) {
-            const combined = t + ' ' + (el.nextElementSibling ? el.nextElementSibling.textContent : '');
-            const m = combined.match(/(\d{1,3}(?:,\d{3})+|\d{4,6})\s*[-–—]\s*(\d{1,3}(?:,\d{3})+|\d{4,6})/);
-            if (m && m[1] && m[2]) {
-              minSuggested = cleanNum(m[1]);
-              maxSuggested = cleanNum(m[2]);
-              break;
+            const containerText = (el.parentElement ? el.parentElement.textContent : '') + ' ' + t;
+            const matches = containerText.match(/(\d{1,3}(?:,\d{3})+|\b\d{4,7}\b)/g);
+            if (matches && matches.length >= 2) {
+              const nums = matches.map(m => cleanNum(m)).filter(n => n >= 5000);
+              if (nums.length >= 2) {
+                nums.sort((a, b) => a - b);
+                const largest = nums[nums.length - 1];
+                const smallest = nums[0];
+                if (largest >= (fedshiWholesale || 5000)) {
+                  minSuggested = smallest;
+                  maxSuggested = largest;
+                  break;
+                }
+              }
             }
           }
         }
       }
 
-      // 3. تطبيق معادلة أرباح منصة وصلي المعتمدة (ربح 3,000 د.ع ثابت للمدير):
+      // 3. تطبيق المعادلة المالية الدقيقة لمنصة وصلي:
       // تكلفة فدشي عليك كمدير (مثال: 67,750 د.ع)
       const costOnYou = fedshiWholesale || 67750;
 
-      // ربحك الصافي كمدير منصة وصلي = 3,000 د.ع ثابت
+      // ربحك الصافي كمدير منصة وصلي = 3,000 د.ع ثابت لكل منتج
       const wasliProfit = 3000;
 
       // سعر جملة وصلي لمسوقك = التكلفة + 3,000 د.ع (مثال: 67,750 + 3,000 = 70,750 د.ع)
       const wasliWholesale = costOnYou + wasliProfit;
 
-      // حدود بيع الزبون لصاحب المتجر (المسوق):
-      // الحد الأدنى: 80,000 د.ع (أو 70,750 + 10,000 = 80,750 د.ع)
-      const wasliMinPrice = (minSuggested && minSuggested >= 70000) ? (wasliWholesale + 10000) : (wasliWholesale + 10000);
-      // الحد الأعلى: 90,000 د.ع (المقترح في فدشي)
-      const wasliMaxPrice = maxSuggested || (wasliWholesale + 20000);
+      // حدود بيع الزبون للتاجر:
+      // الحد الأدنى المقترح: سعر الجملة + 10,000 د.ع أو الحد الأدنى من فدشي (أيهما أكبر)
+      const wasliMinPrice = minSuggested > wasliWholesale ? minSuggested : (wasliWholesale + 10000);
 
-      // 4. استخراج اسم المنتج الحقيقي بدقة (استبعاد "احصائيات المنتج")
+      // الحد الأعلى لبيع الزبون: مأخوذ مباشرة من فدشي إذا كان أكبر من سعر الجملة (مثلاً 90,000 د.ع)
+      let wasliMaxPrice = maxSuggested;
+      if (!wasliMaxPrice || wasliMaxPrice <= wasliMinPrice || wasliMaxPrice < costOnYou) {
+        wasliMaxPrice = wasliMinPrice + 10000;
+      }
+
+      // 4. استخراج اسم المنتج الحقيقي بدقة متناهية واستبعاد "احصائيات المنتج" و"المزودين"
       let title = '';
 
-      // أ) من مسار التنقل (Breadcrumb) - الخيار الأكثر دقة في فدشي مثل "المتجر > اوتي نورفا من ليبرونيك"
-      const breadcrumbLinks = Array.from(document.querySelectorAll('nav a, ol li, ul li, [class*="breadcrumb"] *, div[class*="breadcrumb"]'));
+      // أ) فحص مسار التنقل (Breadcrumbs): آخر عنصر دائماً هو اسم المنتج
+      const breadcrumbLinks = Array.from(document.querySelectorAll('nav ol li, nav ul li, [class*="breadcrumb"] a, [class*="breadcrumb"] span, ol[class*="breadcrumb"] li'));
       for (let i = breadcrumbLinks.length - 1; i >= 0; i--) {
-        const t = (breadcrumbLinks[i].textContent || '').trim();
-        if (t.length > 5 && !t.includes('المتجر') && !t.includes('الرئيسية') && !t.includes('فدشي') && !t.includes('احصائيات')) {
-          title = t;
+        const candidate = (breadcrumbLinks[i].textContent || '').trim();
+        if (isValidTitle(candidate)) {
+          title = candidate;
           break;
         }
       }
 
-      // ب) فحص العناصر النصية البارزة في أعلى الصفحة مع استبعاد الاحصائيات
-      if (!title) {
-        const ignoredExact = ['Fedshi', 'فدشي', 'الرئيسية', 'المتجر', 'سعر الجملة', 'رقم المنتج', 'الربح', 'اضف الى السلة', 'تحميل الصور', 'احصائيات المنتج'];
-        const ignoredSubstrings = ['الأرباح', 'دليل التاجر', 'تسجيل الخروج', 'الإعدادات', 'المحفظة', 'أبو ', 'احصائيات', 'أداء المنتج'];
-
-        const titleCandidates = Array.from(document.querySelectorAll('h1, h2, h3, div, span, p')).filter(el => {
-          if (el.children.length > 2) return false;
-          const t = (el.textContent || '').trim();
-          if (t.length < 5 || t.length > 90) return false;
-          if (ignoredExact.includes(t)) return false;
-          if (ignoredSubstrings.some(sub => t.includes(sub))) return false;
-          if (extractRealisticPrice(t) > 0) return false;
-          return true;
-        });
-
-        let bestCandidate = null;
-        let maxScore = 0;
-
-        for (const el of titleCandidates) {
-          const style = window.getComputedStyle(el);
-          const fSize = parseFloat(style.fontSize) || 14;
-          const isBold = (style.fontWeight === 'bold' || parseInt(style.fontWeight, 10) >= 600);
-          
-          let score = fSize + (isBold ? 6 : 0);
-          const rect = el.getBoundingClientRect();
-          if (rect.top > 50 && rect.top < 450) {
-            score += 15;
-          }
-
-          if (score > maxScore) {
-            maxScore = score;
-            bestCandidate = el;
-          }
-        }
-
-        if (bestCandidate) {
-          title = bestCandidate.textContent.trim();
+      // ب) فحص عنوان الصفحة document.title إذا كان يحمل اسم المنتج
+      if (!title && document.title) {
+        const docTitle = document.title
+          .replace(/[-|].*(fedshi|فدشي).*$/i, '')
+          .replace(/^.*(fedshi|فدشي)[-|]/i, '')
+          .trim();
+        if (isValidTitle(docTitle)) {
+          title = docTitle;
         }
       }
 
-      // 6. استخراج الألوان والخيارات (ازرق، رمادي...) مع صورها
+      // ج) فحص العنصر الرئيسي الذي يسبق "رقم المنتج:" أو "سعر الجملة"
+      if (!title) {
+        for (const el of allElements) {
+          const t = (el.textContent || '').trim();
+          if (t.includes('رقم المنتج:') || t.includes('سعر الجملة')) {
+            // فحص العناصر السابقة له في الـ DOM
+            let prev = el.previousElementSibling;
+            while (prev) {
+              const pt = (prev.textContent || '').trim();
+              if (isValidTitle(pt)) {
+                title = pt;
+                break;
+              }
+              prev = prev.previousElementSibling;
+            }
+            if (title) break;
+
+            // فحص الحاوية الأب
+            if (el.parentElement) {
+              const headings = Array.from(el.parentElement.querySelectorAll('h1, h2, h3, div, span'));
+              for (const h of headings) {
+                const ht = (h.textContent || '').trim();
+                if (isValidTitle(ht)) {
+                  title = ht;
+                  break;
+                }
+              }
+            }
+            if (title) break;
+          }
+        }
+      }
+
+      // د) فحص عناوين H1 أو H2 البارزة
+      if (!title) {
+        const mainHeadings = Array.from(document.querySelectorAll('h1, h2')).filter(h => isValidTitle(h.textContent));
+        if (mainHeadings.length > 0) {
+          title = mainHeadings[0].textContent.trim();
+        }
+      }
+
+      // 5. استخراج القسم والفرع التلقائي من مسار التنقل
+      let category = 'عام';
+      let subcategory = '';
+
+      if (breadcrumbLinks.length >= 2) {
+        const validCrumbs = breadcrumbLinks
+          .map(b => (b.textContent || '').trim())
+          .filter(t => t && !t.includes('الرئيسية') && !t.includes('المتجر') && !t.includes('فدشي') && !t.includes('المزودين') && t !== title);
+
+        if (validCrumbs.length >= 1) {
+          category = validCrumbs[0];
+        }
+        if (validCrumbs.length >= 2) {
+          subcategory = validCrumbs[1];
+        }
+      }
+
+      // 6. استخراج الألوان والخيارات مع صورها
       const colors = [];
       const colorHeaders = allElements.filter(el => {
         const t = (el.textContent || '').trim();
@@ -207,7 +310,7 @@
         }
       }
 
-      // 7. استخراج جميع صور المنتج ومعرض الصور
+      // 7. استخراج جميع صور المنتج
       const images = [];
       const allImgs = Array.from(document.querySelectorAll('img')).filter(img => {
         const src = img.src || '';
@@ -229,51 +332,34 @@
         videoUrl = videoEl.src || videoEl.getAttribute('src') || '';
       }
 
-      // 8. استخراج المواصفات الفنية والوصف الترويجي بدقة متناهية
-      let promoDescription = '';
-      let specifications = '';
+      // 9. استخراج "الوصف الترويجي" و "المواصفات" من التبويبات المخصصة
+      let promoDescription = readTabContent('وصف ترويجي');
+      let specifications = readTabContent('المواصفات');
 
-      // البحث عن تبويب "وصف ترويجي" وتبويب "المواصفات"
-      const tabButtons = Array.from(document.querySelectorAll('button, div[role="tab"], a, span')).filter(el => {
-        const t = (el.textContent || '').trim();
-        return t === 'وصف ترويجي' || t === 'المواصفات';
-      });
+      // إذا لم يتوفر عبر التبويب النشط، استخراجه من الفقرات التفصيلية بالصفحة
+      if (!promoDescription || !specifications) {
+        const contentParagraphs = Array.from(document.querySelectorAll('div, p')).filter(el => {
+          if (el.children.length > 3) return false;
+          const t = (el.textContent || '').trim();
+          return t.length > 40 &&
+                 !t.includes('الربح:') &&
+                 !t.includes('سعر الزبون المقترح') &&
+                 !t.includes('سعر الجملة') &&
+                 !t.includes('رابط الفايلز') &&
+                 !t.includes('اضف الى السلة') &&
+                 !t.includes('احصائيات');
+        });
 
-      // فحص النصوص التفصيلية أسفل التبويبات مع استبعاد نصوص الأزرار والأسعار
-      const contentParagraphs = Array.from(document.querySelectorAll('div, p')).filter(el => {
-        if (el.children.length > 3) return false;
-        const t = (el.textContent || '').trim();
-        return t.length > 50 && 
-               !t.includes('الربح:') && 
-               !t.includes('سعر الزبون المقترح') && 
-               !t.includes('متبقية') && 
-               !t.includes('سعر الجملة') && 
-               !t.includes('رابط الفايلز') && 
-               !t.includes('احصائيات المنتج');
-      });
+        if (contentParagraphs.length > 0) {
+          contentParagraphs.sort((a, b) => b.textContent.trim().length - a.textContent.trim().length);
+          const fullProductText = contentParagraphs[0].innerText || contentParagraphs[0].textContent || '';
 
-      if (contentParagraphs.length > 0) {
-        // ترتيب الفقرات بحسب طول النص
-        contentParagraphs.sort((a, b) => b.textContent.trim().length - a.textContent.trim().length);
-        const fullProductText = contentParagraphs[0].innerText || contentParagraphs[0].textContent || '';
-
-        // تقسيم النص إلى وصف ترويجي ومواصفات إذا وجد
-        if (fullProductText.includes('المميزات:') || fullProductText.includes('الاستخدامات:') || fullProductText.includes('المواصفات:')) {
-          const parts = fullProductText.split(/(?:المميزات:|الاستخدامات:|المواصفات:)/);
-          promoDescription = parts[0].trim();
-          specifications = fullProductText.replace(parts[0], '').trim();
-        } else {
-          promoDescription = fullProductText.trim();
-          specifications = fullProductText.trim();
-        }
-      }
-
-      // محاولة خاصة لتبويب "وصف ترويجي" إذا كان هناك عنصر يحمل هذا النص
-      const promoTab = tabButtons.find(b => (b.textContent || '').trim() === 'وصف ترويجي');
-      if (promoTab && promoTab.nextElementSibling) {
-        const pText = (promoTab.nextElementSibling.innerText || '').trim();
-        if (pText.length > 30 && !pText.includes('الربح:')) {
-          promoDescription = pText;
+          if (!promoDescription) {
+            promoDescription = fullProductText.trim();
+          }
+          if (!specifications) {
+            specifications = fullProductText.trim();
+          }
         }
       }
 
@@ -281,20 +367,22 @@
         title: title || 'منتج مستورد من فدشي',
         productCode: productCode || '',
         skuCode: skuCode || '',
+        category: category,
+        subcategory: subcategory,
         fedshiWholesale: costOnYou,
         fedshiProfit: fedshiProfit || 2250,
-        minSuggested: wasliWholesale,
+        minSuggested: wasliMinPrice,
         maxSuggested: wasliMaxPrice,
         wasliWholesale: wasliWholesale,
         wasliProfit: wasliProfit,
         wasliMinPrice: wasliMinPrice,
         wasliMaxPrice: wasliMaxPrice,
-        promoDescription: promoDescription || 'منتج أصلي عالي الجودة بتصميم عصري وأداء ممتاز مناسب للاستخدام اليومي مع ضمان وفحص عند الاستلام.',
-        specifications: specifications || 'خامات عالية الجودة\nأداء قوي ومثالي\nسهل الاستخدام والتنظيف\nتصميم حديث ومريح',
+        promoDescription: promoDescription || 'منتج عالي الجودة بتصميم أنيق ومثالي للاستخدام اليومي مع ضمان فحص عند الاستلام وتوصيل سريع لكافة المحافظات.',
+        specifications: specifications || 'خامات أصلية متينة\nأداء قوي وكفاءة عالية\nسهل الاستخدام والتخزين\nتصميم حديث ومريح',
         colors: colors.length > 0 ? colors : [{ name: 'افتراضي' }],
         images: images.slice(0, 10),
         videoUrl,
-        stock: 100
+        stock: 50
       };
     } catch (err) {
       console.error('حدث خطأ أثناء قراءة بيانات المنتج:', err);
@@ -336,7 +424,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">مورد: فدشي</span>
-            <span class="wasli-badge-source" style="background: #e2e8f0; color: #334155;">إصدار 1.0.4</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.0.5</span>
           </div>
           <button type="button" class="wasli-close-btn" id="wasli-modal-close">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -411,19 +499,19 @@
           <div class="wasli-codes-row" style="margin-top: 4px;">
             ${data.productCode ? `<span>كود فدشي: <strong class="wasli-code-pill">${data.productCode}</strong></span>` : ''}
             ${data.skuCode ? `<span>نوع المنتج: <strong class="wasli-code-pill">${data.skuCode}</strong></span>` : ''}
-            <span>الصور المكتشفة: <strong>${data.images.length}</strong></span>
+            <span>الصور: <strong>${data.images.length}</strong></span>
           </div>
         </div>
       </div>
 
-      <!-- حسابات الأرباح الذكية -->
+      <!-- حسابات الأرباح الذكية لمنصة وصلي -->
       <div class="wasli-finance-box">
         <div class="wasli-finance-title">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
             <polyline points="17 6 23 6 23 12"></polyline>
           </svg>
-          <span>توزيع الأرباح التلقائي المحسوب</span>
+          <span>توزيع الأرباح التلقائي المحسوب (ربحك كمدير +3,000 د.ع)</span>
         </div>
         <div class="wasli-finance-grid">
           <div class="wasli-finance-item">
@@ -444,7 +532,7 @@
       <!-- حقول التسعير والتكلفة القابلة للتعديل -->
       <div class="wasli-inputs-grid">
         <div class="wasli-field-group">
-          <label class="wasli-label">تكلفة فدشي عليك (سعر الجملة الأصلي د.ع)</label>
+          <label class="wasli-label">تكلفة فدشي عليك (سعر الجملة د.ع)</label>
           <input type="number" class="wasli-input" id="wasli-inp-cost" value="${data.fedshiWholesale}">
         </div>
         <div class="wasli-field-group">
@@ -459,38 +547,38 @@
           <input type="number" class="wasli-input" id="wasli-inp-min" value="${data.wasliMinPrice}">
         </div>
         <div class="wasli-field-group">
-          <label class="wasli-label">الحد الأعلى لبيع الزبون (د.ع)</label>
+          <label class="wasli-label">الحد الأعلى لبيع الزبون (د.ع - من فدشي)</label>
           <input type="number" class="wasli-input" id="wasli-inp-max" value="${data.wasliMaxPrice}">
         </div>
       </div>
 
+      <!-- القسم والفرع التلقائي -->
       <div class="wasli-inputs-grid">
         <div class="wasli-field-group">
-          <label class="wasli-label">تصنيف المنتج في وصلي</label>
-          <select class="wasli-select" id="wasli-inp-category">
-            <option value="إلكترونيات وهواتف">إلكترونيات وهواتف</option>
-            <option value="أزياء وملابس">أزياء وملابس</option>
-            <option value="عطور وتجميل">عطور وتجميل</option>
-            <option value="مستلزمات منزلية">مستلزمات منزلية</option>
-            <option value="ساعات وإكسسوارات">ساعات وإكسسوارات</option>
-            <option value="عام">عام</option>
-          </select>
+          <label class="wasli-label">القسم الرئيسي (يُنشأ آلياً إن لم يوجد)</label>
+          <input type="text" class="wasli-input" id="wasli-inp-category" value="${data.category || 'عام'}" placeholder="مثال: أجهزة منزلية">
         </div>
         <div class="wasli-field-group">
-          <label class="wasli-label">المخزون المتوفر</label>
-          <input type="number" class="wasli-input" id="wasli-inp-stock" value="${data.stock || 50}">
+          <label class="wasli-label">الفرع التابع (يُنشأ آلياً إن لم يوجد)</label>
+          <input type="text" class="wasli-input" id="wasli-inp-subcategory" value="${data.subcategory || ''}" placeholder="مثال: مكاوي وبخار">
         </div>
+      </div>
+
+      <!-- المخزون -->
+      <div class="wasli-field-group">
+        <label class="wasli-label">المخزون المتوفر المبدئي</label>
+        <input type="number" class="wasli-input" id="wasli-inp-stock" value="${data.stock || 50}">
       </div>
 
       <!-- الوصف الترويجي والمواصفات الفنية -->
       <div class="wasli-field-group">
-        <label class="wasli-label">الوصف الترويجي التسويقي للزبون:</label>
-        <textarea class="wasli-input" id="wasli-inp-promo" rows="2" style="font-size: 11px; resize: vertical; line-height: 1.4;">${data.promoDescription}</textarea>
+        <label class="wasli-label">الوصف الترويجي التسويقي (يظهر للزبون):</label>
+        <textarea class="wasli-input" id="wasli-inp-promo" rows="3" style="font-size: 11px; resize: vertical; line-height: 1.5;">${data.promoDescription}</textarea>
       </div>
 
       <div class="wasli-field-group">
-        <label class="wasli-label">المواصفات الفنية للمنتج:</label>
-        <textarea class="wasli-input" id="wasli-inp-specs" rows="2" style="font-size: 11px; resize: vertical; line-height: 1.4;">${data.specifications}</textarea>
+        <label class="wasli-label">المواصفات الفنية والتفاصيل (تظهر للزبون):</label>
+        <textarea class="wasli-input" id="wasli-inp-specs" rows="3" style="font-size: 11px; resize: vertical; line-height: 1.5;">${data.specifications}</textarea>
       </div>
 
       <!-- الألوان المكتشفة -->
@@ -540,7 +628,8 @@
       const productTitle = overlay.querySelector('#wasli-inp-title').value.trim() || data.title;
       const costPrice = parseInt(costInp.value, 10) || data.fedshiWholesale;
       const wholesale = parseInt(wholesaleInp.value, 10) || data.wasliWholesale;
-      const category = overlay.querySelector('#wasli-inp-category').value;
+      const categoryVal = overlay.querySelector('#wasli-inp-category').value.trim() || 'عام';
+      const subcategoryVal = overlay.querySelector('#wasli-inp-subcategory').value.trim() || '';
       const minPrice = parseInt(overlay.querySelector('#wasli-inp-min').value, 10);
       const maxPrice = parseInt(overlay.querySelector('#wasli-inp-max').value, 10);
       const stock = parseInt(overlay.querySelector('#wasli-inp-stock').value, 10) || 50;
@@ -554,12 +643,13 @@
         fedshiPrice: costPrice,
         fedshiProfit: data.fedshiProfit,
         minSuggestedPrice: data.minSuggested,
-        maxSuggestedPrice: data.maxSuggested,
+        maxSuggestedPrice: maxPrice,
         wholesalePriceIqd: wholesale,
         platformPriceIqd: wholesale,
         minPriceIqd: minPrice,
         maxPriceIqd: maxPrice,
-        category: category,
+        category: categoryVal,
+        subcategory: subcategoryVal,
         description: promoText || productTitle,
         promoDescription: promoText,
         specifications: specsText,

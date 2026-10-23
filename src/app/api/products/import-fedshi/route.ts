@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPlatformProduct } from '@/lib/services/productService';
+import { findOrCreateCategoryAndSubcategory } from '@/lib/services/categoryService';
 
 // دعم طلبات CORS المسبقة للمتصفح وإضافة كروم
 export async function OPTIONS() {
@@ -35,7 +36,9 @@ export async function POST(request: NextRequest) {
       promoDescription = '',
       specifications = '',
       category = 'عام',
+      subcategory = '',
       categoryId,
+      subcategoryId,
       stockQuantity = 50,
     } = body;
 
@@ -51,23 +54,49 @@ export async function POST(request: NextRequest) {
 
     const supplierCost = Number(fedshiPrice || 0);
 
-    // تطبيق معادلة الأسعار والأرباح الذكية لمنصة وصلي:
-    // 1. سعر الجملة لمسوق وصلي = الحد الأدنى المقترح في فدشي (أو التكلفة + 18,000 د.ع)
+    // تطبيق المعادلة المالية الدقيقة لمنصة وصلي:
+    // 1. ربح المنصة الثابت = 3,000 د.ع لكل منتج
+    // 2. سعر جملة وصلي للمسوق = تكلفة فدشي + 3,000 د.ع
     const wholesalePrice = customWholesale 
       ? Number(customWholesale) 
-      : (minSuggestedPrice ? Number(minSuggestedPrice) : (supplierCost + 18000));
+      : (supplierCost > 0 ? (supplierCost + 3000) : (minSuggestedPrice ? Number(minSuggestedPrice) : 3000));
 
-    // 2. سعر المنصة الأساسي
+    // 3. سعر المنصة الأساسي يطابق سعر الجملة
     const platformPrice = customPlatform ? Number(customPlatform) : wholesalePrice;
 
-    // 3. سعر بيع الزبون النهائي لمسوق وصلي (بين 45,000 و 55,000 د.ع أو حسب التخصيص)
+    // 4. حدود بيع الزبون للمسوق:
+    // الحد الأدنى المقترح: سعر الجملة + 10,000 د.ع (أو 80,000 د.ع في حال كان أعلى)
     const minPrice = customMin 
       ? Number(customMin) 
-      : Math.max(wholesalePrice + 10000, 45000);
+      : (minSuggestedPrice && Number(minSuggestedPrice) > wholesalePrice 
+          ? Number(minSuggestedPrice) 
+          : (wholesalePrice + 10000));
 
+    // الحد الأعلى المقترح لبيع الزبون: يأتي مباشرة من فدشي، أو سعر الجملة + 20,000
     const maxPrice = customMax 
       ? Number(customMax) 
-      : (maxSuggestedPrice ? Number(maxSuggestedPrice) : Math.max(minPrice + 10000, 55000));
+      : (maxSuggestedPrice && Number(maxSuggestedPrice) > minPrice 
+          ? Number(maxSuggestedPrice) 
+          : (wholesalePrice + 20000));
+
+    // إنشاء أو جلب القسم والفرع تلقائياً
+    let finalCategoryId = categoryId;
+    let finalCategoryName = category;
+    let finalSubcategoryId = subcategoryId;
+    let finalSubcategoryName = subcategory;
+
+    try {
+      const catResult = await findOrCreateCategoryAndSubcategory(
+        category || 'منتجات عامة',
+        subcategory || undefined
+      );
+      finalCategoryId = catResult.categoryId;
+      finalCategoryName = catResult.categoryName;
+      finalSubcategoryId = catResult.subcategoryId;
+      finalSubcategoryName = catResult.subcategoryName;
+    } catch (catErr) {
+      console.warn('تعذر إنشاء/ربط القسم آلياً:', catErr);
+    }
 
     // الصورة الرئيسية للمنتج
     const primaryImage = (images && images.length > 0) 
@@ -77,8 +106,10 @@ export async function POST(request: NextRequest) {
     // حفظ المنتج في النظام
     const product = await createPlatformProduct({
       name,
-      category,
-      categoryId,
+      category: finalCategoryName,
+      categoryId: finalCategoryId,
+      subcategory: finalSubcategoryName,
+      subcategoryId: finalSubcategoryId,
       description: description || promoDescription || name,
       promoDescription: promoDescription || description || name,
       specifications: specifications,

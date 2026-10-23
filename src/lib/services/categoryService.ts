@@ -303,6 +303,57 @@ export async function deleteCategory(id: string): Promise<boolean> {
 }
 
 /**
+ * البحث عن قسم وفرع أو إنشاؤهما تلقائياً إذا لم يكونا موجودين
+ */
+export async function findOrCreateCategoryAndSubcategory(
+  categoryName: string, 
+  subcategoryName?: string
+): Promise<{ categoryId: string; categoryName: string; subcategoryId?: string; subcategoryName?: string }> {
+  const categories = await getCategoriesWithSubcategories();
+  const cleanCatName = (categoryName || 'عام').trim();
+  
+  let targetCat = categories.find(c => c.name.toLowerCase() === cleanCatName.toLowerCase());
+  
+  if (!targetCat) {
+    targetCat = await createMainCategory({
+      name: cleanCatName,
+      description: `قسم ${cleanCatName} المنشأ تلقائياً للمنتجات المستوردة`,
+      iconName: 'Package',
+    });
+  }
+
+  let subId: string | undefined = undefined;
+  let subName: string | undefined = undefined;
+
+  if (subcategoryName && subcategoryName.trim()) {
+    const cleanSubName = subcategoryName.trim();
+    const existingSub = targetCat.subcategories?.find(s => s.name.toLowerCase() === cleanSubName.toLowerCase());
+    
+    if (existingSub) {
+      subId = existingSub.id;
+      subName = existingSub.name;
+    } else {
+      const createdSub = await createSubcategory({
+        categoryId: targetCat.id,
+        name: cleanSubName,
+        description: `فرع ${cleanSubName} تلقائي`,
+      });
+      if (createdSub) {
+        subId = createdSub.id;
+        subName = createdSub.name;
+      }
+    }
+  }
+
+  return {
+    categoryId: targetCat.id,
+    categoryName: targetCat.name,
+    subcategoryId: subId,
+    subcategoryName: subName,
+  };
+}
+
+/**
  * حذف فرع تتبع لقسم
  */
 export async function deleteSubcategory(categoryId: string, subcategoryId: string): Promise<boolean> {
