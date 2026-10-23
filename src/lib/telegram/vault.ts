@@ -269,6 +269,17 @@ export async function sendAdminOrderNotification(orderData: OrderNotificationPay
 }
 
 
+export function cleanTelegramChatId(input: string | number | null | undefined): string | number | null {
+  if (!input) return null;
+  if (typeof input === 'number') return input;
+  let cleaned = String(input).replace(/[\u200E\u200F\u202A-\u202E\uFEFF]/g, '').trim();
+  cleaned = cleaned.replace(/[\u2010-\u2015\u2212]/g, '-');
+  if (/^-?\d+$/.test(cleaned)) {
+    return Number(cleaned);
+  }
+  return cleaned;
+}
+
 /**
  * نشر المنتج المستورد تلقائياً في قناة تيليجرام
  */
@@ -285,7 +296,8 @@ export async function publishProductToTelegramChannel(product: {
   productId?: string;
 }): Promise<{ success: boolean; messageId?: number; error?: string }> {
   const botToken = getVaultBotToken() || getOrdersBotToken();
-  const channelId = getVaultChannelId() || process.env.TELEGRAM_ADMIN_CHAT_ID;
+  const rawChannelId = getVaultChannelId() || process.env.TELEGRAM_ADMIN_CHAT_ID;
+  const channelId = cleanTelegramChatId(rawChannelId);
 
   if (!botToken || !channelId) {
     return { 

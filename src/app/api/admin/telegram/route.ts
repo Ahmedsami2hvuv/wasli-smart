@@ -8,6 +8,18 @@ export const dynamic = 'force-dynamic';
 let runtimeBotToken: string | null = null;
 let runtimeChannelId: string | null = null;
 
+// تنظيف وتجهيز معرف المحادثة أو القناة وحذف أي أحرف توجيه خفية من النسخ
+function cleanTelegramChatId(input: string | number | null | undefined): string | number | null {
+  if (!input) return null;
+  if (typeof input === 'number') return input;
+  let cleaned = input.replace(/[\u200E\u200F\u202A-\u202E\uFEFF]/g, '').trim();
+  cleaned = cleaned.replace(/[\u2010-\u2015\u2212]/g, '-');
+  if (/^-?\d+$/.test(cleaned)) {
+    return Number(cleaned);
+  }
+  return cleaned;
+}
+
 function getActiveBotToken(): string | null {
   return runtimeBotToken || getVaultBotToken() || null;
 }
@@ -113,10 +125,11 @@ export async function POST(req: NextRequest) {
       }
 
       // جلب معلومات القناة
+      const targetChatId = cleanTelegramChatId(currentChannel);
       const chatRes = await fetch(`https://api.telegram.org/bot${currentToken}/getChat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: currentChannel }),
+        body: JSON.stringify({ chat_id: targetChatId }),
       });
       const chatData = await chatRes.json();
 
@@ -155,11 +168,12 @@ export async function POST(req: NextRequest) {
 
       const sampleImage = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=1000&auto=format&fit=crop&q=80';
 
+      const targetChatId = cleanTelegramChatId(currentChannel);
       const postRes = await fetch(`https://api.telegram.org/bot${currentToken}/sendPhoto`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chat_id: currentChannel,
+          chat_id: targetChatId,
           photo: sampleImage,
           caption: sampleCaption,
         }),
