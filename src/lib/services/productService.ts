@@ -1,6 +1,8 @@
 import { Product } from '@/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import { mockProducts } from '@/data/mockData';
+import crypto from 'crypto';
 
 // منتجات المنصة الأولية مع تفاصيل التسعير والعمولات
 const initialProducts: Product[] = mockProducts.map((p, idx) => {
@@ -120,8 +122,10 @@ export async function createPlatformProduct(productData: {
     .replace(/[^\u0621-\u064Aa-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') + `-${Date.now().toString().slice(-4)}`;
 
+  const productId = crypto.randomUUID();
+
   const newProduct: Product = {
-    id: `prod-${Date.now()}`,
+    id: productId,
     name: productData.name,
     slug: slug,
     description: productData.description,
@@ -146,8 +150,8 @@ export async function createPlatformProduct(productData: {
     status: 'published',
     image: productData.image,
     images: productData.images?.map((url, i) => ({
-      id: `img-${Date.now()}-${i}`,
-      productId: `prod-${Date.now()}`,
+      id: crypto.randomUUID(),
+      productId: productId,
       localUrl: url,
       isPrimary: i === 0,
       sortOrder: i,
@@ -160,10 +164,11 @@ export async function createPlatformProduct(productData: {
     createdAt: new Date().toISOString(),
   };
 
-  // محاولة الإدخال في سوبابيس إن كان مهيأ
-  if (isSupabaseConfigured && supabase) {
+  // محاولة الإدخال في سوبابيس (باستخدام عميل الإدارة أو العميل العام)
+  const dbClient = supabaseAdmin || supabase;
+  if (dbClient) {
     try {
-      await supabase.from('products').insert({
+      const { error: insertError } = await dbClient.from('products').insert({
         id: newProduct.id,
         title: newProduct.name,
         slug: newProduct.slug,
@@ -190,10 +195,14 @@ export async function createPlatformProduct(productData: {
         }
       });
 
+      if (insertError) {
+        console.warn('تنبيه سوبابيس عند إدخال المنتج:', insertError);
+      }
+
       // حفظ الصور في جدول الصور إذا توفرت
       if (newProduct.images && newProduct.images.length > 0) {
         try {
-          await supabase.from('product_images').insert(
+          await dbClient.from('product_images').insert(
             newProduct.images.map((img, i) => ({
               id: img.id,
               product_id: newProduct.id,
