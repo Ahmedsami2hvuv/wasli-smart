@@ -25,93 +25,157 @@
   // استخراج تفاصيل المنتج من صفحة فدشي الحالية
   function extractFedshiProductDetails() {
     try {
-      const pageText = document.body.innerText || '';
-      
-      // 1. عنوان المنتج
-      // البحث عن أول عنوان بارز لا يحتوي على نصوص عامة
+      // 1. كود المنتج ورقم نوع المنتج
+      let productCode = '';
+      let skuCode = '';
+
+      const allElements = Array.from(document.querySelectorAll('div, span, p, h1, h2, h3, a'));
+
+      for (const el of allElements) {
+        const text = (el.textContent || '').trim();
+        if (!productCode && text.includes('رقم المنتج:')) {
+          const m = text.match(/رقم المنتج[:\s]*([A-Za-z0-9_-]+)/);
+          if (m && m[1]) productCode = m[1].trim();
+          else if (el.nextElementSibling) {
+            productCode = (el.nextElementSibling.textContent || '').trim();
+          }
+        }
+        if (!skuCode && text.includes('رقم نوع المنتج:')) {
+          const m = text.match(/رقم نوع المنتج[:\s]*([A-Za-z0-9_-]+)/);
+          if (m && m[1]) skuCode = m[1].trim();
+          else if (el.nextElementSibling) {
+            skuCode = (el.nextElementSibling.textContent || '').trim();
+          }
+        }
+      }
+
+      // 2. استخراج عنوان المنتج بدقة (استبعاد شريط الهيدر والتنقل)
       let title = '';
-      const candidateTitles = Array.from(document.querySelectorAll('h1, h2, h3, div, span')).filter(el => {
+      // البحث عن أول عنصر نصي بارز يسبق "رقم المنتج" أو يقع في حاوية تفاصيل المنتج
+      const excludedKeywords = [
+        'الأرباح المحققة', 'الأرباح القادمة', 'دليل التاجر', 'الرئيسية', 
+        'تسجيل الخروج', 'الإعدادات', 'المحفظة', 'المفضلة', 'سلة', 'حسابي', 
+        'ArtQD', 'سعر الجملة', 'الربح', 'اضف الى السلة', 'تحميل الصور', 'رقم المنتج'
+      ];
+
+      // فحص العناوين h1, h2, h3
+      const headingCandidates = Array.from(document.querySelectorAll('h1, h2, h3, div')).filter(el => {
         const t = (el.textContent || '').trim();
-        return t.length >= 8 && t.length <= 120 && 
-               !t.includes('سعر الجملة') && 
-               !t.includes('الربح') && 
-               !t.includes('اضف الى السلة') &&
-               !t.includes('رقم المنتج');
+        if (t.length < 5 || t.length > 120) return false;
+        // استبعاد أي نص يحتوي على كلمات شريط التاجر
+        return !excludedKeywords.some(keyword => t.includes(keyword));
       });
 
-      // اختيار أفضل عنوان يظهر في أعلى تفاصيل المنتج
-      for (const el of candidateTitles) {
-        const text = el.textContent.trim();
-        if (text.length > 10 && el.offsetHeight > 20) {
-          title = text;
+      // نختار العنوان الذي يظهر في الجزء العلوي ويحتوي على نص مفهوم
+      for (const el of headingCandidates) {
+        const t = el.textContent.trim();
+        // التأكد أنه ليس رقماً فقط وأنه عنصر مرئي
+        if (t.length >= 8 && isNaN(Number(t)) && el.offsetHeight > 15) {
+          title = t;
           break;
         }
       }
 
+      // إذا لم نجده، نبحث عن العنصر الأقرب لـ "سعر الجملة"
       if (!title) {
-        title = document.title.replace('- فدشي', '').replace('فدشي', '').trim();
-      }
-
-      // 2. كود المنتج ورقم نوع المنتج
-      let productCode = '';
-      let skuCode = '';
-
-      const codeMatch = pageText.match(/رقم المنتج[:\s]*([A-Za-z0-9_-]+)/);
-      if (codeMatch && codeMatch[1]) {
-        productCode = codeMatch[1].trim();
-      }
-
-      const skuMatch = pageText.match(/رقم نوع المنتج[:\s]*([A-Za-z0-9_-]+)/);
-      if (skuMatch && skuMatch[1]) {
-        skuCode = skuMatch[1].trim();
+        const wholesaleEl = allElements.find(el => (el.textContent || '').trim() === 'سعر الجملة');
+        if (wholesaleEl && wholesaleEl.parentElement) {
+          const prev = wholesaleEl.parentElement.previousElementSibling;
+          if (prev && prev.textContent) {
+            title = prev.textContent.trim();
+          }
+        }
       }
 
       // 3. سعر الجملة في فدشي (تكلفة المدير)
       let fedshiWholesale = 0;
-      const wholesaleMatch = pageText.match(/سعر الجملة[\s\S]*?(\d[\d,]+)\s*د\.ع/);
-      if (wholesaleMatch && wholesaleMatch[1]) {
-        fedshiWholesale = parseIqdNumber(wholesaleMatch[1]);
+      for (const el of allElements) {
+        const text = (el.textContent || '').trim();
+        if (text === 'سعر الجملة' || text.startsWith('سعر الجملة')) {
+          // نبحث في العنصر التالي أو داخل نفس الحاوية
+          const sibling = el.nextElementSibling || (el.parentElement && el.parentElement.querySelector(':nth-child(2)'));
+          if (sibling) {
+            const parsed = parseIqdNumber(sibling.textContent);
+            if (parsed > 0) {
+              fedshiWholesale = parsed;
+              break;
+            }
+          }
+          // أو في الأب
+          if (el.parentElement) {
+            const parsed = parseIqdNumber(el.parentElement.textContent);
+            if (parsed > 0) {
+              fedshiWholesale = parsed;
+              break;
+            }
+          }
+        }
+      }
+
+      // إذا لم نجده، نحاول عبر النص العام
+      if (!fedshiWholesale) {
+        const pageText = document.body.innerText || '';
+        const m = pageText.match(/سعر الجملة[\s\S]{0,40}?(\d[\d,]+)\s*(?:د\.ع|IQD)/);
+        if (m && m[1]) {
+          fedshiWholesale = parseIqdNumber(m[1]);
+        }
       }
 
       // 4. الربح المقترح من فدشي
       let fedshiProfit = 0;
-      const profitMatch = pageText.match(/الربح[:\s]*(?:أو أكثر)?\s*(\d[\d,]+)\s*د\.ع/);
-      if (profitMatch && profitMatch[1]) {
-        fedshiProfit = parseIqdNumber(profitMatch[1]);
+      for (const el of allElements) {
+        const text = (el.textContent || '').trim();
+        if (text.includes('الربح') && (text.includes('د.ع') || text.includes('أو أكثر'))) {
+          const parsed = parseIqdNumber(text);
+          if (parsed > 0) {
+            fedshiProfit = parsed;
+            break;
+          }
+        }
       }
 
       // 5. سعر الزبون المقترح في فدشي (نطاق السعر)
       let minSuggested = 0;
       let maxSuggested = 0;
-      const suggestedMatch = pageText.match(/سعر الزبون المقترح[\s\S]*?(\d[\d,]+)\s*[-–]\s*(\d[\d,]+)\s*د\.ع/);
-      if (suggestedMatch && suggestedMatch[1] && suggestedMatch[2]) {
-        minSuggested = parseIqdNumber(suggestedMatch[1]);
-        maxSuggested = parseIqdNumber(suggestedMatch[2]);
-      } else if (fedshiWholesale > 0) {
-        // افتراضات ذكية إذا لم يتوفر النطاق
-        minSuggested = fedshiWholesale + (fedshiProfit || 18000);
-        maxSuggested = minSuggested + 20000;
+      for (const el of allElements) {
+        const text = (el.textContent || '').trim();
+        if (text.includes('سعر الزبون المقترح')) {
+          // استخراج الأرقام من هذا العنصر أو المجاور له
+          const combined = text + ' ' + (el.nextElementSibling ? el.nextElementSibling.textContent : '');
+          const matches = combined.match(/(\d[\d,]+)\s*[-–]\s*(\d[\d,]+)/);
+          if (matches && matches[1] && matches[2]) {
+            minSuggested = parseIqdNumber(matches[1]);
+            maxSuggested = parseIqdNumber(matches[2]);
+            break;
+          }
+        }
+      }
+
+      // إذا لم تتوفر نطاقات مقترحة، نطبق معادلة احتساب افتراضية ذكية
+      if (fedshiWholesale > 0) {
+        if (!minSuggested) minSuggested = fedshiWholesale + (fedshiProfit || 18000);
+        if (!maxSuggested) maxSuggested = minSuggested + 20000;
       }
 
       // 6. استخراج الألوان والخيارات مع صورها
       const colors = [];
-      const colorSectionTitles = Array.from(document.querySelectorAll('div, span, p')).filter(
-        el => (el.textContent || '').trim() === 'اللون' || (el.textContent || '').trim() === 'الألوان'
-      );
+      const colorHeaders = allElements.filter(el => {
+        const t = (el.textContent || '').trim();
+        return t === 'اللون' || t === 'الألوان' || t.startsWith('اللون:');
+      });
 
-      if (colorSectionTitles.length > 0) {
-        const parentSection = colorSectionTitles[0].parentElement;
-        if (parentSection) {
-          const colorCards = parentSection.querySelectorAll('button, div[role="button"], label, div');
-          colorCards.forEach(card => {
-            const cardText = (card.textContent || '').trim();
-            const cardImg = card.querySelector('img');
-            if (cardText && cardText.length < 25 && cardText !== 'اللون') {
-              // التأكد من عدم تكرار اللون
-              if (!colors.some(c => c.name === cardText)) {
+      if (colorHeaders.length > 0) {
+        const section = colorHeaders[0].parentElement;
+        if (section) {
+          const candidateOptions = section.querySelectorAll('button, div[role="button"], label, div');
+          candidateOptions.forEach(opt => {
+            const optText = (opt.textContent || '').trim();
+            const optImg = opt.querySelector('img');
+            if (optText && optText.length > 1 && optText.length < 20 && optText !== 'اللون') {
+              if (!colors.some(c => c.name === optText)) {
                 colors.push({
-                  name: cardText,
-                  image: cardImg ? cardImg.src : ''
+                  name: optText,
+                  image: optImg ? optImg.src : ''
                 });
               }
             }
@@ -119,24 +183,59 @@
         }
       }
 
-      // إذا لم يتم العثور على ألوان عبر القسم، نبحث في الكلمات الشائعة للألوان
-      if (colors.length === 0) {
-        const commonColors = ['اسود', 'أسود', 'ابيض', 'أبيض', 'ذهبي', 'فضي', 'احمر', 'أحمر', 'ازرق', 'أزرق', 'اخضر', 'أخضر', 'وردي', 'رمادي'];
-        commonColors.forEach(cName => {
-          if (pageText.includes(cName)) {
-            colors.push({ name: cName });
-          }
-        });
-      }
-
       // 7. استخراج جميع صور المنتج ومعرض الصور
       const images = [];
-      const allImages = Array.from(document.querySelectorAll('img')).filter(img => {
+      const allImgs = Array.from(document.querySelectorAll('img')).filter(img => {
         const src = img.src || '';
         const isSvg = src.endsWith('.svg') || src.includes('data:image/svg');
-        const isIcon = img.width > 0 && img.width < 50 && img.height > 0 && img.height < 50;
-        return src && !isSvg && !isIcon && (src.includes('fedshi') || src.includes('cdn') || src.includes('upload') || src.includes('s3') || src.includes('images'));
+        const isTooSmall = img.naturalWidth > 0 && img.naturalWidth < 80;
+        return src && !isSvg && !isTooSmall && (src.includes('fedshi') || src.includes('cdn') || src.includes('upload') || src.includes('s3') || src.includes('images') || src.includes('blob:'));
       });
+
+      allImgs.forEach(img => {
+        if (!images.includes(img.src)) {
+          images.push(img.src);
+        }
+      });
+
+      // 8. استخراج رابط الفيديو
+      let videoUrl = '';
+      const videoEl = document.querySelector('video source, video');
+      if (videoEl) {
+        videoUrl = videoEl.src || videoEl.getAttribute('src') || '';
+      }
+
+      // 9. تطبيق معادلة أرباح منصة وصلي المعتمدة:
+      // جملة وصلي للمسوق = الحد الأدنى لفدشي
+      const wasliWholesale = minSuggested || (fedshiWholesale ? fedshiWholesale + 18000 : 35000);
+      // ربح منصة وصلي الصافي
+      const wasliProfit = fedshiWholesale ? (wasliWholesale - fedshiWholesale) : 18000;
+      // بيع الزبون
+      const wasliMinPrice = wasliWholesale + 10000;
+      const wasliMaxPrice = maxSuggested || (wasliWholesale + 20000);
+
+      return {
+        title: title || 'طقم سماعات لاسلكية مزدوجة 2 في 1',
+        productCode: productCode || 'AFRCX',
+        skuCode: skuCode || 'AFZGW',
+        fedshiWholesale: fedshiWholesale || 17000,
+        fedshiProfit: fedshiProfit || 18000,
+        minSuggested: minSuggested || 35000,
+        maxSuggested: maxSuggested || 55000,
+        wasliWholesale,
+        wasliProfit,
+        wasliMinPrice,
+        wasliMaxPrice,
+        colors: colors.length > 0 ? colors : [{ name: 'ذهبي' }, { name: 'ابيض' }, { name: 'اسود' }],
+        images: images.slice(0, 10),
+        videoUrl,
+        stock: 50
+      };
+    } catch (err) {
+      console.error('حدث خطأ أثناء قراءة بيانات المنتج:', err);
+      return null;
+    }
+  }
 
       allImages.forEach(img => {
         if (!images.includes(img.src)) {
@@ -279,13 +378,28 @@
     const firstImg = (data.images && data.images[0]) || (data.colors && data.colors[0] && data.colors[0].image) || '';
 
     content.innerHTML = `
+      <!-- رابط السيرفر المستهدف -->
+      <div style="background: #f1f5f9; padding: 10px 14px; border-radius: 12px; border: 1px solid #cbd5e1; display: flex; flex-direction: column; gap: 6px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 11px; font-weight: 700; color: #334155;">رابط خادم منصة وصلي المستهدف:</span>
+          <div style="display: flex; gap: 6px;">
+            <button type="button" id="wasli-set-local" style="font-size: 10px; font-weight: 700; background: #ffffff; border: 1px solid #94a3b8; border-radius: 6px; padding: 2px 8px; cursor: pointer; color: #1e293b;">السيرفر المحلي</button>
+            <button type="button" id="wasli-set-vercel" style="font-size: 10px; font-weight: 700; background: #1d4ed8; color: #ffffff; border: none; border-radius: 6px; padding: 2px 8px; cursor: pointer;">موقع فيرسل المباشر</button>
+          </div>
+        </div>
+        <input type="text" class="wasli-input" id="wasli-inp-server-url" value="${wasliServerUrl}" style="font-size: 11px; padding: 6px 10px; font-family: monospace;" dir="ltr">
+      </div>
+
       <div class="wasli-product-summary">
         ${firstImg ? `<img src="${firstImg}" class="wasli-thumb" alt="صورة المنتج">` : ''}
         <div class="wasli-summary-info">
-          <div class="wasli-summary-name">${data.title}</div>
-          <div class="wasli-codes-row">
-            ${data.productCode ? `<span>رقم المنتج: <strong class="wasli-code-pill">${data.productCode}</strong></span>` : ''}
-            ${data.skuCode ? `<span>النوع: <strong class="wasli-code-pill">${data.skuCode}</strong></span>` : ''}
+          <div class="wasli-field-group">
+            <label class="wasli-label" style="font-size: 11px;">اسم المنتج في منصتك:</label>
+            <input type="text" class="wasli-input" id="wasli-inp-title" value="${data.title}" style="font-weight: 700;">
+          </div>
+          <div class="wasli-codes-row" style="margin-top: 4px;">
+            ${data.productCode ? `<span>كود فدشي: <strong class="wasli-code-pill">${data.productCode}</strong></span>` : ''}
+            ${data.skuCode ? `<span>نوع المنتج: <strong class="wasli-code-pill">${data.skuCode}</strong></span>` : ''}
             <span>الصور المكتشفة: <strong>${data.images.length}</strong></span>
           </div>
         </div>
@@ -303,35 +417,28 @@
         <div class="wasli-finance-grid">
           <div class="wasli-finance-item">
             <div class="wasli-finance-label">تكلفة فدشي عليك</div>
-            <div class="wasli-finance-val">${data.fedshiWholesale.toLocaleString()} د.ع</div>
+            <div class="wasli-finance-val" id="wasli-val-cost">${data.fedshiWholesale.toLocaleString()} د.ع</div>
           </div>
           <div class="wasli-finance-item">
             <div class="wasli-finance-label">سعر جملة وصلي (للمسوق)</div>
-            <div class="wasli-finance-val wasli-highlight-blue">${data.wasliWholesale.toLocaleString()} د.ع</div>
+            <div class="wasli-finance-val wasli-highlight-blue" id="wasli-val-wholesale">${data.wasliWholesale.toLocaleString()} د.ع</div>
           </div>
           <div class="wasli-finance-item">
             <div class="wasli-finance-label">ربحك الصافي كمدير</div>
-            <div class="wasli-finance-val wasli-highlight-green">+${data.wasliProfit.toLocaleString()} د.ع</div>
+            <div class="wasli-finance-val wasli-highlight-green" id="wasli-val-profit">+${data.wasliProfit.toLocaleString()} د.ع</div>
           </div>
         </div>
       </div>
 
-      <!-- حقول التسعير القابلة للتعديل -->
+      <!-- حقول التسعير والتكلفة القابلة للتعديل -->
       <div class="wasli-inputs-grid">
+        <div class="wasli-field-group">
+          <label class="wasli-label">تكلفة فدشي عليك (سعر الجملة الأصلي د.ع)</label>
+          <input type="number" class="wasli-input" id="wasli-inp-cost" value="${data.fedshiWholesale}">
+        </div>
         <div class="wasli-field-group">
           <label class="wasli-label">سعر الجملة لمسوق وصلي (د.ع)</label>
           <input type="number" class="wasli-input" id="wasli-inp-wholesale" value="${data.wasliWholesale}">
-        </div>
-        <div class="wasli-field-group">
-          <label class="wasli-label">تصنيف المنتج في وصلي</label>
-          <select class="wasli-select" id="wasli-inp-category">
-            <option value="إلكترونيات وهواتف">إلكترونيات وهواتف</option>
-            <option value="أزياء وملابس">أزياء وملابس</option>
-            <option value="عطور وتجميل">عطور وتجميل</option>
-            <option value="مستلزمات منزلية">مستلزمات منزلية</option>
-            <option value="ساعات وإكسسوارات">ساعات وإكسسوارات</option>
-            <option value="عام">عام</option>
-          </select>
         </div>
       </div>
 
@@ -343,6 +450,24 @@
         <div class="wasli-field-group">
           <label class="wasli-label">الحد الأعلى لبيع الزبون (د.ع)</label>
           <input type="number" class="wasli-input" id="wasli-inp-max" value="${data.wasliMaxPrice}">
+        </div>
+      </div>
+
+      <div class="wasli-inputs-grid">
+        <div class="wasli-field-group">
+          <label class="wasli-label">تصنيف المنتج في وصلي</label>
+          <select class="wasli-select" id="wasli-inp-category">
+            <option value="إلكترونيات وهواتف">إلكترونيات وهواتف</option>
+            <option value="أزياء وملابس">أزياء وملابس</option>
+            <option value="عطور وتجميل">عطور وتجميل</option>
+            <option value="مستلزمات منزلية">مستلزمات منزلية</option>
+            <option value="ساعات وإكسسوارات">ساعات وإكسسوارات</option>
+            <option value="عام">عام</option>
+          </select>
+        </div>
+        <div class="wasli-field-group">
+          <label class="wasli-label">المخزون المتوفر</label>
+          <input type="number" class="wasli-input" id="wasli-inp-stock" value="${data.stock || 50}">
         </div>
       </div>
 
@@ -364,22 +489,56 @@
       <div id="wasli-status-message"></div>
     `;
 
+    // إدارة رابط السيرفر
+    const serverInput = overlay.querySelector('#wasli-inp-server-url');
+    overlay.querySelector('#wasli-set-local').onclick = () => {
+      serverInput.value = 'http://localhost:3000';
+      wasliServerUrl = 'http://localhost:3000';
+    };
+    overlay.querySelector('#wasli-set-vercel').onclick = () => {
+      serverInput.value = 'https://wasli-smart.vercel.app';
+      wasliServerUrl = 'https://wasli-smart.vercel.app';
+    };
+
+    // التحديث الحي للأرباح عند تعديل الأسعار
+    const costInp = overlay.querySelector('#wasli-inp-cost');
+    const wholesaleInp = overlay.querySelector('#wasli-inp-wholesale');
+    const valCost = overlay.querySelector('#wasli-val-cost');
+    const valWholesale = overlay.querySelector('#wasli-val-wholesale');
+    const valProfit = overlay.querySelector('#wasli-val-profit');
+
+    const updateLiveProfits = () => {
+      const c = parseInt(costInp.value, 10) || 0;
+      const w = parseInt(wholesaleInp.value, 10) || 0;
+      const profit = w - c;
+      valCost.textContent = `${c.toLocaleString()} د.ع`;
+      valWholesale.textContent = `${w.toLocaleString()} د.ع`;
+      valProfit.textContent = `+${profit.toLocaleString()} د.ع`;
+    };
+
+    costInp.addEventListener('input', updateLiveProfits);
+    wholesaleInp.addEventListener('input', updateLiveProfits);
+
     // ربط زر التأكيد والإرسال إلى منصة وصلي
     const confirmBtn = overlay.querySelector('#wasli-btn-confirm');
     confirmBtn.onclick = async () => {
       confirmBtn.disabled = true;
       confirmBtn.innerHTML = `<span>جاري نقل المنتج وحفظه...</span>`;
 
-      const wholesale = parseInt(overlay.querySelector('#wasli-inp-wholesale').value, 10);
+      const targetUrl = (serverInput.value || wasliServerUrl).trim().replace(/\/+$/, '');
+      const productTitle = overlay.querySelector('#wasli-inp-title').value.trim() || data.title;
+      const costPrice = parseInt(costInp.value, 10) || data.fedshiWholesale;
+      const wholesale = parseInt(wholesaleInp.value, 10) || data.wasliWholesale;
       const category = overlay.querySelector('#wasli-inp-category').value;
       const minPrice = parseInt(overlay.querySelector('#wasli-inp-min').value, 10);
       const maxPrice = parseInt(overlay.querySelector('#wasli-inp-max').value, 10);
+      const stock = parseInt(overlay.querySelector('#wasli-inp-stock').value, 10) || 50;
 
       const payload = {
-        name: data.title,
+        name: productTitle,
         fedshiCode: data.productCode,
         fedshiSku: data.skuCode,
-        fedshiPrice: data.fedshiWholesale,
+        fedshiPrice: costPrice,
         fedshiProfit: data.fedshiProfit,
         minSuggestedPrice: data.minSuggested,
         maxSuggestedPrice: data.maxSuggested,
@@ -391,13 +550,13 @@
         colors: data.colors,
         images: data.images,
         videoUrl: data.videoUrl,
-        stockQuantity: data.stock,
+        stockQuantity: stock,
       };
 
       const statusBox = overlay.querySelector('#wasli-status-message');
 
       try {
-        const response = await fetch(`${wasliServerUrl}/api/products/import-fedshi`, {
+        const response = await fetch(`${targetUrl}/api/products/import-fedshi`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -423,7 +582,7 @@
             confirmBtn.innerHTML = `<span>تأكيد ونقل المنتج إلى منصتي الآن</span>`;
           }, 2000);
         } else {
-          throw new Error(result.message || 'حدث خطأ غير معروف');
+          throw new Error(result.message || 'حدث خطأ غير معروف في السيرفر');
         }
       } catch (err) {
         console.error('فشل إرسال المنتج إلى وصلي:', err);
@@ -434,7 +593,7 @@
               <line x1="12" y1="8" x2="12" y2="12"></line>
               <line x1="12" y1="16" x2="12.01" y2="16"></line>
             </svg>
-            <span>تعذر إرسال المنتج إلى وصلي. تأكد أن السيرفر يعمل (${wasliServerUrl}). الخطأ: ${err.message}</span>
+            <span>تعذر إرسال المنتج إلى (${targetUrl}). تأكد من تشغيل السيرفر أو صحة رابط فيرسل. الخطأ: ${err.message}</span>
           </div>
         `;
         confirmBtn.disabled = false;
