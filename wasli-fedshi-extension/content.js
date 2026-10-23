@@ -33,61 +33,65 @@
   }
 
   // محاولة النقر البرمجي على تبويب معين ثم قراءة محتواه
-  async function readTabContentAsync(tabName) {
+  async function extractRadixTabsContent() {
+    let promoDescription = '';
+    let specifications = '';
+
     try {
-      const allElements = Array.from(document.querySelectorAll('button, [role="tab"], div, a, span'));
-      const targetTab = allElements.find(el => {
-        const text = (el.textContent || '').trim();
-        return text === tabName;
-      });
+      // 1. استخراج الوصف الترويجي من تبويب Radix (detailed_description)
+      const promoBtn = document.querySelector('button[aria-controls*="detailed_description"], button[id*="trigger-detailed_description"]') ||
+        Array.from(document.querySelectorAll('button[role="tab"]')).find(b => (b.textContent || '').trim().includes('وصف ترويجي'));
 
-      if (!targetTab) return '';
+      if (promoBtn) {
+        promoBtn.click();
+        await new Promise(r => setTimeout(r, 160));
 
-      // النقر على التبويب لتنشيطه في React
-      targetTab.click();
-      await new Promise(r => setTimeout(r, 200));
+        const controlsId = promoBtn.getAttribute('aria-controls');
+        let promoPanel = controlsId ? document.getElementById(controlsId) : null;
+        if (!promoPanel) {
+          promoPanel = document.querySelector('[id*="content-detailed_description"], [data-slot="tabs-content"][id*="detailed"]');
+        }
 
-      // إذا كان التبويب هو "وصف ترويجي"، نبحث عن زر "نسخ الوصف"
-      if (tabName.includes('ترويجي')) {
-        const copyBtn = Array.from(document.querySelectorAll('button, div, span')).find(el => {
-          return (el.textContent || '').trim().includes('نسخ الوصف');
-        });
-        if (copyBtn) {
-          let textContainer = copyBtn.previousElementSibling || copyBtn.parentElement;
-          if (textContainer) {
-            const raw = textContainer.innerText || textContainer.textContent || '';
-            const clean = raw.replace('نسخ الوصف', '').trim();
-            if (clean.length > 20) return clean;
+        if (promoPanel) {
+          const raw = promoPanel.innerText || promoPanel.textContent || '';
+          promoDescription = raw.replace(/نسخ الوصف/g, '').trim();
+        }
+
+        // بحث احتياطي دقيق بجانب زر "نسخ الوصف" حصراً
+        if (!promoDescription) {
+          const copyBtn = Array.from(document.querySelectorAll('button, div, span')).find(el => (el.textContent || '').trim() === 'نسخ الوصف');
+          if (copyBtn) {
+            const parentBox = copyBtn.closest('div[class*="pt-"], [role="tabpanel"]') || copyBtn.parentElement;
+            if (parentBox) {
+              promoDescription = (parentBox.innerText || '').replace(/نسخ الوصف/g, '').trim();
+            }
           }
         }
       }
 
-      // البحث في الحاوية النشطة الحالية
-      let container = targetTab.closest('[role="tablist"]')?.parentElement || targetTab.parentElement?.parentElement;
-      if (!container) container = targetTab.parentElement;
+      // 2. استخراج المواصفات الفنية من تبويب Radix (description)
+      const specsBtn = document.querySelector('button[aria-controls*="content-description"], button[id*="trigger-description"]:not([id*="detailed"])') ||
+        Array.from(document.querySelectorAll('button[role="tab"]')).find(b => (b.textContent || '').trim().includes('المواصفات'));
 
-      const paragraphs = Array.from(container.querySelectorAll('p, div, li, span')).filter(p => {
-        const t = (p.textContent || '').trim();
-        return t.length > 30 &&
-               !t.includes('سعر الجملة') &&
-               !t.includes('سعر الزبون') &&
-               !t.includes('الربح:') &&
-               !t.includes('اضف الى السلة') &&
-               !t.includes('احصائيات') &&
-               !t.includes('نسخ الوصف') &&
-               p.children.length <= 4;
-      });
+      if (specsBtn) {
+        specsBtn.click();
+        await new Promise(r => setTimeout(r, 160));
 
-      if (paragraphs.length > 0) {
-        paragraphs.sort((a, b) => (b.innerText || b.textContent || '').length - (a.innerText || a.textContent || '').length);
-        return (paragraphs[0].innerText || paragraphs[0].textContent || '').trim();
+        const controlsId = specsBtn.getAttribute('aria-controls');
+        let specsPanel = controlsId ? document.getElementById(controlsId) : null;
+        if (!specsPanel) {
+          specsPanel = document.querySelector('[id*="content-description"]:not([id*="detailed"]), [data-slot="tabs-content"]:not([id*="detailed"])');
+        }
+
+        if (specsPanel) {
+          specifications = (specsPanel.innerText || specsPanel.textContent || '').trim();
+        }
       }
-
-      return '';
-    } catch (e) {
-      console.warn('تعذر قراءة محتوى تبويب:', tabName, e);
-      return '';
+    } catch (err) {
+      console.warn('خطأ في استخراج تبويبات Radix:', err);
     }
+
+    return { promoDescription, specifications };
   }
 
   // استخراج تفاصيل المنتج من صفحة فدشي بالاعتماد المباشر على هيكلية عناصر F12
@@ -274,8 +278,7 @@
       }
 
       // 8. استخراج "الوصف الترويجي" و "المواصفات"
-      let promoDescription = await readTabContentAsync('وصف ترويجي');
-      let specifications = await readTabContentAsync('المواصفات');
+      const { promoDescription, specifications } = await extractRadixTabsContent();
 
       if (!promoDescription || !specifications) {
         const contentParagraphs = Array.from(document.querySelectorAll('div, p')).filter(el => {
@@ -360,7 +363,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">مورد: فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.0.9</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.1.0</span>
           </div>
           <button type="button" class="wasli-close-btn" id="wasli-modal-close">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
