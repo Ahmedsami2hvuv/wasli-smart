@@ -32,6 +32,7 @@ export async function getAllStores(): Promise<Store[]> {
         return data.map(item => ({
           id: item.id,
           name: item.name,
+          ownerName: item.settings?.owner_name || undefined,
           slug: item.slug,
           code: item.code,
           description: item.description,
@@ -86,6 +87,7 @@ export async function createNewStore(params: {
   city?: string;
   description?: string;
   ownerId?: string;
+  ownerName?: string;
 }): Promise<Store> {
   const code = generateStoreCode();
   const baseSlug = params.name
@@ -98,10 +100,11 @@ export async function createNewStore(params: {
   const newStore: Store = {
     id: `store-${Date.now()}`,
     name: params.name,
+    ownerName: params.ownerName,
     slug: slug,
     code: code,
     description: params.description || `متجر ${params.name} المعتمد على منصة وصلي للتوصيل السريع`,
-    city: params.city || 'البصرة - أبي الخصيب',
+    city: params.city || 'البصرة',
     phone: params.phone,
     status: 'active',
     totalSales: 0,
@@ -113,11 +116,11 @@ export async function createNewStore(params: {
     deliveryFeeIqd: 4000,
     deliveryTimeMinutes: '30-45 دقيقة',
     isOpen: true,
-    isAbiAlkhaseeb: params.city?.includes('أبي الخصيب') || true,
+    isAbiAlkhaseeb: params.city?.includes('أبي الخصيب') || false,
     image: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80',
     logoUrl: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80',
-    location: params.city || 'البصرة - أبي الخصيب',
-    district: 'أبي الخصيب',
+    location: params.city || 'البصرة',
+    district: params.city || 'البصرة',
     createdAt: new Date().toISOString(),
   };
 
@@ -135,6 +138,9 @@ export async function createNewStore(params: {
           phone: newStore.phone,
           status: 'active',
           logo_url: newStore.logoUrl,
+          settings: {
+            owner_name: params.ownerName || '',
+          },
         })
         .select()
         .single();

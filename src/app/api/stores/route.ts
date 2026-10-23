@@ -13,17 +13,18 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, phone, city, description } = body;
+    const { name, phone, city, description, ownerName } = body;
 
-    if (!name || !phone) {
+    if (!name?.trim() || !phone?.trim()) {
       return NextResponse.json({ success: false, message: 'اسم المتجر ورقم الهاتف مطلوبان' }, { status: 400 });
     }
 
     const store = await createNewStore({
-      name,
-      phone,
-      city,
-      description,
+      name: name.trim(),
+      ownerName: ownerName?.trim() || '',
+      phone: phone.trim(),
+      city: city?.trim() || 'البصرة',
+      description: description?.trim() || '',
     });
 
     return NextResponse.json({ success: true, store }, { status: 201 });

@@ -2,15 +2,16 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Store, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Share2 } from 'lucide-react';
+import { Store, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Share2, User, Phone, MapPin } from 'lucide-react';
 import Link from 'next/link';
+import { IRAQ_GOVERNORATES } from '@/data/iraqCities';
 
 export default function RegisterStorePage() {
   const router = useRouter();
+  const [ownerName, setOwnerName] = useState('');
   const [storeName, setStoreName] = useState('');
   const [phone, setPhone] = useState('');
-  const [city, setCity] = useState('البصرة - أبي الخصيب');
-  const [description, setDescription] = useState('');
+  const [city, setCity] = useState('البصرة');
   const [isLoading, setIsLoading] = useState(false);
   const [createdStore, setCreatedStore] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -19,8 +20,18 @@ export default function RegisterStorePage() {
     e.preventDefault();
     setErrorMsg('');
 
-    if (!storeName.trim() || !phone.trim()) {
-      setErrorMsg('يرجى كتابة اسم المتجر ورقم الهاتف للتواصل');
+    if (!ownerName.trim()) {
+      setErrorMsg('يرجى كتابة الاسم الثلاثي لصاحب المتجر');
+      return;
+    }
+
+    if (!storeName.trim()) {
+      setErrorMsg('يرجى كتابة اسم المتجر');
+      return;
+    }
+
+    if (!phone.trim()) {
+      setErrorMsg('يرجى إدخال رقم الهاتف للتواصل');
       return;
     }
 
@@ -31,10 +42,10 @@ export default function RegisterStorePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          ownerName: ownerName.trim(),
           name: storeName.trim(),
           phone: phone.trim(),
           city,
-          description: description.trim(),
         }),
       });
 
@@ -95,7 +106,7 @@ export default function RegisterStorePage() {
               </div>
               <div className="flex flex-col items-center gap-1 p-2">
                 <Share2 className="w-5 h-5 text-skybrand-600" />
-                <span className="font-semibold text-slate-800">روابط مشفرة</span>
+                <span className="font-semibold text-slate-800">روابط مباشرة</span>
               </div>
             </div>
 
@@ -107,23 +118,46 @@ export default function RegisterStorePage() {
 
             {/* النموذج */}
             <form onSubmit={handleSubmit} className="space-y-5">
+              {/* الاسم الثلاثي */}
               <div>
-                <label className="block text-sm font-semibold text-slate-800 mb-1.5">
-                  اسم متجرك <span className="text-red-500">*</span>
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5 flex items-center gap-1.5">
+                  <User className="w-4 h-4 text-brand-700" />
+                  <span>الاسم الثلاثي</span>
+                  <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="مثال: متجر النخيل، متجر أحمد ستور"
+                  placeholder="مثال: أحمد عبد الله حسين"
+                  value={ownerName}
+                  onChange={(e) => setOwnerName(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm outline-none transition-all"
+                />
+              </div>
+
+              {/* اسم المتجر */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5 flex items-center gap-1.5">
+                  <Store className="w-4 h-4 text-brand-700" />
+                  <span>اسم متجرك</span>
+                  <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: متجر النخيل، متجر الوسام"
                   value={storeName}
                   onChange={(e) => setStoreName(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm outline-none transition-all"
                 />
               </div>
 
+              {/* رقم الهاتف */}
               <div>
-                <label className="block text-sm font-semibold text-slate-800 mb-1.5">
-                  رقم الهاتف (واتساب للتواصل) <span className="text-red-500">*</span>
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5 flex items-center gap-1.5">
+                  <Phone className="w-4 h-4 text-brand-700" />
+                  <span>رقم الهاتف (واتساب للتواصل)</span>
+                  <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="tel"
@@ -136,36 +170,27 @@ export default function RegisterStorePage() {
                 />
               </div>
 
+              {/* اختيار المحافظة من بين 18 محافظة */}
               <div>
-                <label className="block text-sm font-semibold text-slate-800 mb-1.5">
-                  المنطقة / المحافظة
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5 flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 text-brand-700" />
+                  <span>المحافظة</span>
+                  <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm outline-none transition-all bg-white"
                 >
-                  <option value="البصرة - أبي الخصيب">البصرة - قضاء أبي الخصيب</option>
-                  <option value="البصرة - العشار">البصرة - العشار</option>
-                  <option value="البصرة - الجبيلة">البصرة - الجبيلة</option>
-                  <option value="البصرة - الجزائر">البصرة - الجزائر</option>
-                  <option value="البصرة - الزبير">البصرة - الزبير</option>
-                  <option value="بغداد">بغداد</option>
-                  <option value="محافظة أخرى">محافظة أخرى</option>
+                  {IRAQ_GOVERNORATES.map((gov) => (
+                    <option key={gov} value={gov}>
+                      {gov}
+                    </option>
+                  ))}
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-slate-800 mb-1.5">
-                  نبذة تعريفية عن متجرك (اختياري)
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="مثال: متجر متخصص بأفضل منتجات وإلكترونيات بجودة عالية وتوصيل مباشر"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm outline-none transition-all"
-                />
+                <p className="text-xs text-slate-500 mt-1">
+                  اختر محافظتك من بين المحافظات العراقية الـ 18
+                </p>
               </div>
 
               <button
@@ -199,9 +224,23 @@ export default function RegisterStorePage() {
             </p>
 
             <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-right space-y-3 mb-8">
+              {createdStore.ownerName && (
+                <div className="flex justify-between items-center text-sm border-b border-slate-200/80 pb-2">
+                  <span className="text-slate-500">اسم صاحب المتجر:</span>
+                  <span className="font-bold text-slate-900">{createdStore.ownerName}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center text-sm border-b border-slate-200/80 pb-2">
                 <span className="text-slate-500">اسم المتجر:</span>
                 <span className="font-bold text-slate-900">{createdStore.name}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm border-b border-slate-200/80 pb-2">
+                <span className="text-slate-500">المحافظة:</span>
+                <span className="font-semibold text-slate-800">{createdStore.city}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm border-b border-slate-200/80 pb-2">
+                <span className="text-slate-500">رقم الهاتف:</span>
+                <span className="font-semibold text-slate-800" dir="ltr">{createdStore.phone}</span>
               </div>
               <div className="flex justify-between items-center text-sm border-b border-slate-200/80 pb-2">
                 <span className="text-slate-500">رمز المتجر الفريد:</span>
