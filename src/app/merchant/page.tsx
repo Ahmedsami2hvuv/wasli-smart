@@ -60,6 +60,7 @@ function MerchantDashboardContent() {
 
   const [currentStore, setCurrentStore] = useState<StoreType | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [totalProductsCount, setTotalProductsCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -126,6 +127,15 @@ function MerchantDashboardContent() {
           if (ordersData.success && ordersData.orders) {
             setOrders(ordersData.orders);
           }
+
+          // جلب عدد المنتجات المنشورة من المنصة تلقائياً
+          try {
+            const prodRes = await fetch('/api/products');
+            const prodData = await prodRes.json();
+            if (prodData.success && Array.isArray(prodData.products)) {
+              setTotalProductsCount(prodData.products.length);
+            }
+          } catch (e) {}
         } else {
           setCurrentStore(null);
         }
@@ -194,6 +204,15 @@ function MerchantDashboardContent() {
           if (ordersData.success && ordersData.orders) {
             setOrders(ordersData.orders);
           }
+
+          // جلب عدد المنتجات المنشورة
+          try {
+            const prodRes = await fetch('/api/products');
+            const prodData = await prodRes.json();
+            if (prodData.success && Array.isArray(prodData.products)) {
+              setTotalProductsCount(prodData.products.length);
+            }
+          } catch (e) {}
           return;
         }
       }
@@ -610,15 +629,14 @@ function MerchantDashboardContent() {
           </div>
 
           <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-            <div className="text-xs font-bold text-slate-500 mb-1">كتالوج المنتجات</div>
-            <Link 
-              href={`/merchant/catalog?storeCode=${currentStore?.code}`}
-              className="inline-flex items-center gap-1.5 text-brand-700 hover:text-brand-800 font-bold text-sm mt-1"
-            >
-              <span>إضافة منتجات لمتجري</span>
-              <Plus className="w-4 h-4" />
-            </Link>
-            <div className="text-[11px] text-slate-400 mt-2">اختر منتجات المنصة وحدد سعرك</div>
+            <div className="text-xs font-bold text-slate-500 mb-1">المنتجات المعروضة</div>
+            <div className="text-xl sm:text-2xl font-black text-slate-900">
+              {totalProductsCount} <span className="text-xs font-normal text-slate-500">منتج جاهز</span>
+            </div>
+            <div className="text-[11px] text-emerald-600 font-medium mt-2 flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+              <span>تظهر تلقائياً في متجرك للزبائن</span>
+            </div>
           </div>
         </div>
 
