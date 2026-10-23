@@ -402,7 +402,7 @@ export async function addProductToStore(params: {
 }
 
 /**
- * تعطيل أو إخفاء منتج من متجر المسوق
+ * تعطيل أو إخفاء منتج من متجر التاجر
  */
 export async function toggleStoreProductStatus(storeId: string, productId: string, isActive: boolean) {
   const item = localStoreProducts.find(sp => sp.storeId === storeId && sp.productId === productId);

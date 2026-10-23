@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     // تطبيق المعادلة المالية الدقيقة لمنصة وصلي:
     // 1. ربح المنصة الثابت = 3,000 د.ع لكل منتج
-    // 2. سعر جملة وصلي للمسوق = تكلفة فدشي + 3,000 د.ع
+    // 2. سعر جملة وصلي للتاجر = تكلفة فدشي + 3,000 د.ع
     const wholesalePrice = customWholesale 
       ? Number(customWholesale) 
       : (supplierCost > 0 ? (supplierCost + 3000) : (minSuggestedPrice ? Number(minSuggestedPrice) : 3000));
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     // 3. سعر المنصة الأساسي يطابق سعر الجملة
     const platformPrice = customPlatform ? Number(customPlatform) : wholesalePrice;
 
-    // 4. حدود بيع الزبون للمسوق:
+    // 4. حدود بيع الزبون للتاجر:
     // الحد الأدنى المقترح: سعر الجملة + 10,000 د.ع (أو 80,000 د.ع في حال كان أعلى)
     const minPrice = customMin 
       ? Number(customMin) 

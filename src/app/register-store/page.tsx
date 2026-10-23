@@ -24,14 +24,14 @@ export default function RegisterStorePage() {
     const storeUrl = `${origin}/s/${createdStore.code}?name=${encodeURIComponent(createdStore.name)}`;
     const dashboardUrl = `${origin}/merchant?storeCode=${createdStore.code}`;
 
-    const textToCopy = `معلومات متجري:
-- اسم صاحب المتجر: ${createdStore.ownerName || 'غير محدد'}
+    const textToCopy = `معلومات متجر التاجر:
+- اسم التاجر: ${createdStore.ownerName || 'غير محدد'}
 - اسم المتجر: ${createdStore.name}
 - المحافظة: ${createdStore.city}
 - رقم الهاتف: ${createdStore.phone}
 - رمز المتجر الفريد: ${createdStore.code}
-- رابط المتجر المباشر: ${storeUrl}
-- رابط لوحة إدارة متجري: ${dashboardUrl}`;
+- رابط متجر التاجر المباشر للزبائن: ${storeUrl}
+- رابط صفحة التاجر (لوحة إدارة المتجر): ${dashboardUrl}`;
 
     try {
       if (navigator?.clipboard?.writeText) {
@@ -55,7 +55,7 @@ export default function RegisterStorePage() {
     setErrorMsg('');
 
     if (!ownerName.trim()) {
-      setErrorMsg('يرجى كتابة الاسم الثلاثي لصاحب المتجر');
+      setErrorMsg('يرجى كتابة الاسم الثلاثي للتاجر');
       return;
     }
 
@@ -130,10 +130,10 @@ export default function RegisterStorePage() {
                 <Store className="w-8 h-8" />
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-2">
-                أنشئ متجرك الإلكتروني مجاناً
+                انضم كتاجر وأنشئ متجرك مجاناً
               </h1>
               <p className="text-slate-600 text-sm leading-relaxed max-w-md mx-auto">
-                اختر منتجات منصة وصلي، حدد سعر البيع الذي تريده، وابدأ بجني الأرباح فورياً بدون الحاجة لرأس مال أو شراء بضاعة مسبقاً!
+                كن تاجراً معتمداً، اختر منتجات المنصة، حدد سعر البيع الذي تريده، وابدأ بجني أرباحك فورياً بدون الحاجة لرأس مال أو شراء بضاعة مسبقاً!
               </p>
             </div>
 
@@ -145,11 +145,11 @@ export default function RegisterStorePage() {
               </div>
               <div className="flex flex-col items-center gap-1 p-2 border-x border-slate-200">
                 <Zap className="w-5 h-5 text-accent-500" />
-                <span className="font-semibold text-slate-800">توصيل سريع</span>
+                <span className="font-semibold text-slate-800">توصيل لكل العراق</span>
               </div>
               <div className="flex flex-col items-center gap-1 p-2">
                 <Share2 className="w-5 h-5 text-skybrand-600" />
-                <span className="font-semibold text-slate-800">روابط مباشرة</span>
+                <span className="font-semibold text-slate-800">متجر تاجر مستقل</span>
               </div>
             </div>
 
@@ -165,7 +165,7 @@ export default function RegisterStorePage() {
               <div>
                 <label className="block text-sm font-semibold text-slate-800 mb-1.5 flex items-center gap-1.5">
                   <User className="w-4 h-4 text-brand-700" />
-                  <span>الاسم الثلاثي</span>
+                  <span>الاسم الثلاثي للتاجر</span>
                   <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -182,7 +182,7 @@ export default function RegisterStorePage() {
               <div>
                 <label className="block text-sm font-semibold text-slate-800 mb-1.5 flex items-center gap-1.5">
                   <Store className="w-4 h-4 text-brand-700" />
-                  <span>اسم متجرك</span>
+                  <span>اسم متجر التاجر</span>
                   <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -199,7 +199,7 @@ export default function RegisterStorePage() {
               <div>
                 <label className="block text-sm font-semibold text-slate-800 mb-1.5 flex items-center gap-1.5">
                   <Phone className="w-4 h-4 text-brand-700" />
-                  <span>رقم الهاتف (واتساب للتواصل)</span>
+                  <span>رقم هاتف التاجر (واتساب للتواصل)</span>
                   <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -242,7 +242,7 @@ export default function RegisterStorePage() {
                 className="w-full py-4 px-6 rounded-xl bg-brand-700 hover:bg-brand-800 active:bg-brand-900 text-white font-bold text-base shadow-lg shadow-brand-700/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {isLoading ? (
-                  <span>جاري إنشاء متجرك...</span>
+                  <span>جاري إنشاء متجر التاجر...</span>
                 ) : (
                   <>
                     <Sparkles className="w-5 h-5 text-accent-400" />
@@ -263,13 +263,13 @@ export default function RegisterStorePage() {
               مبروك! تم إنشاء متجرك بنجاح
             </h2>
             <p className="text-slate-600 text-sm mb-6">
-              أصبح متجرك جاهزاً الآن للبدء باختيار المنتجات وتحديد أرباحك.
+              أصبح متجر التاجر جاهزاً الآن للبدء باختيار المنتجات وتحديد أرباحك وإدارته من صفحة التاجر.
             </p>
 
             <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-right space-y-3 mb-8">
               {createdStore.ownerName && (
                 <div className="flex justify-between items-center text-sm border-b border-slate-200/80 pb-2">
-                  <span className="text-slate-500">اسم صاحب المتجر:</span>
+                  <span className="text-slate-500">اسم التاجر:</span>
                   <span className="font-bold text-slate-900">{createdStore.ownerName}</span>
                 </div>
               )}
@@ -289,15 +289,15 @@ export default function RegisterStorePage() {
                 <span className="text-slate-500">رمز المتجر الفريد:</span>
                 <span className="font-mono font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded">{createdStore.code}</span>
               </div>
-              {/* الرابط الأول: رابط لوحة إدارة متجرك */}
+              {/* الرابط الأول: رابط صفحة التاجر */}
               <div className="flex flex-col gap-1.5 text-sm pt-3 border-t border-slate-200/80">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
                     <Store className="w-3.5 h-3.5 text-brand-700" />
-                    <span>رابط لوحة إدارة متجرك (الخاص بك):</span>
+                    <span>رابط صفحة التاجر (لوحة إدارة متجرك):</span>
                   </span>
                   <span className="text-[11px] text-brand-800 bg-brand-50 font-bold px-2 py-0.5 rounded-md">
-                    لوحة التحكم
+                    صفحة التاجر
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -307,15 +307,15 @@ export default function RegisterStorePage() {
                 </div>
               </div>
 
-              {/* الرابط الثاني: رابط متجرك للزبائن */}
+              {/* الرابط الثاني: رابط متجر التاجر للزبائن */}
               <div className="flex flex-col gap-1.5 text-sm pt-2">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
                     <Share2 className="w-3.5 h-3.5 text-skybrand-600" />
-                    <span>رابط متجرك المباشر (للزبائن والمشترين):</span>
+                    <span>رابط متجر التاجر المباشر (للزبائن والمشترين):</span>
                   </span>
                   <span className="text-[11px] text-skybrand-800 bg-skybrand-50 font-bold px-2 py-0.5 rounded-md">
-                    متجر الزبائن
+                    متجر التاجر
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -350,13 +350,13 @@ export default function RegisterStorePage() {
 
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* زر الدخول إلى لوحة إدارة متجري */}
+                {/* زر الدخول إلى صفحة التاجر */}
                 <Link
                   href={`/merchant?storeCode=${createdStore.code}`}
                   className="w-full py-4 px-6 rounded-xl bg-brand-700 hover:bg-brand-800 active:bg-brand-900 text-white font-bold text-sm shadow-md shadow-brand-700/25 transition-all flex items-center justify-center gap-2 cursor-pointer text-center"
                 >
                   <Store className="w-4 h-4 text-accent-400" />
-                  <span>الدخول إلى لوحة إدارة متجري</span>
+                  <span>الدخول إلى صفحة التاجر</span>
                 </Link>
 
                 {/* زر نسخ معلوماتي */}
@@ -383,12 +383,12 @@ export default function RegisterStorePage() {
                 </button>
               </div>
 
-              {/* زر معاينة صفحة المتجر */}
+              {/* زر معاينة متجر التاجر */}
               <Link
                 href={`/s/${createdStore.code}?name=${encodeURIComponent(createdStore.name)}`}
                 className="w-full py-3 px-6 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900 font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 text-center"
               >
-                <span>معاينة صفحة المتجر</span>
+                <span>معاينة متجر التاجر</span>
               </Link>
             </div>
           </div>

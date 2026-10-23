@@ -27,7 +27,13 @@ import {
   Phone,
   User,
   Truck,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Eye,
+  EyeOff,
+  Save,
+  Search,
+  Tag,
+  Filter
 } from 'lucide-react';
 import Link from 'next/link';
 import { Store as StoreType, Order } from '@/types';
@@ -63,6 +69,15 @@ function MerchantDashboardContent() {
   const [totalProductsCount, setTotalProductsCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // حالات إدارة منتجات وأسعار المتجر
+  const [merchantProducts, setMerchantProducts] = useState<any[]>([]);
+  const [editingPrices, setEditingPrices] = useState<Record<string, number>>({});
+  const [savingProductId, setSavingProductId] = useState<string | null>(null);
+  const [productFeedback, setProductFeedback] = useState<Record<string, string>>({});
+  const [productFilter, setProductFilter] = useState<'all' | 'active' | 'hidden'>('all');
+  const [productSearch, setProductSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders'>('products');
 
   // حالة تسجيل الدخول برابط المتجر إذا لم يتم تحديد متجر
   const [storeInput, setStoreInput] = useState('');
@@ -171,14 +186,22 @@ function MerchantDashboardContent() {
             setOrders(ordersData.orders);
           }
 
-          // جلب عدد المنتجات المنشورة من المنصة تلقائياً
+          // جلب منتجات وأسعار متجر هذا التاجر المنشورة من المنصة
           try {
-            const prodRes = await fetch('/api/products');
-            const prodData = await prodRes.json();
-            if (prodData.success && Array.isArray(prodData.products)) {
-              setTotalProductsCount(prodData.products.length);
+            const spRes = await fetch(`/api/stores/products?storeCode=${found.code || found.id}`);
+            const spData = await spRes.json();
+            if (spData.success && Array.isArray(spData.products)) {
+              setMerchantProducts(spData.products);
+              setTotalProductsCount(spData.products.length);
+              const initialPrices: Record<string, number> = {};
+              spData.products.forEach((p: any) => {
+                initialPrices[p.id] = p.sellingPrice || p.priceIqd || p.platformPriceIqd;
+              });
+              setEditingPrices(initialPrices);
             }
-          } catch (e) {}
+          } catch (e) {
+            console.warn('تعذر جلب منتجات المتجر:', e);
+          }
         } else {
           setCurrentStore(null);
         }
@@ -325,12 +348,18 @@ function MerchantDashboardContent() {
           }
         } catch (e) {}
 
-        // جلب عدد المنتجات المنشورة
+        // جلب منتجات وأسعار متجر هذا التاجر
         try {
-          const prodRes = await fetch('/api/products');
-          const prodData = await prodRes.json();
-          if (prodData.success && Array.isArray(prodData.products)) {
-            setTotalProductsCount(prodData.products.length);
+          const spRes = await fetch(`/api/stores/products?storeCode=${found.code || found.id}`);
+          const spData = await spRes.json();
+          if (spData.success && Array.isArray(spData.products)) {
+            setMerchantProducts(spData.products);
+            setTotalProductsCount(spData.products.length);
+            const initialPrices: Record<string, number> = {};
+            spData.products.forEach((p: any) => {
+              initialPrices[p.id] = p.sellingPrice || p.priceIqd || p.platformPriceIqd;
+            });
+            setEditingPrices(initialPrices);
           }
         } catch (e) {}
         return;
@@ -481,6 +510,95 @@ function MerchantDashboardContent() {
       setEditErrorMsg('تعذر الاتصال بالخادم، يرجى المحاولة مرة أخرى');
     } finally {
       setIsSavingStore(false);
+    }
+  };
+
+  // دوال التحكم بأسعار وحالات المنتجات في متجر التاجر
+  const handleSaveProductPrice = async (productId: string, newPrice: number) => {
+    if (!currentStore) return;
+    setSavingProductId(productId);
+    try {
+      const res = await fetch('/api/stores/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storeCode: currentStore.code,
+          storeId: currentStore.id,
+          productId,
+          sellingPrice: newPrice,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMerchantProducts(prev =>
+          prev.map(p =>
+            p.id === productId
+              ? {
+                  ...p,
+                  sellingPrice: newPrice,
+                  priceIqd: newPrice,
+                  merchantProfit: Math.max(0, newPrice - (p.platformPriceIqd || 0)),
+                }
+              : p
+          )
+        );
+        setProductFeedback(prev => ({ ...prev, [productId]: 'تم حفظ السعر الجديد بنجاح!' }));
+        setTimeout(() => {
+          setProductFeedback(prev => {
+            const next = { ...prev };
+            delete next[productId];
+            return next;
+          });
+        }, 3000);
+      } else {
+        alert(data.message || 'تعذر حفظ السعر');
+      }
+    } catch (err) {
+      alert('حدث خطأ في الاتصال بالخادم');
+    } finally {
+      setSavingProductId(null);
+    }
+  };
+
+  const handleToggleProductActive = async (productId: string, currentActive: boolean) => {
+    if (!currentStore) return;
+    const newActive = !currentActive;
+    try {
+      const res = await fetch('/api/stores/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storeCode: currentStore.code,
+          storeId: currentStore.id,
+          productId,
+          isActive: newActive,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMerchantProducts(prev =>
+          prev.map(p => (p.id === productId ? { ...p, isActive: newActive } : p))
+        );
+      }
+    } catch (err) {
+      alert('تعذر تحديث حالة المنتج');
+    }
+  };
+
+  const handleCopyProductLink = (productId: string) => {
+    if (!currentStore) return;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const url = `${origin}/p/${productId}?store=${currentStore.code}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url);
+      setProductFeedback(prev => ({ ...prev, [`link_${productId}`]: 'تم نسخ رابط المنتج!' }));
+      setTimeout(() => {
+        setProductFeedback(prev => {
+          const next = { ...prev };
+          delete next[`link_${productId}`];
+          return next;
+        });
+      }, 2000);
     }
   };
 
@@ -759,7 +877,332 @@ function MerchantDashboardContent() {
           </div>
         </div>
 
-        {/* الطلبات الواردة لمتجري */}
+        {/* شريط التبويب الرئيسي: إدارة المنتجات والأسعار / الطلبات الواردة */}
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 pb-3">
+          <button
+            onClick={() => setActiveTab('products')}
+            className={`py-3 px-5 rounded-2xl font-black text-sm flex items-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'products'
+                ? 'bg-brand-700 text-white shadow-md shadow-brand-700/20'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <Tag className="w-4 h-4" />
+            <span>منتجات متجري وتعديل الأسعار</span>
+            <span className={`text-xs px-2.5 py-0.5 rounded-full font-mono font-bold ${
+              activeTab === 'products' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+            }`}>
+              {merchantProducts.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('orders')}
+            className={`py-3 px-5 rounded-2xl font-black text-sm flex items-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'orders'
+                ? 'bg-brand-700 text-white shadow-md shadow-brand-700/20'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <ShoppingBag className="w-4 h-4" />
+            <span>طلبات زبائن متجري</span>
+            <span className={`text-xs px-2.5 py-0.5 rounded-full font-mono font-bold ${
+              activeTab === 'orders' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+            }`}>
+              {orders.length}
+            </span>
+          </button>
+        </div>
+
+        {/* 1. قسم منتجات متجري وتعديل الأسعار */}
+        {activeTab === 'products' && (
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md space-y-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+              <div>
+                <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                  <Tag className="w-5 h-5 text-brand-700" />
+                  <span>منتجات متجرك وتعديل أسعار البيع</span>
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  جميع هذه المنتجات منشورة تلقائياً من إدارة المنصة. يمكنك تحديد سعر بيعك الخاص لتحقيق أرباحك، أو إخفاء أي منتج.
+                </p>
+              </div>
+
+              {/* إحصائيات سريعة للمنتجات */}
+              <div className="flex items-center gap-2 text-xs font-bold shrink-0">
+                <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-xl">
+                  {merchantProducts.filter(p => p.isActive !== false).length} معروض للبيع
+                </span>
+                {merchantProducts.filter(p => p.isActive === false).length > 0 && (
+                  <span className="bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1.5 rounded-xl">
+                    {merchantProducts.filter(p => p.isActive === false).length} مخفي
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* شريط البحث والفلترة */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  placeholder="ابحث عن منتج بالاسم أو القسم..."
+                  className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-sm outline-none font-medium bg-slate-50/50"
+                />
+                <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
+              </div>
+
+              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setProductFilter('all')}
+                  className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    productFilter === 'all' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  الكل ({merchantProducts.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProductFilter('active')}
+                  className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    productFilter === 'active' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  المعروضة ({merchantProducts.filter(p => p.isActive !== false).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProductFilter('hidden')}
+                  className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    productFilter === 'hidden' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  المخفية ({merchantProducts.filter(p => p.isActive === false).length})
+                </button>
+              </div>
+            </div>
+
+            {/* قائمة كروت المنتجات */}
+            {merchantProducts.length === 0 ? (
+              <div className="text-center py-12">
+                <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <h3 className="text-base font-bold text-slate-700">جاري تحميل منتجات المنصة...</h3>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {merchantProducts
+                  .filter(product => {
+                    if (productFilter === 'active' && product.isActive === false) return false;
+                    if (productFilter === 'hidden' && product.isActive !== false) return false;
+                    if (productSearch.trim()) {
+                      const q = productSearch.toLowerCase();
+                      const matchName = product.name?.toLowerCase().includes(q);
+                      const matchCat = product.category?.toLowerCase().includes(q);
+                      return matchName || matchCat;
+                    }
+                    return true;
+                  })
+                  .map((product) => {
+                    const baseCost = product.platformPriceIqd || product.priceIqd || 10000;
+                    const userPrice = editingPrices[product.id] !== undefined ? editingPrices[product.id] : product.sellingPrice || baseCost;
+                    const calculatedProfit = Math.max(0, userPrice - baseCost);
+                    const isSaving = savingProductId === product.id;
+                    const feedback = productFeedback[product.id];
+                    const linkFeedback = productFeedback[`link_${product.id}`];
+
+                    return (
+                      <div
+                        key={product.id}
+                        className={`rounded-2xl p-5 border transition-all flex flex-col justify-between gap-4 ${
+                          product.isActive !== false
+                            ? 'bg-white border-slate-200/90 shadow-xs hover:shadow-md'
+                            : 'bg-slate-50/70 border-slate-200 opacity-75'
+                        }`}
+                      >
+                        {/* الجزء العلوي: الصورة والاسم والتصنيف */}
+                        <div>
+                          <div className="flex items-start gap-4">
+                            <div className="w-20 h-20 rounded-xl bg-slate-100 overflow-hidden border border-slate-200 shrink-0 relative">
+                              <img
+                                src={product.image || 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=300&q=80'}
+                                alt={product.name}
+                                className="w-full h-full object-cover"
+                              />
+                              {product.isActive === false && (
+                                <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center text-white text-[10px] font-bold">
+                                  مخفي
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <span className="text-[11px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
+                                  {product.category || 'عام'}
+                                </span>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  product.isActive !== false
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-slate-200 text-slate-600'
+                                }`}>
+                                  {product.isActive !== false ? 'معروض في متجرك' : 'مخفي من متجرك'}
+                                </span>
+                              </div>
+
+                              <h3 className="font-black text-slate-900 text-sm sm:text-base leading-snug line-clamp-2">
+                                {product.name}
+                              </h3>
+
+                              <div className="text-xs text-slate-500 mt-1 font-mono">
+                                سعر تكلفة المنصة: <strong className="text-slate-800">{baseCost.toLocaleString('ar-IQ')} د.ع</strong>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* حقل تعديل السعر وحساب الربح الفوري */}
+                          <div className="mt-4 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <label className="text-xs font-bold text-slate-700">
+                                سعر بيعك للزبون (د.ع):
+                              </label>
+                              <span className="text-[11px] text-slate-400 font-mono">
+                                الأدنى: {product.minPriceIqd ? product.minPriceIqd.toLocaleString('ar-IQ') : baseCost.toLocaleString('ar-IQ')} د.ع
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                step="500"
+                                min={product.minPriceIqd || baseCost}
+                                max={product.maxPriceIqd || baseCost * 2}
+                                value={userPrice}
+                                onChange={(e) => {
+                                  setEditingPrices({
+                                    ...editingPrices,
+                                    [product.id]: Number(e.target.value),
+                                  });
+                                }}
+                                className="flex-1 px-3 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-sm font-mono font-black text-slate-900 bg-white outline-none"
+                              />
+
+                              <button
+                                type="button"
+                                disabled={isSaving}
+                                onClick={() => handleSaveProductPrice(product.id, userPrice)}
+                                className="py-2 px-4 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+                              >
+                                {isSaving ? (
+                                  <span>حفظ...</span>
+                                ) : (
+                                  <>
+                                    <Save className="w-3.5 h-3.5" />
+                                    <span>حفظ السعر</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+
+                            {/* أزرار زيادة سريعة للسعر */}
+                            <div className="flex items-center gap-1.5 pt-1">
+                              <span className="text-[10px] text-slate-400 font-bold ml-1">زيادة سريعة:</span>
+                              {[2000, 5000, 10000].map((addAmount) => (
+                                <button
+                                  key={addAmount}
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingPrices({
+                                      ...editingPrices,
+                                      [product.id]: baseCost + addAmount,
+                                    });
+                                  }}
+                                  className="py-1 px-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 text-[10px] font-bold font-mono transition-colors cursor-pointer"
+                                >
+                                  +{addAmount.toLocaleString('ar-IQ')}
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* شريط ربح التاجر الصافي */}
+                            <div className="pt-1 flex items-center justify-between border-t border-slate-200/70 text-xs font-bold">
+                              <span className="text-emerald-800">ربحك الصافي من كل بيعة:</span>
+                              <span className="text-emerald-600 font-black font-mono text-sm">
+                                +{calculatedProfit.toLocaleString('ar-IQ')} د.ع
+                              </span>
+                            </div>
+
+                            {feedback && (
+                              <div className="text-[11px] text-emerald-700 font-bold bg-emerald-50 p-2 rounded-lg border border-emerald-200 flex items-center gap-1.5">
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>{feedback}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* الجزء السفلي: أزرار التحكم بالمشاركة والإظهار والإخفاء */}
+                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                          {/* زر تفعيل أو إخفاء المنتج */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleProductActive(product.id, product.isActive !== false)}
+                            className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                              product.isActive !== false
+                                ? 'bg-slate-100 hover:bg-red-50 text-slate-700 hover:text-red-700 border-slate-200'
+                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                            }`}
+                            title={product.isActive !== false ? 'إخفاء المنتج من متجرك' : 'إظهار المنتج في متجرك للزبائن'}
+                          >
+                            {product.isActive !== false ? (
+                              <>
+                                <EyeOff className="w-3.5 h-3.5" />
+                                <span>إخفاء من متجري</span>
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>إظهار في متجري</span>
+                              </>
+                            )}
+                          </button>
+
+                          <div className="flex items-center gap-2">
+                            {/* زر نسخ رابط المنتج */}
+                            <button
+                              type="button"
+                              onClick={() => handleCopyProductLink(product.id)}
+                              className="py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors flex items-center gap-1 cursor-pointer border border-slate-200"
+                              title="نسخ رابط هذا المنتج لمتجرك"
+                            >
+                              {linkFeedback ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                              <span>{linkFeedback ? 'تم النسخ!' : 'نسخ الرابط'}</span>
+                            </button>
+
+                            {/* زر معاينة المنتج */}
+                            <Link
+                              href={`/p/${product.id}?store=${currentStore?.code}`}
+                              target="_blank"
+                              className="py-1.5 px-3 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs transition-colors flex items-center gap-1"
+                              title="معاينة المنتج كما يراه الزبون بسعرك المحدد"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+                              <span>معاينة</span>
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 2. قسم الطلبات الواردة لمتجري */}
+        {activeTab === 'orders' && (
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md">
           <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
             <div>
@@ -839,6 +1282,7 @@ function MerchantDashboardContent() {
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* نافذة مودال لتعديل بيانات المتجر ("يكدر يعدل اي شي من المتجر") */}

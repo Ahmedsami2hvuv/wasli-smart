@@ -285,7 +285,7 @@ export default function AdminCategoriesPage() {
             className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-brand-700 bg-white px-3.5 py-2 rounded-xl border border-slate-200/80 shadow-2xs transition-all"
           >
             <ArrowRight className="w-4 h-4 text-brand-600" />
-            <span>العودة للوحة الإدارة العامة</span>
+            <span>العودة إلى صفحة المدير</span>
           </Link>
 
           <div className="flex items-center gap-2.5">

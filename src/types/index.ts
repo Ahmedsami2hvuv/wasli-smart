@@ -96,7 +96,7 @@ export interface Product {
   specifications?: string[] | string; // المواصفات الفنية للمنتج
   priceIqd: number; // السعر الظاهر للزبون
   originalPriceIqd?: number;
-  wholesalePriceIqd?: number; // سعر الجملة للمنصة (الذي يشتري به المسوق)
+  wholesalePriceIqd?: number; // سعر الجملة للمنصة (الذي يشتري به التاجر)
   platformPriceIqd?: number; // سعر المنصة الأساسي
   minPriceIqd?: number; // الحد الأدنى للبيع
   maxPriceIqd?: number; // الحد الأعلى للبيع

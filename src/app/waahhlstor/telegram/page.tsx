@@ -254,7 +254,7 @@ export default function TelegramManagerPage() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="w-2.5 h-2.5 rounded-full bg-sky-500 animate-pulse" />
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">لوحة الإدارة - قناة التيليجرام</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">صفحة المدير - قناة التيليجرام</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 flex items-center gap-3">
               <Send className="w-7 h-7 text-sky-600" />
@@ -278,7 +278,7 @@ export default function TelegramManagerPage() {
               className="py-2.5 px-4 bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
             >
               <ArrowRight className="w-4 h-4" />
-              <span>الرئيسية</span>
+              <span>صفحة المدير</span>
             </Link>
           </div>
         </div>

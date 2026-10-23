@@ -179,7 +179,7 @@ export async function sendStoreOrderNotification(
     : `عدد المنتجات: ${orderData.itemsCount}`;
 
   const messageText = [
-    'طلب جديد وارد لمتجرك في منصة وصلي',
+    'طلب جديد وارد لمتجر التاجر',
     '==============================',
     `رقم الطلب: ${orderData.orderNumber}`,
     `اسم المتجر: ${orderData.storeName}`,
@@ -191,7 +191,7 @@ export async function sendStoreOrderNotification(
     itemsSummary,
     '------------------------------',
     `إجمالي مبلغ الطلب: ${orderData.totalAmount.toLocaleString('ar-IQ')} د.ع`,
-    `صافي أرباحك من هذا الطلب: ${orderData.merchantProfit.toLocaleString('ar-IQ')} د.ع`,
+    `صافي أرباح التاجر من هذا الطلب: ${orderData.merchantProfit.toLocaleString('ar-IQ')} د.ع`,
     '==============================',
     'تم تسجيل الطلب وبدء إجراءات التجهيز والتوصيل عبر المنصة.'
   ].join('\n');
@@ -229,10 +229,10 @@ export async function sendAdminOrderNotification(orderData: OrderNotificationPay
     : `عدد المنتجات: ${orderData.itemsCount}`;
 
   const messageText = [
-    'إشعار إداري: طلب جديد في منصة وصلي',
+    'إشعار صفحة المدير: طلب جديد',
     '==============================',
     `رقم الطلب: ${orderData.orderNumber}`,
-    `المتجر المسوّق: ${orderData.storeName}`,
+    `متجر التاجر: ${orderData.storeName}`,
     `الزبون: ${orderData.customerName}`,
     `رقم الهاتف: ${orderData.customerPhone}`,
     `العنوان: ${orderData.governorate} - ${orderData.city || ''} ${orderData.address || ''}`,
@@ -241,9 +241,9 @@ export async function sendAdminOrderNotification(orderData: OrderNotificationPay
     itemsSummary,
     '------------------------------',
     `إجمالي المبلغ: ${orderData.totalAmount.toLocaleString('ar-IQ')} د.ع`,
-    `ربح المتجر: ${orderData.merchantProfit.toLocaleString('ar-IQ')} د.ع`,
+    `ربح التاجر: ${orderData.merchantProfit.toLocaleString('ar-IQ')} د.ع`,
     '==============================',
-    'يرجى مراجعة لوحة الإدارة لمتابعة وتأكيد الطلب.'
+    'يرجى مراجعة صفحة المدير لمتابعة وتأكيد الطلب.'
   ].join('\n');
 
   try {
@@ -320,14 +320,14 @@ export async function publishProductToTelegramChannel(product: {
   }
 
   const caption = [
-    `منتج جديد متاح للتسويق: ${product.name}`,
+    `منتج جديد متاح للتجار: ${product.name}`,
     '==============================',
     `القسم: ${product.category || 'عام'}`,
     product.supplierCode ? `كود المورد: ${product.supplierCode}` : '',
     '------------------------------',
-    `سعر الجملة للمسوق: ${product.wholesalePriceIqd.toLocaleString('ar-IQ')} د.ع`,
+    `سعر الجملة للتاجر: ${product.wholesalePriceIqd.toLocaleString('ar-IQ')} د.ع`,
     `سعر البيع المقترح للزبون: ${product.minPriceIqd.toLocaleString('ar-IQ')} - ${product.maxPriceIqd.toLocaleString('ar-IQ')} د.ع`,
-    `هامش ربحك المتوقع: ${(product.minPriceIqd - product.wholesalePriceIqd).toLocaleString('ar-IQ')} - ${(product.maxPriceIqd - product.wholesalePriceIqd).toLocaleString('ar-IQ')} د.ع`,
+    `هامش ربح التاجر المتوقع: ${(product.minPriceIqd - product.wholesalePriceIqd).toLocaleString('ar-IQ')} - ${(product.maxPriceIqd - product.wholesalePriceIqd).toLocaleString('ar-IQ')} د.ع`,
     '------------------------------',
     product.promoDescription ? `الوصف والمميزات:\n${product.promoDescription.slice(0, 350)}` : '',
     '==============================',

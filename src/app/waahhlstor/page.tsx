@@ -110,10 +110,10 @@ export default function AdminDashboardPage() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">لوحة الإدارة المركزية</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">صفحة المدير (لوحة الأدمن)</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900">
-              إدارة منصة وصلي الموحدة
+              صفحة المدير - إدارة منصة وصلي
             </h1>
           </div>
 
@@ -162,7 +162,7 @@ export default function AdminDashboardPage() {
             <div className="text-xl font-black text-slate-900">
               {totalGrossSales.toLocaleString('ar-IQ')} <span className="text-xs text-slate-500 font-normal">د.ع</span>
             </div>
-            <div className="text-[11px] text-slate-400 mt-2">من كافة المتاجر النشطة</div>
+            <div className="text-[11px] text-slate-400 mt-2">من كافة متاجر التجار النشطة</div>
           </div>
 
           <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
@@ -174,11 +174,11 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-            <div className="text-xs font-bold text-slate-500 mb-1">أرباح أصحاب المتاجر</div>
+            <div className="text-xs font-bold text-slate-500 mb-1">أرباح التجار</div>
             <div className="text-xl font-black text-emerald-600">
               {totalMerchantProfit.toLocaleString('ar-IQ')} <span className="text-xs text-slate-500 font-normal">د.ع</span>
             </div>
-            <div className="text-[11px] text-emerald-600 font-medium mt-2">المستحقة للمسوّقين</div>
+            <div className="text-[11px] text-emerald-600 font-medium mt-2">المستحقة للتجار الشركاء</div>
           </div>
 
           <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
@@ -190,7 +190,7 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-            <div className="text-xs font-bold text-slate-500 mb-1">المتاجر والمنتجات</div>
+            <div className="text-xs font-bold text-slate-500 mb-1">متاجر التجار والمنتجات</div>
             <div className="text-xl font-black text-slate-900">
               {storesCount} <span className="text-xs text-slate-400 font-normal">متجر</span> / {productsCount} <span className="text-xs text-slate-400 font-normal">منتج</span>
             </div>
@@ -238,9 +238,9 @@ export default function AdminDashboardPage() {
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-slate-100 pb-4">
             <div>
-              <h2 className="text-lg font-black text-slate-900">إدارة الطلبات الواردة لجميع المتاجر</h2>
+              <h2 className="text-lg font-black text-slate-900">إدارة الطلبات الواردة من كافة متاجر التجار</h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                يمكنك معرفة صاحب المتجر الذي جلب كل طلب، وتحديث حالته وتأكيد التوصيل واحتساب الأرباح
+                يمكنك معرفة التاجر ومتجره الذي جلب كل طلب، وتحديث حالته وتأكيد التوصيل واحتساب الأرباح
               </p>
             </div>
 
@@ -278,12 +278,12 @@ export default function AdminDashboardPage() {
                 <thead>
                   <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-400 uppercase">
                     <th className="py-3 px-3">رقم الطلب</th>
-                    <th className="py-3 px-3">المتجر المسوّق</th>
+                    <th className="py-3 px-3">متجر التاجر</th>
                     <th className="py-3 px-3">الزبون والهاتف</th>
                     <th className="py-3 px-3">العنوان</th>
                     <th className="py-3 px-3">المنتجات</th>
                     <th className="py-3 px-3">المبلغ الإجمالي</th>
-                    <th className="py-3 px-3">ربح المسوّق</th>
+                    <th className="py-3 px-3">ربح التاجر</th>
                     <th className="py-3 px-3">ربح المنصة</th>
                     <th className="py-3 px-3">تحديث الحالة</th>
                   </tr>

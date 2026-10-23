@@ -224,7 +224,7 @@ export default function AdminProductsPage() {
             className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-brand-700 transition-colors"
           >
             <ArrowRight className="w-4 h-4" />
-            <span>العودة للوحة الإدارة العامة</span>
+            <span>العودة إلى صفحة المدير</span>
           </Link>
 
           <div className="flex flex-wrap items-center gap-2.5">
@@ -273,7 +273,7 @@ export default function AdminProductsPage() {
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md">
           <h1 className="text-2xl font-black text-slate-900 mb-2">إدارة المنتجات والتسعير ومستودع الصور</h1>
           <p className="text-slate-600 text-xs leading-relaxed max-w-3xl">
-            هنا تحدد أسعار الجملة، وسعر المنصة، وتضبط الحدين الأدنى والأعلى المسموح بهما للمسوّقين لضمان عدالة التسعير وجدوى الأرباح. كما يتم ضغط الصور ومعالجتها ورفعها لمستودع تيليجرام تلقائياً.
+            هنا تحدد أسعار الجملة، وسعر المنصة، وتضبط الحدين الأدنى والأعلى المسموح بهما للتجار لضمان عدالة التسعير وجدوى الأرباح. كما يتم ضغط الصور ومعالجتها ورفعها لمستودع تيليجرام تلقائياً.
           </p>
         </div>
 
@@ -284,7 +284,7 @@ export default function AdminProductsPage() {
               <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-6">
                 <div>
                   <h3 className="text-lg font-black text-slate-900">إضافة منتج جديد وتحديد أسعاره</h3>
-                  <p className="text-xs text-slate-500">سيظهر المنتج في كتالوج أصحاب المتاجر فورياً</p>
+                  <p className="text-xs text-slate-500">سيظهر المنتج في كتالوج صفحة التاجر فورياً</p>
                 </div>
                 <button
                   onClick={() => setShowAddModal(false)}
@@ -569,7 +569,7 @@ export default function AdminProductsPage() {
                     <th className="py-3 px-3">المنتج والمصدر</th>
                     <th className="py-3 px-3">التصنيف</th>
                     <th className="py-3 px-3">تكلفة المورد</th>
-                    <th className="py-3 px-3">سعر الجملة (للمسوق)</th>
+                    <th className="py-3 px-3">سعر الجملة (للتاجر)</th>
                     <th className="py-3 px-3">ربح المنصة الصافي</th>
                     <th className="py-3 px-3">حدود بيع الزبون</th>
                     <th className="py-3 px-3">المخزون والخيارات</th>
