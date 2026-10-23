@@ -19,10 +19,39 @@ import {
   LogOut,
   Sparkles,
   Link as LinkIcon,
-  ArrowLeft
+  ArrowLeft,
+  Sliders,
+  X,
+  Upload,
+  MapPin,
+  Phone,
+  User,
+  Truck,
+  Image as ImageIcon
 } from 'lucide-react';
 import Link from 'next/link';
 import { Store as StoreType, Order } from '@/types';
+
+const IRAQI_GOVERNORATES = [
+  'بغداد',
+  'البصرة',
+  'أربيل',
+  'النجف الأشرف',
+  'كربلاء المقدسة',
+  'نينوى (الموصل)',
+  'كركوك',
+  'ذي قار (الناصرية)',
+  'بابل (الحلة)',
+  'ميسان (العمارة)',
+  'الأنبار',
+  'ديالى',
+  'المثنى (السماوة)',
+  'القادسية (الديوانية)',
+  'واسط (الكوت)',
+  'السليمانية',
+  'دهوك',
+  'صلاح الدين (تكريت)'
+];
 
 function MerchantDashboardContent() {
   const searchParams = useSearchParams();
@@ -38,6 +67,28 @@ function MerchantDashboardContent() {
   const [storeInput, setStoreInput] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // حالات نافذة تعديل المتجر
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isSavingStore, setIsSavingStore] = useState(false);
+  const [editSuccessMsg, setEditSuccessMsg] = useState('');
+  const [editErrorMsg, setEditErrorMsg] = useState('');
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+
+  const [editForm, setEditForm] = useState({
+    name: '',
+    ownerName: '',
+    phone: '',
+    city: 'البصرة',
+    district: '',
+    description: '',
+    logoUrl: '',
+    bannerUrl: '',
+    deliveryTimeMinutes: '30-45 دقيقة',
+    deliveryFeeIqd: 4000,
+    isOpen: true,
+  });
 
   useEffect(() => {
     async function initMerchant() {
@@ -166,7 +217,7 @@ function MerchantDashboardContent() {
   };
 
   const storeUrl = typeof window !== 'undefined' && currentStore 
-    ? `${window.location.origin}/s/${currentStore.code}`
+    ? `${window.location.origin}/s/${currentStore.code}?name=${encodeURIComponent(currentStore.name)}`
     : `/s/${currentStore?.code || 'store'}`;
 
   const handleCopyLink = () => {
@@ -191,6 +242,108 @@ function MerchantDashboardContent() {
       } catch (e) {}
     }
     handleCopyLink();
+  };
+
+  const openEditModal = () => {
+    if (!currentStore) return;
+    setEditForm({
+      name: currentStore.name || '',
+      ownerName: currentStore.ownerName || '',
+      phone: currentStore.phone || '',
+      city: currentStore.city || 'البصرة',
+      district: currentStore.district || currentStore.location || '',
+      description: currentStore.description || '',
+      logoUrl: currentStore.logoUrl || currentStore.image || '',
+      bannerUrl: currentStore.bannerUrl || '',
+      deliveryTimeMinutes: currentStore.deliveryTimeMinutes || '30-45 دقيقة',
+      deliveryFeeIqd: currentStore.deliveryFeeIqd ?? 4000,
+      isOpen: currentStore.isOpen !== false,
+    });
+    setEditSuccessMsg('');
+    setEditErrorMsg('');
+    setIsEditModalOpen(true);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'banner') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('files', file);
+
+    if (type === 'logo') setIsUploadingLogo(true);
+    if (type === 'banner') setIsUploadingBanner(true);
+
+    try {
+      const res = await fetch('/api/images/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success && data.images?.[0]?.displayUrl) {
+        const url = data.images[0].displayUrl;
+        setEditForm(prev => ({
+          ...prev,
+          [type === 'logo' ? 'logoUrl' : 'bannerUrl']: url,
+        }));
+      } else {
+        alert('تعذر رفع الصورة، يمكنك وضع رابط الصورة مباشرة');
+      }
+    } catch (err) {
+      alert('حدث خطأ أثناء رفع الصورة');
+    } finally {
+      if (type === 'logo') setIsUploadingLogo(false);
+      if (type === 'banner') setIsUploadingBanner(false);
+    }
+  };
+
+  const handleSaveStore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentStore) return;
+
+    if (!editForm.name.trim()) {
+      setEditErrorMsg('يرجى إدخال اسم المتجر');
+      return;
+    }
+    if (!editForm.phone.trim()) {
+      setEditErrorMsg('يرجى إدخال رقم هاتف المتجر');
+      return;
+    }
+
+    setIsSavingStore(true);
+    setEditErrorMsg('');
+    setEditSuccessMsg('');
+
+    try {
+      const res = await fetch('/api/stores', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: currentStore.id,
+          code: currentStore.code,
+          ...editForm,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.store) {
+        setCurrentStore(data.store);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('wasli_current_store', JSON.stringify(data.store));
+        }
+        setEditSuccessMsg('تم حفظ وتحديث بيانات المتجر بنجاح!');
+        setTimeout(() => {
+          setIsEditModalOpen(false);
+          setEditSuccessMsg('');
+        }, 1200);
+      } else {
+        setEditErrorMsg(data.message || 'حدث خطأ أثناء حفظ التعديلات');
+      }
+    } catch (err) {
+      setEditErrorMsg('تعذر الاتصال بالخادم، يرجى المحاولة مرة أخرى');
+    } finally {
+      setIsSavingStore(false);
+    }
   };
 
   const totalExpectedProfits = orders.reduce((sum, o) => sum + (o.merchantProfit || 0), 0);
@@ -296,81 +449,138 @@ function MerchantDashboardContent() {
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8" dir="rtl">
       <div className="max-w-6xl mx-auto space-y-8">
-        {/* الترويسة ومعلومات المتجر */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4 text-center sm:text-right">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-700 to-skybrand-600 flex items-center justify-center text-white font-black text-2xl shadow-md shrink-0">
-              <Store className="w-8 h-8" />
+        
+        {/* الترويسة ومعلومات المتجر مع أزرار التحكم العلوية */}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md flex flex-col lg:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-4 text-center sm:text-right w-full lg:w-auto justify-center sm:justify-start">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-700 to-skybrand-600 flex items-center justify-center text-white font-black text-2xl shadow-md shrink-0 overflow-hidden">
+              {currentStore?.logoUrl && !currentStore.logoUrl.includes('store-default') ? (
+                <img 
+                  src={currentStore.logoUrl} 
+                  alt={currentStore.name} 
+                  className="w-full h-full object-cover" 
+                />
+              ) : (
+                <Store className="w-8 h-8" />
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2 mb-1 justify-center sm:justify-start">
                 <h1 className="text-xl sm:text-2xl font-black text-slate-900">
                   لوحة تحكم: {currentStore?.name || 'متجري الإلكتروني'}
                 </h1>
-                <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2 py-0.5 rounded-full">
-                  نشط ومفعّل
+                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                  currentStore?.isOpen !== false 
+                    ? 'bg-emerald-100 text-emerald-800' 
+                    : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {currentStore?.isOpen !== false ? 'نشط ومفعّل' : 'مغلق مؤقتاً'}
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-mono">
-                كود المتجر الفريد: <strong className="text-brand-700 font-bold">{currentStore?.code}</strong> | {currentStore?.city || 'البصرة'}
+                كود المتجر: <strong className="text-brand-700 font-bold">{currentStore?.code}</strong> | {currentStore?.city || 'البصرة'} {currentStore?.district ? `(${currentStore.district})` : ''}
               </p>
             </div>
           </div>
 
-          {/* أزرار المشاركة والمعاينة والخروج */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              onClick={handleNativeShare}
-              className="py-2.5 px-4 bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer"
-            >
-              <Share2 className="w-4 h-4 text-accent-400" />
-              <span>مشاركة المتجر</span>
-            </button>
+          {/* الأزرار العلوية المحددة: نسخ الرابط، مشاركة الرابط، فتح المتجر، تعديل المتجر */}
+          <div className="flex flex-wrap items-center justify-center lg:justify-end gap-2.5 w-full lg:w-auto">
+            {/* 1. زر نسخ الرابط */}
             <button
               onClick={handleCopyLink}
-              className="py-2.5 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+              className="py-2.5 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl border border-slate-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title="نسخ رابط المتجر"
             >
-              {copiedLink ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+              {copiedLink ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-slate-600" />}
               <span>{copiedLink ? 'تم النسخ' : 'نسخ الرابط'}</span>
             </button>
-            <Link
-              href={`/s/${currentStore?.code}`}
-              target="_blank"
-              className="py-2.5 px-3.5 border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5"
+
+            {/* 2. زر مشاركة الرابط */}
+            <button
+              onClick={handleNativeShare}
+              className="py-2.5 px-4 bg-brand-700 hover:bg-brand-800 active:bg-brand-900 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+              title="مشاركة رابط المتجر"
             >
-              <ExternalLink className="w-4 h-4 text-slate-500" />
+              <Share2 className="w-4 h-4 text-skybrand-200" />
+              <span>مشاركة الرابط</span>
+            </button>
+
+            {/* 3. زر فتح المتجر */}
+            <Link
+              href={storeUrl}
+              target="_blank"
+              className="py-2.5 px-3.5 border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 shadow-2xs"
+              title="فتح ومعاينة المتجر"
+            >
+              <ExternalLink className="w-4 h-4 text-slate-600" />
               <span>فتح المتجر</span>
             </Link>
+
+            {/* 4. زر تعديل المتجر */}
+            <button
+              onClick={openEditModal}
+              className="py-2.5 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-slate-950 font-black text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+              title="تعديل بيانات المتجر"
+            >
+              <Sliders className="w-4 h-4 text-slate-950" />
+              <span>تعديل المتجر</span>
+            </button>
+
+            {/* زر تبديل الحساب */}
             <button
               onClick={handleLogout}
               className="py-2.5 px-3 bg-red-50 hover:bg-red-100 text-red-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-              title="تسجيل الخروج أو الدخول بمتجر آخر"
+              title="تبديل المتجر أو الخروج"
             >
               <LogOut className="w-4 h-4" />
-              <span>تبديل الحساب</span>
+              <span className="hidden sm:inline">تبديل الحساب</span>
             </button>
           </div>
         </div>
 
-        {/* شريط الرابط المشفر المميز */}
-        <div className="bg-gradient-to-r from-skybrand-900 to-brand-900 text-white rounded-2xl p-4 sm:p-5 shadow-md flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-              <Share2 className="w-5 h-5 text-skybrand-300" />
+        {/* بلوك الرابط بتصميم واضح وعالي التباين وألوان صحيحة 100% */}
+        <div className="bg-slate-900 border border-slate-800 text-white rounded-2xl p-4 sm:p-5 shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 w-full md:w-auto">
+            <div className="w-11 h-11 rounded-xl bg-brand-600/30 border border-brand-500/40 flex items-center justify-center shrink-0">
+              <LinkIcon className="w-5 h-5 text-skybrand-400" />
             </div>
-            <div>
-              <div className="text-xs text-skybrand-200 font-medium">رابط متجرك الحصري للمشاركة على واتساب ومنصات التواصل:</div>
-              <div className="font-mono text-sm font-bold text-white break-all select-all mt-0.5" dir="ltr">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-xs sm:text-sm font-bold text-slate-100">
+                  رابط متجرك الحصري للمشاركة على واتساب ومنصات التواصل:
+                </span>
+                <span className="hidden sm:inline-block bg-skybrand-500/20 text-skybrand-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-skybrand-500/30">
+                  رابط مباشر
+                </span>
+              </div>
+              <div className="font-mono text-xs sm:text-sm font-bold text-skybrand-300 break-all select-all bg-black/40 px-3.5 py-2 rounded-xl border border-white/10" dir="ltr">
                 {storeUrl}
               </div>
             </div>
           </div>
-          <button
-            onClick={handleCopyLink}
-            className="w-full sm:w-auto py-2 px-4 bg-white text-slate-900 hover:bg-skybrand-50 font-bold text-xs rounded-xl transition-all shrink-0 cursor-pointer"
-          >
-            {copiedLink ? 'تم نسخ الرابط!' : 'نسخ الرابط للنشر'}
-          </button>
+
+          <div className="flex items-center gap-2 w-full md:w-auto justify-end shrink-0">
+            <button
+              onClick={handleCopyLink}
+              className={`w-full md:w-auto py-2.5 px-5 font-black text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm ${
+                copiedLink
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-accent-500 hover:bg-accent-400 active:bg-accent-600 text-slate-950'
+              }`}
+            >
+              {copiedLink ? (
+                <>
+                  <Check className="w-4 h-4 text-white" />
+                  <span>تم نسخ الرابط!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  <span>نسخ الرابط للنشر</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* بطاقات الإحصائيات والأرباح */}
@@ -493,6 +703,285 @@ function MerchantDashboardContent() {
           )}
         </div>
       </div>
+
+      {/* نافذة مودال لتعديل بيانات المتجر ("يكدر يعدل اي شي من المتجر") */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto" dir="rtl">
+          <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col my-auto">
+            {/* رأس النافذة */}
+            <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                  <Sliders className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">تعديل بيانات المتجر</h3>
+                  <p className="text-xs text-slate-500">عدل اسم متجرك، مدينتك، شعارك ومعلومات التوصيل بسهولة</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* محتوى النموذج */}
+            <form onSubmit={handleSaveStore} className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1">
+              {editSuccessMsg && (
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                  <span>{editSuccessMsg}</span>
+                </div>
+              )}
+
+              {editErrorMsg && (
+                <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                  <span>{editErrorMsg}</span>
+                </div>
+              )}
+
+              {/* الصف الأول: اسم المتجر واسم صاحب المتجر */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    اسم المتجر <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      placeholder="مثال: متجر أبو الأكبر"
+                      className="w-full pl-3 pr-9 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-sm outline-none font-medium"
+                    />
+                    <Store className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    اسم صاحب المتجر / المسوّق
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={editForm.ownerName}
+                      onChange={(e) => setEditForm({ ...editForm, ownerName: e.target.value })}
+                      placeholder="اسمك الثلاثي أو اللقب"
+                      className="w-full pl-3 pr-9 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-sm outline-none font-medium"
+                    />
+                    <User className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
+                  </div>
+                </div>
+              </div>
+
+              {/* الصف الثاني: رقم الهاتف والمحافظة */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    رقم هاتف / واتساب المتجر <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      value={editForm.phone}
+                      onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                      placeholder="مثال: 07701234567"
+                      className="w-full pl-3 pr-9 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-sm outline-none font-mono text-left dir-ltr"
+                    />
+                    <Phone className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    المحافظة
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={editForm.city}
+                      onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                      className="w-full pl-3 pr-9 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-sm outline-none font-medium bg-white"
+                    >
+                      {IRAQI_GOVERNORATES.map(gov => (
+                        <option key={gov} value={gov}>{gov}</option>
+                      ))}
+                    </select>
+                    <MapPin className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
+                  </div>
+                </div>
+              </div>
+
+              {/* الصف الثالث: المنطقة أو الحي */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  المنطقة أو الحي (اختياري)
+                </label>
+                <input
+                  type="text"
+                  value={editForm.district}
+                  onChange={(e) => setEditForm({ ...editForm, district: e.target.value })}
+                  placeholder="مثال: العشار، الكرادة، حي الحسين، المنصور..."
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-sm outline-none font-medium"
+                />
+              </div>
+
+              {/* الصف الرابع: وصف المتجر */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  وصف ونبذة عن المتجر
+                </label>
+                <textarea
+                  rows={2}
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  placeholder="اكتب عبارة ترحيبية تظهر لزبائنك عند فتح المتجر..."
+                  className="w-full p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-sm outline-none font-medium resize-none"
+                />
+              </div>
+
+              {/* الصف الخامس: إعدادات التوصيل وحالة المتجر */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    وقت التوصيل التقديري
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.deliveryTimeMinutes}
+                    onChange={(e) => setEditForm({ ...editForm, deliveryTimeMinutes: e.target.value })}
+                    placeholder="مثال: 30-45 دقيقة"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 text-xs outline-none bg-white font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    أجور التوصيل (د.ع)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="500"
+                    value={editForm.deliveryFeeIqd}
+                    onChange={(e) => setEditForm({ ...editForm, deliveryFeeIqd: Number(e.target.value) })}
+                    placeholder="4000"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 text-xs outline-none bg-white font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    حالة استقبال الطلبات
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setEditForm({ ...editForm, isOpen: !editForm.isOpen })}
+                    className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-colors cursor-pointer border ${
+                      editForm.isOpen 
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                        : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                    }`}
+                  >
+                    {editForm.isOpen ? 'المتجر مفتوح ويستقبل' : 'المتجر مغلق مؤقتاً'}
+                  </button>
+                </div>
+              </div>
+
+              {/* الصف السادس: شعار المتجر وغلافه */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* شعار المتجر */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    شعار المتجر (اللوغو)
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+                      {editForm.logoUrl ? (
+                        <img src={editForm.logoUrl} alt="شعار المتجر" className="w-full h-full object-cover" />
+                      ) : (
+                        <Store className="w-6 h-6 text-slate-400" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer transition-colors w-full justify-center border border-slate-200">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{isUploadingLogo ? 'جاري الرفع...' : 'رفع صورة الشعار'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={isUploadingLogo}
+                          onChange={(e) => handleImageUpload(e, 'logo')}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* غلاف المتجر */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    صورة غلاف المتجر
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+                      {editForm.bannerUrl ? (
+                        <img src={editForm.bannerUrl} alt="غلاف المتجر" className="w-full h-full object-cover" />
+                      ) : (
+                        <ImageIcon className="w-6 h-6 text-slate-400" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer transition-colors w-full justify-center border border-slate-200">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{isUploadingBanner ? 'جاري الرفع...' : 'رفع صورة الغلاف'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={isUploadingBanner}
+                          onChange={(e) => handleImageUpload(e, 'banner')}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* أزرار الحفظ والإلغاء */}
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="py-2.5 px-4 rounded-xl text-slate-600 hover:bg-slate-100 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingStore}
+                  className="py-2.5 px-6 rounded-xl bg-brand-700 hover:bg-brand-800 active:bg-brand-900 text-white font-black text-xs shadow-md shadow-brand-700/20 transition-all flex items-center gap-2 disabled:opacity-60 cursor-pointer"
+                >
+                  {isSavingStore ? (
+                    <span>جاري حفظ التعديلات...</span>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>حفظ التعديلات</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { Store, StoreProduct, Product } from '@/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase/admin';
 import { mockStores } from '@/data/mockData';
 
 // مخزن محلي متفاعل أثناء التطوير السريع
@@ -20,9 +21,11 @@ export function generateStoreCode(): string {
  * الحصول على كافة المتاجر النشطة
  */
 export async function getAllStores(): Promise<Store[]> {
-  if (isSupabaseConfigured && supabase) {
+  const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+
+  if (activeSupabase) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await activeSupabase
         .from('stores')
         .select('*')
         .eq('status', 'active')
@@ -48,7 +51,7 @@ export async function getAllStores(): Promise<Store[]> {
           rating: item.settings?.rating || 4.9,
           reviewsCount: item.settings?.reviews_count || 38,
           deliveryFeeIqd: item.settings?.delivery_fee_iqd !== undefined ? Number(item.settings.delivery_fee_iqd) : 4000,
-          deliveryTimeMinutes: item.settings?.delivery_time_minutes || '30-45 دقيقة',
+          deliveryTimeMinutes: item.settings?.delivery_time_minutes || 'خلال يوم أو يومين',
           isOpen: item.settings?.is_open !== undefined ? item.settings.is_open : true,
           isAbiAlkhaseeb: item.settings?.is_abi_alkhaseeb ?? false,
           image: item.logo_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80',
@@ -103,7 +106,7 @@ export async function createNewStore(params: {
     ownerName: params.ownerName,
     slug: slug,
     code: code,
-    description: params.description || `متجر ${params.name} المعتمد على منصة وصلي للتوصيل السريع`,
+    description: params.description || `متجر ${params.name} الإلكتروني للتسوق المباشر والتوصيل السريع والدفع عند الاستلام`,
     city: params.city || 'العراق',
     phone: params.phone,
     status: 'active',
@@ -114,7 +117,7 @@ export async function createNewStore(params: {
     rating: 5.0,
     reviewsCount: 1,
     deliveryFeeIqd: 4000,
-    deliveryTimeMinutes: '30-45 دقيقة',
+    deliveryTimeMinutes: 'خلال يوم أو يومين',
     isOpen: true,
     isAbiAlkhaseeb: false,
     image: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80',
@@ -124,9 +127,11 @@ export async function createNewStore(params: {
     createdAt: new Date().toISOString(),
   };
 
-  if (isSupabaseConfigured && supabase) {
+  const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+
+  if (activeSupabase) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await activeSupabase
         .from('stores')
         .insert({
           owner_id: params.ownerId || '00000000-0000-0000-0000-000000000000',
@@ -140,6 +145,7 @@ export async function createNewStore(params: {
           logo_url: newStore.logoUrl,
           settings: {
             owner_name: params.ownerName || '',
+            delivery_time_minutes: 'خلال يوم أو يومين',
           },
         })
         .select()
@@ -221,7 +227,8 @@ export async function updateStore(
   }
 
   // التحديث في Supabase إن كان متاحاً
-  if (isSupabaseConfigured && supabase) {
+  const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+  if (activeSupabase) {
     try {
       const dbPayload: any = {
         name: updatedStore.name,
@@ -245,12 +252,12 @@ export async function updateStore(
       dbPayload.settings = settingsPayload;
 
       if (targetStore.id && !targetStore.id.startsWith('store-')) {
-        await supabase
+        await activeSupabase
           .from('stores')
           .update(dbPayload)
           .eq('id', targetStore.id);
       } else if (targetStore.code) {
-        await supabase
+        await activeSupabase
           .from('stores')
           .update(dbPayload)
           .eq('code', targetStore.code);

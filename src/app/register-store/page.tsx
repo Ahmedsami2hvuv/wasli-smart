@@ -90,6 +90,15 @@ export default function RegisterStorePage() {
         // حفظ هوية المتجر في المتصفح للوصول السريع
         if (typeof window !== 'undefined') {
           localStorage.setItem('wasli_current_store', JSON.stringify(data.store));
+          try {
+            const registryStr = localStorage.getItem('wasli_stores_registry');
+            const registry = registryStr ? JSON.parse(registryStr) : [];
+            const exists = registry.some((s: any) => s.code === data.store.code);
+            if (!exists) {
+              registry.unshift(data.store);
+              localStorage.setItem('wasli_stores_registry', JSON.stringify(registry));
+            }
+          } catch (e) {}
         }
       } else {
         setErrorMsg(data.message || 'حدث خطأ أثناء إنشاء المتجر');
@@ -311,7 +320,7 @@ export default function RegisterStorePage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="flex-1 font-mono text-xs text-skybrand-700 bg-white p-2.5 rounded-xl border border-skybrand-200/90 break-all select-all">
-                    {typeof window !== 'undefined' ? `${window.location.origin}/s/${createdStore.code}` : `/s/${createdStore.code}`}
+                    {typeof window !== 'undefined' ? `${window.location.origin}/s/${createdStore.code}?name=${encodeURIComponent(createdStore.name)}` : `/s/${createdStore.code}?name=${encodeURIComponent(createdStore.name)}`}
                   </span>
                 </div>
               </div>
@@ -376,7 +385,7 @@ export default function RegisterStorePage() {
 
               {/* زر معاينة صفحة المتجر */}
               <Link
-                href={`/s/${createdStore.code}`}
+                href={`/s/${createdStore.code}?name=${encodeURIComponent(createdStore.name)}`}
                 className="w-full py-3 px-6 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900 font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 text-center"
               >
                 <span>معاينة صفحة المتجر</span>
