@@ -307,6 +307,7 @@ export async function publishProductToTelegramChannel(product: {
   wholesalePriceIqd: number;
   minPriceIqd: number;
   maxPriceIqd: number;
+  description?: string;
   promoDescription?: string;
   specifications?: string;
   supplierCode?: string;
@@ -324,7 +325,12 @@ export async function publishProductToTelegramChannel(product: {
     };
   }
 
-  const caption = [
+  // استخراج الوصف والمواصفات
+  const descriptionText = (product.specifications || product.description || '').trim();
+  // استخراج الوصف الترويجي
+  const promoText = (product.promoDescription || '').trim();
+
+  const headerLines = [
     `منتج جديد متاح للتجار: ${product.name}`,
     '==============================',
     `القسم: ${product.category || 'عام'}`,
@@ -334,10 +340,54 @@ export async function publishProductToTelegramChannel(product: {
     `سعر البيع المقترح للزبون: ${product.minPriceIqd.toLocaleString('ar-IQ')} - ${product.maxPriceIqd.toLocaleString('ar-IQ')} د.ع`,
     `هامش ربح التاجر المتوقع: ${(product.minPriceIqd - product.wholesalePriceIqd).toLocaleString('ar-IQ')} - ${(product.maxPriceIqd - product.wholesalePriceIqd).toLocaleString('ar-IQ')} د.ع`,
     '------------------------------',
-    product.promoDescription ? `الوصف والمميزات:\n${product.promoDescription.slice(0, 350)}` : '',
-    '==============================',
-    'متوفر الآن للطلب والشحن المباشر لكافة محافظات العراق والدفع عند الاستلام.'
-  ].filter(Boolean).join('\n');
+  ].filter(Boolean);
+
+  const footerLine = '==============================\nمتوفر الآن للطلب والشحن المباشر لكافة محافظات العراق والدفع عند الاستلام.';
+
+  let caption = '';
+  let needExtraPromoMessage = false;
+
+  const combinedFullLines = [...headerLines];
+  if (descriptionText) {
+    combinedFullLines.push(`الوصف والمواصفات:\n${descriptionText}`);
+  }
+  if (promoText) {
+    combinedFullLines.push(`الوصف الترويجي (للإعلان والترويج):\n${promoText}`);
+  }
+  combinedFullLines.push(footerLine);
+
+  const fullText = combinedFullLines.join('\n');
+
+  if (fullText.length <= 1020) {
+    caption = fullText;
+  } else {
+    needExtraPromoMessage = true;
+    const fittedLines = [...headerLines];
+    if (descriptionText) {
+      fittedLines.push(`الوصف والمواصفات:\n${descriptionText.slice(0, 420)}`);
+    }
+    fittedLines.push('الوصف الترويجي الكامل مرفق أدناه مباشرة (جاهز للنسخ والإعلان)');
+    fittedLines.push(footerLine);
+    caption = fittedLines.join('\n').slice(0, 1020);
+  }
+
+  // دالة مساعدة لإرسال رسالة الوصف الترويجي التكميلية إن دعت الحاجة
+  const sendExtraPromoIfNeeded = async () => {
+    if (needExtraPromoMessage && promoText) {
+      try {
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: channelId,
+            text: `الوصف الترويجي (جاهز للنسخ والإعلان):\n\n${promoText}`,
+          }),
+        });
+      } catch (extraErr) {
+        console.warn('تعذر إرسال رسالة الوصف الترويجي الإضافية:', extraErr);
+      }
+    }
+  };
 
   try {
     // جمع الصور وتصفيتها (بحد أقصى 10 صور لتيليجرام)
@@ -384,6 +434,7 @@ export async function publishProductToTelegramChannel(product: {
 
           const groupData = await groupRes.json();
           if (groupData.ok) {
+            await sendExtraPromoIfNeeded();
             return {
               success: true,
               messageId: Array.isArray(groupData.result) ? groupData.result[0]?.message_id : undefined,
@@ -415,6 +466,7 @@ export async function publishProductToTelegramChannel(product: {
 
         const groupUrlData = await groupUrlRes.json();
         if (groupUrlData.ok) {
+          await sendExtraPromoIfNeeded();
           return {
             success: true,
             messageId: Array.isArray(groupUrlData.result) ? groupUrlData.result[0]?.message_id : undefined,
@@ -442,6 +494,7 @@ export async function publishProductToTelegramChannel(product: {
 
         const singleData = await singleRes.json();
         if (singleData.ok) {
+          await sendExtraPromoIfNeeded();
           return { success: true, messageId: singleData.result?.message_id };
         }
       }
@@ -459,6 +512,7 @@ export async function publishProductToTelegramChannel(product: {
 
       const photoData = await photoRes.json();
       if (photoData.ok) {
+        await sendExtraPromoIfNeeded();
         return { success: true, messageId: photoData.result?.message_id };
       }
     }
@@ -474,6 +528,9 @@ export async function publishProductToTelegramChannel(product: {
     });
 
     const msgData = await msgRes.json();
+    if (msgData.ok) {
+      await sendExtraPromoIfNeeded();
+    }
     return { success: msgData.ok === true, messageId: msgData.result?.message_id, error: msgData.description };
   } catch (err: any) {
     console.error('خطأ في نشر المنتج على قناة تيليجرام:', err);

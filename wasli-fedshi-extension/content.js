@@ -656,7 +656,7 @@
         maxPriceIqd: maxPrice,
         category: categoryVal,
         subcategory: subcategoryVal,
-        description: promoText || productTitle,
+        description: specsText || promoText || productTitle,
         promoDescription: promoText,
         specifications: specsText,
         colors: data.colors,
