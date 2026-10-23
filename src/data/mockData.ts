@@ -328,3 +328,6 @@ export const FEATURES = [
     iconName: 'Headphones',
   },
 ];
+
+export const mockStores = STORES;
+export const mockProducts = PRODUCTS;

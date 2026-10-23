@@ -39,16 +39,54 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [customerPhone, setCustomerPhone] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createdOrderNumber, setCreatedOrderNumber] = useState('');
+  const [orderError, setOrderError] = useState('');
+
   if (!isOpen) return null;
 
   const subtotal = items.reduce((sum, item) => sum + (item.product.priceIqd * item.quantity), 0);
-  const deliveryFee = items.length > 0 ? 2500 : 0;
+  const deliveryFee = items.length > 0 ? 4000 : 0;
   const total = subtotal + deliveryFee;
 
-  const handleCheckout = (e: React.FormEvent) => {
+  const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (items.length === 0) return;
-    setOrderPlaced(true);
+    setIsSubmitting(true);
+    setOrderError('');
+
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storeIdentifier: items[0]?.storeCode || 'platform',
+          customerName: customerName.trim(),
+          customerPhone: customerPhone.trim(),
+          governorate: 'البصرة',
+          city: selectedLocation || 'أبي الخصيب',
+          address: selectedLocation || 'البصرة',
+          deliveryNotes: orderNotes.trim(),
+          items: items.map(i => ({
+            productId: i.product.id,
+            quantity: i.quantity,
+            requestedPrice: i.product.priceIqd,
+          })),
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.order) {
+        setCreatedOrderNumber(data.order.orderNumber);
+        setOrderPlaced(true);
+      } else {
+        setOrderError(data.message || 'حدث خطأ أثناء تسجيل الطلب');
+      }
+    } catch (err: any) {
+      setOrderError('تعذر الاتصال بالخادم، يرجى المحاولة ثانية');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleResetAfterSuccess = () => {
@@ -103,6 +141,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </p>
 
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-right space-y-2 text-xs">
+                  {createdOrderNumber && (
+                    <div className="flex justify-between items-center text-slate-800 pb-2 border-b border-slate-200">
+                      <span className="font-bold">رقم الطلب:</span>
+                      <span className="font-mono font-black text-brand-700 bg-brand-50 px-2.5 py-0.5 rounded-md text-sm">{createdOrderNumber}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-slate-500">
                     <span>موقع التوصيل:</span>
                     <span className="font-bold text-slate-800">{selectedLocation}</span>
@@ -249,13 +293,26 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </div>
               </div>
 
+              {orderError && (
+                <div className="p-3 rounded-xl bg-red-50 text-red-700 text-xs font-semibold">
+                  {orderError}
+                </div>
+              )}
+
               <button
                 type="submit"
                 form="checkout-form"
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-brand-700 to-skybrand-600 hover:from-brand-800 hover:to-skybrand-700 text-white font-black text-sm shadow-lg shadow-brand-700/20 active:scale-98 transition-all flex items-center justify-center gap-2"
+                disabled={isSubmitting}
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-brand-700 to-skybrand-600 hover:from-brand-800 hover:to-skybrand-700 text-white font-black text-sm shadow-lg shadow-brand-700/20 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
-                <span>تأكيد الطلب والدفع عند الاستلام</span>
-                <ArrowLeft className="w-4 h-4" />
+                {isSubmitting ? (
+                  <span>جاري تسجيل الطلب...</span>
+                ) : (
+                  <>
+                    <span>تأكيد الطلب والدفع عند الاستلام</span>
+                    <ArrowLeft className="w-4 h-4" />
+                  </>
+                )}
               </button>
 
               <div className="text-center text-[10px] text-slate-500 flex items-center justify-center gap-1">

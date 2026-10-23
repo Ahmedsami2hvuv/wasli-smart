@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Plus, Check, ShoppingBag, Store } from 'lucide-react';
+import Link from 'next/link';
 import { Product } from '@/types';
 import { formatIqd } from '@/lib/utils';
 
@@ -22,7 +23,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     <div className="bg-white rounded-2xl overflow-hidden border border-slate-200/80 shadow-soft hover:shadow-card hover:-translate-y-1 transition-all duration-300 flex flex-col group">
       
       {/* صورة المنتج */}
-      <div className="relative aspect-square overflow-hidden bg-slate-50">
+      <Link href={`/p/${product.id}`} className="relative aspect-square overflow-hidden bg-slate-50 block">
         <img
           src={product.image}
           alt={product.name}
@@ -45,14 +46,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             <span className="truncate">{product.storeName}</span>
           </span>
         </div>
-      </div>
+      </Link>
 
       {/* تفاصيل المنتج */}
       <div className="p-3.5 flex-1 flex flex-col justify-between space-y-2.5">
         <div>
-          <h4 className="font-bold text-sm text-slate-900 group-hover:text-brand-700 transition-colors line-clamp-1">
+          <Link href={`/p/${product.id}`} className="font-bold text-sm text-slate-900 group-hover:text-brand-700 transition-colors line-clamp-1 block">
             {product.name}
-          </h4>
+          </Link>
           <p className="text-xs text-slate-500 line-clamp-2 mt-1 leading-relaxed">
             {product.description}
           </p>

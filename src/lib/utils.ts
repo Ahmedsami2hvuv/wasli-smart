@@ -5,6 +5,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatIqd(amount: number): string {
-  return `${amount.toLocaleString("ar-IQ")} د.ع`;
+export function formatIqd(amount?: number | null): string {
+  const value = typeof amount === 'number' ? amount : 0;
+  return `${value.toLocaleString("ar-IQ")} د.ع`;
 }

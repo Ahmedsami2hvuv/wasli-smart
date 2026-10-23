@@ -2,19 +2,22 @@
 
 import React from 'react';
 import { Star, Clock, MapPin, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 import { Store } from '@/types';
 import { formatIqd } from '@/lib/utils';
 
 interface StoreCardProps {
   store: Store;
-  onSelect: (store: Store) => void;
+  onSelect?: (store: Store) => void;
 }
 
 export const StoreCard: React.FC<StoreCardProps> = ({ store, onSelect }) => {
+  const storeUrl = `/s/${store.code || store.slug || store.id}`;
+
   return (
-    <div
-      onClick={() => onSelect(store)}
-      className="bg-white rounded-2xl overflow-hidden border border-slate-200/80 shadow-soft hover:shadow-hover hover:-translate-y-1 transition-all duration-300 flex flex-col group cursor-pointer"
+    <Link
+      href={storeUrl}
+      className="bg-white rounded-2xl overflow-hidden border border-slate-200/80 shadow-soft hover:shadow-hover hover:-translate-y-1 transition-all duration-300 flex flex-col group cursor-pointer block"
     >
       {/* صورة المتجر */}
       <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
@@ -66,6 +69,6 @@ export const StoreCard: React.FC<StoreCardProps> = ({ store, onSelect }) => {
           </div>
         </div>
       </div>
-    </div>
+    </Link>
   );
 };

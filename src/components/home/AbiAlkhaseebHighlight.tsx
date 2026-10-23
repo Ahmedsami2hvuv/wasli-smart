@@ -112,7 +112,7 @@ export const AbiAlkhaseebHighlight: React.FC<AbiAlkhaseebHighlightProps> = ({
 
                 {/* الوسوم السريعة */}
                 <div className="flex flex-wrap gap-1.5">
-                  {store.tags.map((tag) => (
+                  {(store.tags || []).map((tag) => (
                     <span
                       key={tag}
                       className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-medium"
@@ -130,7 +130,7 @@ export const AbiAlkhaseebHighlight: React.FC<AbiAlkhaseebHighlightProps> = ({
                   </div>
 
                   <div className="text-slate-500">
-                    توصيل: <span className="font-bold text-slate-900">{formatIqd(store.deliveryFeeIqd)}</span>
+                    توصيل: <span className="font-bold text-slate-900">{formatIqd(store.deliveryFeeIqd || 2500)}</span>
                   </div>
 
                   <button

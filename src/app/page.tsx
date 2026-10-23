@@ -81,9 +81,9 @@ export default function HomePage() {
     return STORES.filter(store => {
       const matchesSearch = 
         store.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        store.tagline.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        store.district.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        store.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
+        (store.tagline || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (store.district || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (store.tags || []).some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesCategory = selectedCategory 
         ? store.categoryId === selectedCategory 
@@ -98,9 +98,9 @@ export default function HomePage() {
     return PRODUCTS.filter(prod => {
       const matchesSearch = 
         prod.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        prod.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        prod.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        prod.storeName.toLowerCase().includes(searchQuery.toLowerCase());
+        (prod.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (prod.category || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (prod.storeName || '').toLowerCase().includes(searchQuery.toLowerCase());
 
       return matchesSearch;
     });
@@ -144,7 +144,7 @@ export default function HomePage() {
           stores={STORES}
           onSelectStore={setSelectedStore}
           onAddToCart={handleAddToCart}
-          featuredProducts={PRODUCTS.filter(p => p.storeId.includes('alkhaseeb') || p.storeId.includes('khoz') || p.storeId.includes('basra'))}
+          featuredProducts={PRODUCTS.filter(p => (p.storeId || '').includes('alkhaseeb') || (p.storeId || '').includes('khoz') || (p.storeId || '').includes('basra'))}
         />
 
         {/* قسم جميع المتاجر المحلية */}

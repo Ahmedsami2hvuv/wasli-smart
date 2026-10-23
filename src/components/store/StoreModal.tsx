@@ -92,7 +92,7 @@ export const StoreModal: React.FC<StoreModalProps> = ({
                 <span>التوصيل: {store.deliveryTimeMinutes}</span>
               </div>
               <div className="text-slate-600">
-                أجرة التوصيل: <span className="font-bold text-slate-900">{formatIqd(store.deliveryFeeIqd)}</span>
+                أجرة التوصيل: <span className="font-bold text-slate-900">{formatIqd(store.deliveryFeeIqd || 4000)}</span>
               </div>
             </div>
 

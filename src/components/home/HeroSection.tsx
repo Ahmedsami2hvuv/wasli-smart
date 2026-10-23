@@ -57,10 +57,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             {/* شريط الإجراءات والبحث الفوري */}
             <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 max-w-xl">
               <a
-                href="#abi-alkhaseeb"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-brand-700 to-skybrand-600 hover:from-brand-800 hover:to-skybrand-700 text-white font-bold text-sm shadow-lg shadow-brand-700/25 hover:shadow-xl hover:shadow-brand-700/30 transition-all duration-200 active:scale-98"
+                href="/register-store"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-brand-700 via-brand-800 to-skybrand-700 hover:opacity-95 text-white font-bold text-sm shadow-lg shadow-brand-700/25 hover:shadow-xl transition-all duration-200 active:scale-98"
               >
-                <span>استكشف متاجر أبي الخصيب</span>
+                <Sparkles className="w-4 h-4 text-accent-400" />
+                <span>أنشئ متجرك مجاناً وابدأ جني الأرباح</span>
                 <ArrowLeft className="w-4 h-4" />
               </a>
 
@@ -68,7 +69,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 href="#stores"
                 className="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-white hover:bg-slate-50 text-slate-800 font-bold text-sm border border-slate-200/90 shadow-sm hover:border-slate-300 transition-all duration-200"
               >
-                <span>تصفح جميع المتاجر</span>
+                <span>تصفح المتاجر والمنتجات</span>
               </a>
             </div>
 
