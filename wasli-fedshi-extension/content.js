@@ -14,12 +14,25 @@
     });
   }
 
-  // تنظيف الأرقام واستخراج المبالغ بالدينار
-  function parseIqdNumber(text) {
+  // تنظيف واستخراج المبالغ المالية الواقعية بالدينار العراقي
+  function extractRealisticPrice(text) {
     if (!text) return 0;
-    // استخراج الأرقام فقط وتجاهل الفواصل والنصوص
-    const clean = text.replace(/,/g, '').replace(/[^\d]/g, '');
-    return clean ? parseInt(clean, 10) : 0;
+    // استخراج المبالغ المنطقية فقط (بين 500 دينار و 5,000,000 دينار)
+    const matches = text.match(/(\d{1,3}(?:,\d{3})+|\b\d{4,7}\b)/g);
+    if (!matches) return 0;
+    
+    for (const m of matches) {
+      const num = parseInt(m.replace(/,/g, ''), 10);
+      if (num >= 500 && num <= 5000000) {
+        return num;
+      }
+    }
+    return 0;
+  }
+
+  // تنظيف الأرقام العادية
+  function parseIqdNumber(text) {
+    return extractRealisticPrice(text);
   }
 
   // استخراج تفاصيل المنتج من صفحة فدشي الحالية
@@ -49,75 +62,89 @@
         }
       }
 
-      // 2. استخراج عنوان المنتج بدقة (استبعاد شريط الهيدر والتنقل)
+      // 2. استخراج عنوان المنتج الفعلي بدقة
       let title = '';
-      // البحث عن أول عنصر نصي بارز يسبق "رقم المنتج" أو يقع في حاوية تفاصيل المنتج
-      const excludedKeywords = [
-        'الأرباح المحققة', 'الأرباح القادمة', 'دليل التاجر', 'الرئيسية', 
-        'تسجيل الخروج', 'الإعدادات', 'المحفظة', 'المفضلة', 'سلة', 'حسابي', 
-        'ArtQD', 'سعر الجملة', 'الربح', 'اضف الى السلة', 'تحميل الصور', 'رقم المنتج'
-      ];
 
-      // فحص العناوين h1, h2, h3
-      const headingCandidates = Array.from(document.querySelectorAll('h1, h2, h3, div')).filter(el => {
-        const t = (el.textContent || '').trim();
-        if (t.length < 5 || t.length > 120) return false;
-        // استبعاد أي نص يحتوي على كلمات شريط التاجر
-        return !excludedKeywords.some(keyword => t.includes(keyword));
-      });
+      // أ) محاولة من عنوان تبويب الصفحة (document.title)
+      const docTitle = (document.title || '')
+        .replace(/[-–|]\s*فدشي/g, '')
+        .replace(/[-–|]\s*Fedshi/gi, '')
+        .replace(/فدشي/g, '')
+        .trim();
 
-      // نختار العنوان الذي يظهر في الجزء العلوي ويحتوي على نص مفهوم
-      for (const el of headingCandidates) {
-        const t = el.textContent.trim();
-        // التأكد أنه ليس رقماً فقط وأنه عنصر مرئي
-        if (t.length >= 8 && isNaN(Number(t)) && el.offsetHeight > 15) {
-          title = t;
-          break;
-        }
+      if (docTitle && docTitle.length >= 6 && !docTitle.includes('أبو') && !docTitle.includes('حساب')) {
+        title = docTitle;
       }
 
-      // إذا لم نجده، نبحث عن العنصر الأقرب لـ "سعر الجملة"
+      // ب) إذا لم ينجح، نبحث في مسار التنقل (Breadcrumb)
       if (!title) {
-        const wholesaleEl = allElements.find(el => (el.textContent || '').trim() === 'سعر الجملة');
-        if (wholesaleEl && wholesaleEl.parentElement) {
-          const prev = wholesaleEl.parentElement.previousElementSibling;
-          if (prev && prev.textContent) {
-            title = prev.textContent.trim();
+        const breadcrumbLinks = Array.from(document.querySelectorAll('nav a, ol li, ul li a, .breadcrumb a, div[class*="breadcrumb"]'));
+        if (breadcrumbLinks.length > 1) {
+          const lastCrumb = breadcrumbLinks[breadcrumbLinks.length - 1];
+          const cText = (lastCrumb.textContent || '').trim();
+          if (cText.length > 5 && !cText.includes('الرئيسية')) {
+            title = cText;
           }
         }
       }
 
-      // 3. سعر الجملة في فدشي (تكلفة المدير)
+      // ج) فحص العناوين البارزة داخل الصفحة مع استبعاد الحسابات والتجار
+      if (!title) {
+        const excludedKeywords = [
+          'الأرباح', 'دليل التاجر', 'الرئيسية', 'تسجيل الخروج', 'الإعدادات', 
+          'المحفظة', 'المفضلة', 'سلة', 'حسابي', 'ArtQD', 'سعر الجملة', 'الربح', 
+          'اضف الى السلة', 'تحميل الصور', 'رقم المنتج', 'أبو ', 'متجر '
+        ];
+
+        const headingCandidates = Array.from(document.querySelectorAll('h1, h2, h3, div')).filter(el => {
+          const t = (el.textContent || '').trim();
+          if (t.length < 6 || t.length > 100) return false;
+          return !excludedKeywords.some(keyword => t.includes(keyword));
+        });
+
+        for (const el of headingCandidates) {
+          const t = el.textContent.trim();
+          if (t.length >= 8 && isNaN(Number(t)) && el.offsetHeight > 15) {
+            title = t;
+            break;
+          }
+        }
+      }
+
+      if (!title) {
+        title = 'منتج فدشي';
+      }
+
+      // 3. سعر الجملة في فدشي (تكلفة المدير الحقيقية)
       let fedshiWholesale = 0;
       for (const el of allElements) {
         const text = (el.textContent || '').trim();
         if (text === 'سعر الجملة' || text.startsWith('سعر الجملة')) {
-          // نبحث في العنصر التالي أو داخل نفس الحاوية
-          const sibling = el.nextElementSibling || (el.parentElement && el.parentElement.querySelector(':nth-child(2)'));
-          if (sibling) {
-            const parsed = parseIqdNumber(sibling.textContent);
+          // نبحث في العنصر التالي مباشرة
+          if (el.nextElementSibling) {
+            const parsed = extractRealisticPrice(el.nextElementSibling.textContent);
             if (parsed > 0) {
               fedshiWholesale = parsed;
               break;
             }
           }
-          // أو في الأب
+          // أو في العناصر الأبناء القريبة
           if (el.parentElement) {
-            const parsed = parseIqdNumber(el.parentElement.textContent);
-            if (parsed > 0) {
-              fedshiWholesale = parsed;
+            const childWithPrice = Array.from(el.parentElement.children).find(c => c !== el && extractRealisticPrice(c.textContent) > 0);
+            if (childWithPrice) {
+              fedshiWholesale = extractRealisticPrice(childWithPrice.textContent);
               break;
             }
           }
         }
       }
 
-      // إذا لم نجده، نحاول عبر النص العام
+      // إذا لم نجده، نبحث بالسطر النصي المجاور لسعر الجملة فقط
       if (!fedshiWholesale) {
         const pageText = document.body.innerText || '';
-        const m = pageText.match(/سعر الجملة[\s\S]{0,40}?(\d[\d,]+)\s*(?:د\.ع|IQD)/);
+        const m = pageText.match(/سعر الجملة[\s\r\n]{0,20}?(\d{1,3}(?:,\d{3})+|\d{4,6})\s*(?:د\.ع|IQD)?/);
         if (m && m[1]) {
-          fedshiWholesale = parseIqdNumber(m[1]);
+          fedshiWholesale = extractRealisticPrice(m[1]);
         }
       }
 
@@ -126,7 +153,7 @@
       for (const el of allElements) {
         const text = (el.textContent || '').trim();
         if (text.includes('الربح') && (text.includes('د.ع') || text.includes('أو أكثر'))) {
-          const parsed = parseIqdNumber(text);
+          const parsed = extractRealisticPrice(text);
           if (parsed > 0) {
             fedshiProfit = parsed;
             break;
@@ -140,18 +167,17 @@
       for (const el of allElements) {
         const text = (el.textContent || '').trim();
         if (text.includes('سعر الزبون المقترح')) {
-          // استخراج الأرقام من هذا العنصر أو المجاور له
           const combined = text + ' ' + (el.nextElementSibling ? el.nextElementSibling.textContent : '');
-          const matches = combined.match(/(\d[\d,]+)\s*[-–]\s*(\d[\d,]+)/);
+          const matches = combined.match(/(\d{1,3}(?:,\d{3})+|\d{4,6})\s*[-–]\s*(\d{1,3}(?:,\d{3})+|\d{4,6})/);
           if (matches && matches[1] && matches[2]) {
-            minSuggested = parseIqdNumber(matches[1]);
-            maxSuggested = parseIqdNumber(matches[2]);
+            minSuggested = extractRealisticPrice(matches[1]);
+            maxSuggested = extractRealisticPrice(matches[2]);
             break;
           }
         }
       }
 
-      // إذا لم تتوفر نطاقات مقترحة، نطبق معادلة احتساب افتراضية ذكية
+      // ضبط الأسعار التلقائية الذكية لمنصة وصلي:
       if (fedshiWholesale > 0) {
         if (!minSuggested) minSuggested = fedshiWholesale + (fedshiProfit || 18000);
         if (!maxSuggested) maxSuggested = minSuggested + 20000;
@@ -206,27 +232,26 @@
       }
 
       // 9. تطبيق معادلة أرباح منصة وصلي المعتمدة:
-      // جملة وصلي للمسوق = الحد الأدنى لفدشي
-      const wasliWholesale = minSuggested || (fedshiWholesale ? fedshiWholesale + 18000 : 35000);
-      // ربح منصة وصلي الصافي
-      const wasliProfit = fedshiWholesale ? (wasliWholesale - fedshiWholesale) : 18000;
-      // بيع الزبون
+      const safeFedshiWholesale = fedshiWholesale || 17000;
+      const safeMinSuggested = minSuggested || (safeFedshiWholesale + (fedshiProfit || 18000));
+      const wasliWholesale = safeMinSuggested;
+      const wasliProfit = wasliWholesale - safeFedshiWholesale;
       const wasliMinPrice = wasliWholesale + 10000;
       const wasliMaxPrice = maxSuggested || (wasliWholesale + 20000);
 
       return {
-        title: title || 'طقم سماعات لاسلكية مزدوجة 2 في 1',
-        productCode: productCode || 'AFRCX',
-        skuCode: skuCode || 'AFZGW',
-        fedshiWholesale: fedshiWholesale || 17000,
+        title: title || 'منتج مستورد من فدشي',
+        productCode: productCode || '',
+        skuCode: skuCode || '',
+        fedshiWholesale: safeFedshiWholesale,
         fedshiProfit: fedshiProfit || 18000,
-        minSuggested: minSuggested || 35000,
-        maxSuggested: maxSuggested || 55000,
+        minSuggested: safeMinSuggested,
+        maxSuggested: wasliMaxPrice,
         wasliWholesale,
         wasliProfit,
         wasliMinPrice,
         wasliMaxPrice,
-        colors: colors.length > 0 ? colors : [{ name: 'ذهبي' }, { name: 'ابيض' }, { name: 'اسود' }],
+        colors: colors.length > 0 ? colors : [{ name: 'افتراضي' }],
         images: images.slice(0, 10),
         videoUrl,
         stock: 50
