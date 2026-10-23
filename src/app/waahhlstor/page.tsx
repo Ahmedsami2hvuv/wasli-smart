@@ -119,6 +119,13 @@ export default function AdminDashboardPage() {
 
           <div className="flex flex-wrap items-center gap-3">
             <Link
+              href="/waahhlstor/telegram"
+              className="py-2.5 px-4 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
+            >
+              <Send className="w-4 h-4 text-sky-200" />
+              <span>قناة التيليجرام وفحص النشر</span>
+            </Link>
+            <Link
               href="/waahhlstor/categories"
               className="py-2.5 px-4 bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
             >

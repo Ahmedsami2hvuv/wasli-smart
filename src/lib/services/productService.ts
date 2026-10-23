@@ -216,6 +216,49 @@ export async function createPlatformProduct(productData: {
 }
 
 /**
+ * جلب منتج محدد بواسطة المعرف
+ */
+export async function getProductById(id: string): Promise<Product | null> {
+  const all = await getAllProducts();
+  const found = all.find(p => p.id === id);
+  if (found) return found;
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (!error && data) {
+        return {
+          id: data.id,
+          name: data.title || data.name,
+          slug: data.slug,
+          description: data.description,
+          priceIqd: data.price_iqd || data.price,
+          wholesalePriceIqd: data.wholesale_price_iqd || data.price,
+          minPriceIqd: data.min_price_iqd || data.price,
+          maxPriceIqd: data.max_price_iqd || data.price * 1.3,
+          promoDescription: data.promo_description || data.description,
+          specifications: data.specifications,
+          supplierCode: data.supplier_code,
+          category: data.category || 'عام',
+          image: data.image || '/images/products/placeholder.webp',
+          images: Array.isArray(data.images) ? data.images : [],
+          isAvailable: true,
+          status: 'published',
+        };
+      }
+    } catch (err) {
+      console.warn('تعذر جلب المنتج من سوبابيس:', err);
+    }
+  }
+
+  return null;
+}
+
+/**
  * تعديل منتج قائم
  */
 export async function updatePlatformProduct(id: string, updates: Partial<Product>): Promise<Product | null> {

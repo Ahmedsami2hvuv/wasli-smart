@@ -15,7 +15,9 @@ import {
   Image as ImageIcon,
   CheckCircle2,
   Trash2,
-  ExternalLink
+  ExternalLink,
+  Send,
+  RefreshCw
 } from 'lucide-react';
 import Link from 'next/link';
 import { Product, Category, Subcategory } from '@/types';
@@ -43,6 +45,33 @@ export default function AdminProductsPage() {
   const [uploadedImageUrls, setUploadedImageUrls] = useState<string[]>([]);
   const [submittingProduct, setSubmittingProduct] = useState(false);
   const [formMsg, setFormMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [telegramMsg, setTelegramMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [publishingId, setPublishingId] = useState<string | null>(null);
+
+  const handlePublishToTelegram = async (prodId: string) => {
+    try {
+      setPublishingId(prodId);
+      setTelegramMsg(null);
+      const res = await fetch('/api/admin/telegram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'post_product',
+          productId: prodId,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setTelegramMsg({ text: data.message, type: 'success' });
+      } else {
+        setTelegramMsg({ text: data.error || 'تعذر النشر في قناة التيليجرام', type: 'error' });
+      }
+    } catch (err: any) {
+      setTelegramMsg({ text: 'خطأ: ' + err.message, type: 'error' });
+    } finally {
+      setPublishingId(null);
+    }
+  };
 
   const fetchInitialData = async () => {
     try {
@@ -198,7 +227,15 @@ export default function AdminProductsPage() {
             <span>العودة للوحة الإدارة العامة</span>
           </Link>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Link
+              href="/waahhlstor/telegram"
+              className="py-2.5 px-3.5 bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
+            >
+              <Send className="w-4 h-4 text-sky-200" />
+              <span>إعدادات وتيست التيليجرام</span>
+            </Link>
+
             <Link
               href="/waahhlstor/categories"
               className="py-2.5 px-3.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200/80 transition-all flex items-center gap-1.5 shadow-2xs"
@@ -216,6 +253,21 @@ export default function AdminProductsPage() {
             </button>
           </div>
         </div>
+
+        {/* تنبيه نشر التيليجرام */}
+        {telegramMsg && (
+          <div className={`p-4 rounded-2xl border text-xs font-bold flex items-center justify-between gap-3 ${
+            telegramMsg.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}>
+            <div className="flex items-center gap-2">
+              <Send className="w-4 h-4" />
+              <span>{telegramMsg.text}</span>
+            </div>
+            <button onClick={() => setTelegramMsg(null)} className="text-slate-400 hover:text-slate-600 text-xs font-bold">
+              إغلاق
+            </button>
+          </div>
+        )}
 
         {/* بطاقة الرأس والتعليمات */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md">
@@ -522,7 +574,7 @@ export default function AdminProductsPage() {
                     <th className="py-3 px-3">حدود بيع الزبون</th>
                     <th className="py-3 px-3">المخزون والخيارات</th>
                     <th className="py-3 px-3">الحالة</th>
-                    <th className="py-3 px-3">رابط المنتج</th>
+                    <th className="py-3 px-3">الإجراءات والمشاركة</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -574,14 +626,30 @@ export default function AdminProductsPage() {
                           </span>
                         </td>
                         <td className="py-3.5 px-3">
-                          <Link
-                            href={`/p/${p.id}`}
-                            target="_blank"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 font-bold rounded-lg text-[11px] border border-brand-200 transition-colors"
-                          >
-                            <span>معاينة</span>
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </Link>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handlePublishToTelegram(p.id)}
+                              disabled={publishingId === p.id}
+                              title="نشر هذا المنتج في قناة تيليجرام"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-lg text-[11px] shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              {publishingId === p.id ? (
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Send className="w-3.5 h-3.5" />
+                              )}
+                              <span>نشر بالقناة</span>
+                            </button>
+
+                            <Link
+                              href={`/p/${p.id}`}
+                              target="_blank"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 font-bold rounded-lg text-[11px] border border-brand-200 transition-colors"
+                            >
+                              <span>معاينة</span>
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </Link>
+                          </div>
                         </td>
                       </tr>
                     );
