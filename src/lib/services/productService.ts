@@ -4,7 +4,18 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { mockProducts } from '@/data/mockData';
 import crypto from 'crypto';
 
-// منتجات المنصة الأولية مع تفاصيل التسعير والعمولات
+function isValidUUID(str: string | null | undefined): boolean {
+  if (!str) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+}
+
+const CATEGORY_MAP: Record<string, string> = {
+  'cat-electronics': '11111111-1111-1111-1111-111111111101',
+  'cat-fashion': '11111111-1111-1111-1111-111111111102',
+  'cat-perfumes': '11111111-1111-1111-1111-111111111103',
+  'cat-home': '11111111-1111-1111-1111-111111111104',
+  'cat-iraqi-special': '11111111-1111-1111-1111-111111111105',
+};
 const initialProducts: Product[] = mockProducts.map((p, idx) => {
   const basePrice = p.priceIqd || 15000;
   const wholesalePrice = Math.round(basePrice * 0.7); // سعر الجملة
@@ -62,12 +73,11 @@ export async function getAllProducts(): Promise<Product[]> {
           image: item.images?.[0]?.local_url || 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=600&q=80',
           category: item.category?.name || 'عام',
           categoryId: item.category_id,
-          promoDescription: item.metadata?.promoDescription || item.description,
-          specifications: item.metadata?.specifications || null,
-          supplierPriceIqd: item.metadata?.supplierPriceIqd ? Number(item.metadata.supplierPriceIqd) : undefined,
-          supplierCode: item.metadata?.supplierCode,
-          colors: item.metadata?.colors,
-          variants: item.metadata?.variants,
+          promoDescription: item.description,
+          specifications: item.description,
+          supplierPriceIqd: Number(item.wholesale_price) - 3000,
+          supplierCode: item.brand || item.metadata?.supplierCode,
+          images: item.images?.map((im: any) => im.local_url) || [],
         }));
       }
     } catch (e) {
@@ -164,6 +174,32 @@ export async function createPlatformProduct(productData: {
     createdAt: new Date().toISOString(),
   };
 
+  // التأكد من صحة categoryId بصيغة UUID المتوافقة مع سوبابيس
+  let validCategoryId: string | null = null;
+  if (productData.categoryId) {
+    if (isValidUUID(productData.categoryId)) {
+      validCategoryId = productData.categoryId;
+    } else if (CATEGORY_MAP[productData.categoryId]) {
+      validCategoryId = CATEGORY_MAP[productData.categoryId];
+    }
+  }
+
+  // مطابقة تلقائية لقسم سوبابيس بواسطة الاسم إن لم يتوفر المعرف
+  if (!validCategoryId && productData.category) {
+    const catLower = productData.category.toLowerCase();
+    if (catLower.includes('منزل') || catLower.includes('أجهزة') || catLower.includes('اجهزة')) {
+      validCategoryId = '11111111-1111-1111-1111-111111111104';
+    } else if (catLower.includes('إلكترون') || catLower.includes('الكترون') || catLower.includes('هاتف')) {
+      validCategoryId = '11111111-1111-1111-1111-111111111101';
+    } else if (catLower.includes('أزياء') || catLower.includes('ازياء') || catLower.includes('ملابس')) {
+      validCategoryId = '11111111-1111-1111-1111-111111111102';
+    } else if (catLower.includes('عطور') || catLower.includes('تجميل') || catLower.includes('عناية')) {
+      validCategoryId = '11111111-1111-1111-1111-111111111103';
+    } else if (catLower.includes('تمور') || catLower.includes('تمر') || catLower.includes('أغذية') || catLower.includes('اغذية')) {
+      validCategoryId = '11111111-1111-1111-1111-111111111105';
+    }
+  }
+
   // محاولة الإدخال في سوبابيس (باستخدام عميل الإدارة أو العميل العام)
   const dbClient = supabaseAdmin || supabase;
   if (dbClient) {
@@ -179,20 +215,11 @@ export async function createPlatformProduct(productData: {
         min_price: newProduct.minPriceIqd,
         max_price: newProduct.maxPriceIqd,
         stock_quantity: newProduct.stockQuantity,
-        category_id: newProduct.categoryId || null,
+        category_id: validCategoryId,
+        brand: newProduct.supplierCode || null,
+        is_stock_tracked: true,
+        is_available: true,
         status: 'published',
-        metadata: {
-          supplierPriceIqd: newProduct.supplierPriceIqd,
-          supplierCode: newProduct.supplierCode,
-          supplierSku: newProduct.supplierSku,
-          supplierSource: newProduct.supplierSource,
-          promoDescription: newProduct.promoDescription,
-          specifications: newProduct.specifications,
-          colors: newProduct.colors,
-          variants: newProduct.variants,
-          videoUrl: newProduct.videoUrl,
-          images: productData.images,
-        }
       });
 
       if (insertError) {
