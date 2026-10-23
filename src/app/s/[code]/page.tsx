@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { 
   Store as StoreIcon, 
@@ -19,7 +19,7 @@ import {
 import Link from 'next/link';
 import { Store, Product } from '@/types';
 
-export default function PublicStorePage() {
+function StorePageContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -525,5 +525,20 @@ export default function PublicStorePage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function PublicStorePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-brand-200 border-t-brand-700 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-slate-600 font-medium">جاري فتح المتجر وتجهيز المنتجات...</p>
+        </div>
+      </div>
+    }>
+      <StorePageContent />
+    </Suspense>
   );
 }

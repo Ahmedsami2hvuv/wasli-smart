@@ -21,10 +21,10 @@ export default function RegisterStorePage() {
     if (!createdStore) return;
 
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://wasli-smart.vercel.app';
-    const storeUrl = `${origin}/s/${createdStore.code}`;
+    const storeUrl = `${origin}/s/${createdStore.code}?name=${encodeURIComponent(createdStore.name)}`;
     const dashboardUrl = `${origin}/merchant?storeCode=${createdStore.code}`;
 
-    const textToCopy = `معلومات متجري في منصة وصلي:
+    const textToCopy = `معلومات متجري:
 - اسم صاحب المتجر: ${createdStore.ownerName || 'غير محدد'}
 - اسم المتجر: ${createdStore.name}
 - المحافظة: ${createdStore.city}
