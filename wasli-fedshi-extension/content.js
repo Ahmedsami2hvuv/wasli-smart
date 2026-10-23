@@ -2,8 +2,8 @@
 (function () {
   'use strict';
 
-  // الرابط الافتراضي لخادم منصة وصلي
-  let wasliServerUrl = 'http://localhost:3000';
+  // الرابط الافتراضي الدائم لموقع وصلي الحي على فيرسل
+  let wasliServerUrl = 'https://wasli-smart.vercel.app';
 
   // استرجاع الرابط المخصص إن وجد في ذاكرة الإضافة
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
@@ -326,16 +326,13 @@
     const firstImg = (data.images && data.images[0]) || (data.colors && data.colors[0] && data.colors[0].image) || '';
 
     content.innerHTML = `
-      <!-- رابط السيرفر المستهدف -->
-      <div style="background: #f1f5f9; padding: 10px 14px; border-radius: 12px; border: 1px solid #cbd5e1; display: flex; flex-direction: column; gap: 6px;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-size: 11px; font-weight: 700; color: #334155;">رابط خادم منصة وصلي المستهدف:</span>
-          <div style="display: flex; gap: 6px;">
-            <button type="button" id="wasli-set-local" style="font-size: 10px; font-weight: 700; background: #ffffff; border: 1px solid #94a3b8; border-radius: 6px; padding: 2px 8px; cursor: pointer; color: #1e293b;">السيرفر المحلي</button>
-            <button type="button" id="wasli-set-vercel" style="font-size: 10px; font-weight: 700; background: #1d4ed8; color: #ffffff; border: none; border-radius: 6px; padding: 2px 8px; cursor: pointer;">موقع فيرسل المباشر</button>
-          </div>
+      <!-- مؤشر الاتصال المباشر بموقع وصلي -->
+      <div style="background: #eff6ff; padding: 10px 14px; border-radius: 12px; border: 1px solid #bfdbfe; display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #16a34a;"></span>
+          <span style="font-size: 11.5px; font-weight: 700; color: #1e40af;">الوجهة: موقع وصلي الحي (فيرسل)</span>
         </div>
-        <input type="text" class="wasli-input" id="wasli-inp-server-url" value="${wasliServerUrl}" style="font-size: 11px; padding: 6px 10px; font-family: monospace;" dir="ltr">
+        <a href="https://wasli-smart.vercel.app/waahhlstor/products" target="_blank" style="font-size: 11px; font-weight: 700; color: #0284c7; text-decoration: none;">فتح لوحة الإدارة</a>
       </div>
 
       <div class="wasli-product-summary">
@@ -437,17 +434,6 @@
       <div id="wasli-status-message"></div>
     `;
 
-    // إدارة رابط السيرفر
-    const serverInput = overlay.querySelector('#wasli-inp-server-url');
-    overlay.querySelector('#wasli-set-local').onclick = () => {
-      serverInput.value = 'http://localhost:3000';
-      wasliServerUrl = 'http://localhost:3000';
-    };
-    overlay.querySelector('#wasli-set-vercel').onclick = () => {
-      serverInput.value = 'https://wasli-smart.vercel.app';
-      wasliServerUrl = 'https://wasli-smart.vercel.app';
-    };
-
     // التحديث الحي للأرباح عند تعديل الأسعار
     const costInp = overlay.querySelector('#wasli-inp-cost');
     const wholesaleInp = overlay.querySelector('#wasli-inp-wholesale');
@@ -473,7 +459,7 @@
       confirmBtn.disabled = true;
       confirmBtn.innerHTML = `<span>جاري نقل المنتج وحفظه...</span>`;
 
-      const targetUrl = (serverInput.value || wasliServerUrl).trim().replace(/\/+$/, '');
+      const targetUrl = wasliServerUrl.trim().replace(/\/+$/, '');
       const productTitle = overlay.querySelector('#wasli-inp-title').value.trim() || data.title;
       const costPrice = parseInt(costInp.value, 10) || data.fedshiWholesale;
       const wholesale = parseInt(wholesaleInp.value, 10) || data.wasliWholesale;
@@ -516,19 +502,24 @@
 
         if (response.ok && result.success) {
           statusBox.innerHTML = `
-            <div class="wasli-status-bar success">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-              <span>تم استيراد وحفظ المنتج في منصة وصلي بنجاح! الأرباح المسجلة للمنصة: ${result.financials.platformProfit.toLocaleString()} د.ع</span>
+            <div class="wasli-status-bar success" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span>تم استيراد وحفظ المنتج في منصة وصلي بنجاح! ربح المنصة الصافي: ${result.financials.platformProfit.toLocaleString()} د.ع</span>
+              </div>
+              <a href="https://wasli-smart.vercel.app/waahhlstor/products" target="_blank" style="color: #065f46; font-weight: 800; text-decoration: underline; font-size: 11px;">
+                فتح صفحة المنتجات في لوحة الإدارة لرؤية المنتج المستورد
+              </a>
             </div>
           `;
-          confirmBtn.innerHTML = `<span>تم الحفظ بنجاح</span>`;
+          confirmBtn.innerHTML = `<span>تم الحفظ في منصتك بنجاح</span>`;
           setTimeout(() => {
             overlay.classList.remove('wasli-active');
             confirmBtn.disabled = false;
             confirmBtn.innerHTML = `<span>تأكيد ونقل المنتج إلى منصتي الآن</span>`;
-          }, 2000);
+          }, 3000);
         } else {
           throw new Error(result.message || 'حدث خطأ غير معروف في السيرفر');
         }

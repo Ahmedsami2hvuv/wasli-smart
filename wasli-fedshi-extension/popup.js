@@ -9,6 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.sync.get(['wasliCustomUrl'], (res) => {
       if (res.wasliCustomUrl) {
         serverUrlInput.value = res.wasliCustomUrl;
+      } else {
+        serverUrlInput.value = 'https://wasli-smart.vercel.app';
       }
     });
   }

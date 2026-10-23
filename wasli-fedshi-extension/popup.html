@@ -23,14 +23,20 @@
 
     <div class="popup-body">
       <div class="field-box">
-        <label for="serverUrl">رابط خادم منصة وصلي</label>
-        <input type="text" id="serverUrl" placeholder="http://localhost:3000 أو رابط فيرسل" value="http://localhost:3000">
-        <div class="hint">مثال للموقع المباشر: https://wasli-smart.vercel.app</div>
+        <label for="serverUrl">رابط خادم منصة وصلي المباشر</label>
+        <input type="text" id="serverUrl" placeholder="https://wasli-smart.vercel.app" value="https://wasli-smart.vercel.app">
+        <div class="hint">موقعك متصل تلقائياً: https://wasli-smart.vercel.app</div>
       </div>
 
       <div class="action-row">
         <button type="button" class="btn-primary" id="saveBtn">حفظ الرابط</button>
         <button type="button" class="btn-secondary" id="testBtn">فحص الاتصال</button>
+      </div>
+
+      <div style="margin-top: 8px; text-align: center;">
+        <a href="https://wasli-smart.vercel.app/waahhlstor/products" target="_blank" style="font-size: 11px; font-weight: 700; color: #1d4ed8; text-decoration: underline;">
+          الانتقال إلى لوحة إدارة وصلي
+        </a>
       </div>
 
       <div id="statusAlert" class="status-box"></div>

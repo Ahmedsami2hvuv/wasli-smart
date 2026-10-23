@@ -177,6 +177,23 @@ export async function createPlatformProduct(productData: {
           images: productData.images,
         }
       });
+
+      // حفظ الصور في جدول الصور إذا توفرت
+      if (newProduct.images && newProduct.images.length > 0) {
+        try {
+          await supabase.from('product_images').insert(
+            newProduct.images.map((img, i) => ({
+              id: img.id,
+              product_id: newProduct.id,
+              local_url: img.localUrl,
+              is_primary: i === 0,
+              sort_order: i,
+            }))
+          );
+        } catch (imgErr) {
+          console.warn('تعذر حفظ صور المنتج في جدول product_images:', imgErr);
+        }
+      }
     } catch (dbErr) {
       console.warn('تعذر الحفظ المباشر في سوبابيس، تم الاكتفاء بالحفظ المحلي النشط:', dbErr);
     }
