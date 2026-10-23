@@ -31,16 +31,16 @@ let localProducts: Product[] = [...initialProducts];
  * جلب جميع المنتجات المتاحة للتسويق في المنصة
  */
 export async function getAllProducts(): Promise<Product[]> {
-  if (isSupabaseConfigured && supabase) {
+  const dbClient = supabaseAdmin || supabase;
+  if (dbClient) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await dbClient
         .from('products')
         .select(`
           *,
           category:categories(name),
           images:product_images(*)
         `)
-        .eq('status', 'published')
         .order('created_at', { ascending: false });
 
       if (!error && data && data.length > 0) {
@@ -271,25 +271,55 @@ export async function getProductById(id: string): Promise<Product | null> {
  * تعديل منتج قائم
  */
 export async function updatePlatformProduct(id: string, updates: Partial<Product>): Promise<Product | null> {
+  const dbClient = supabaseAdmin || supabase;
+  if (dbClient) {
+    try {
+      const updateData: any = {};
+      if (updates.name) updateData.title = updates.name;
+      if (updates.description) updateData.description = updates.description;
+      if (updates.shortDescription) updateData.short_description = updates.shortDescription;
+      if (updates.wholesalePriceIqd !== undefined) updateData.wholesale_price = updates.wholesalePriceIqd;
+      if (updates.platformPriceIqd !== undefined) updateData.platform_price = updates.platformPriceIqd;
+      if (updates.minPriceIqd !== undefined) updateData.min_price = updates.minPriceIqd;
+      if (updates.maxPriceIqd !== undefined) updateData.max_price = updates.maxPriceIqd;
+      if (updates.stockQuantity !== undefined) updateData.stock_quantity = updates.stockQuantity;
+      if (updates.categoryId) updateData.category_id = updates.categoryId;
+      if (updates.status) updateData.status = updates.status;
+
+      await dbClient.from('products').update(updateData).eq('id', id);
+    } catch (err) {
+      console.warn('تعذر تحديث المنتج في سوبابيس:', err);
+    }
+  }
+
   const idx = localProducts.findIndex(p => p.id === id);
-  if (idx === -1) return null;
+  if (idx !== -1) {
+    localProducts[idx] = {
+      ...localProducts[idx],
+      ...updates,
+    };
+    return localProducts[idx];
+  }
 
-  localProducts[idx] = {
-    ...localProducts[idx],
-    ...updates,
-  };
-
-  return localProducts[idx];
+  return getProductById(id);
 }
 
 /**
  * أرشفة منتج أو إيقاف توفره
  */
 export async function deleteOrArchiveProduct(id: string): Promise<boolean> {
-  const product = localProducts.find(p => p.id === id);
-  if (!product) return false;
+  const dbClient = supabaseAdmin || supabase;
+  if (dbClient) {
+    try {
+      await dbClient.from('products').delete().eq('id', id);
+    } catch (err) {
+      console.warn('تعذر حذف المنتج من سوبابيس:', err);
+    }
+  }
 
-  product.status = 'archived';
-  product.isAvailable = false;
+  const idx = localProducts.findIndex(p => p.id === id);
+  if (idx !== -1) {
+    localProducts.splice(idx, 1);
+  }
   return true;
 }
