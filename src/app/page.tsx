@@ -199,14 +199,14 @@ export default function HomePage() {
               </div>
 
               <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
-                <div className="text-xl sm:text-2xl font-black text-emerald-600 mb-0.5">توصيل لبابك</div>
+                <div className="text-xl sm:text-2xl font-black text-emerald-600 mb-0.5">توصيل لزبائنك</div>
                 <div className="text-xs font-bold text-slate-600">نحن نتولى الشحن</div>
-                <div className="text-[10px] text-slate-400 mt-0.5">بدون عناء المناديب</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">بدون عناء منك</div>
               </div>
 
               <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
                 <div className="text-xl sm:text-2xl font-black text-amber-600 mb-0.5">أرباح فورية</div>
-                <div className="text-xs font-bold text-slate-600">كاش أو زين كاش</div>
+                <div className="text-xs font-bold text-slate-600">ماستر كارت أو زين كاش</div>
                 <div className="text-[10px] text-slate-400 mt-0.5">مع كل طلب ناجح</div>
               </div>
             </div>
