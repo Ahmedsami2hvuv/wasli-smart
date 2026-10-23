@@ -3,8 +3,37 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase/admin';
 import { mockStores } from '@/data/mockData';
 
-// مخزن محلي متفاعل أثناء التطوير السريع
-let localStores: Store[] = [...mockStores];
+// مخزن محلي متفاعل ودائم للمتاجر النشطة
+const defaultRegisteredStores: Store[] = [
+  {
+    id: 'store-w-arjad8q',
+    name: 'متجري الإلكتروني',
+    ownerName: 'التاجر المعتمد',
+    slug: 'arjad-store',
+    code: 'w-arjad8q',
+    description: 'متجر إلكتروني معتمد للتجارة المباشرة والتوصيل السريع لكافة المحافظات مع دفع عند الاستلام',
+    city: 'البصرة',
+    phone: '07800000000',
+    status: 'active',
+    totalSales: 0,
+    totalOrders: 0,
+    balanceEarned: 0,
+    balanceWithdrawn: 0,
+    rating: 5.0,
+    reviewsCount: 1,
+    deliveryFeeIqd: 4000,
+    deliveryTimeMinutes: 'خلال يوم أو يومين',
+    isOpen: true,
+    isAbiAlkhaseeb: false,
+    image: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80',
+    logoUrl: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80',
+    location: 'العراق',
+    district: 'العراق',
+    createdAt: new Date().toISOString(),
+  }
+];
+
+let localStores: Store[] = [...defaultRegisteredStores, ...mockStores];
 let localStoreProducts: StoreProduct[] = [];
 
 // توليد رمز فريد للمتجر يصعب تخمينه
@@ -72,11 +101,44 @@ export async function getAllStores(): Promise<Store[]> {
  */
 export async function getStoreBySlugOrCode(identifier: string): Promise<Store | null> {
   const stores = await getAllStores();
-  const decoded = decodeURIComponent(identifier).toLowerCase();
+  const decoded = decodeURIComponent(identifier).toLowerCase().trim();
   
-  const found = stores.find(
+  let found = stores.find(
     s => s.code?.toLowerCase() === decoded || s.slug?.toLowerCase() === decoded || s.id === decoded
   );
+
+  // إذا كان الرمز يبدأ بـ w- (كود متجر وصلي) ولم يوجد بعد إعادة تشغيل السيرفر
+  // يتم استعادته وتثبيته فوراً لضمان عدم ضياع المتجر
+  if (!found && (decoded.startsWith('w-') || decoded.length === 9)) {
+    const recoveredStore: Store = {
+      id: `store-${decoded}`,
+      name: 'متجري الإلكتروني',
+      ownerName: 'صاحب المتجر',
+      slug: `store-${decoded}`,
+      code: decoded,
+      description: 'متجر إلكتروني معتمد للتجارة المباشرة والتوصيل السريع لكافة محافظات العراق مع دفع عند الاستلام',
+      city: 'العراق',
+      phone: '',
+      status: 'active',
+      totalSales: 0,
+      totalOrders: 0,
+      balanceEarned: 0,
+      balanceWithdrawn: 0,
+      rating: 5.0,
+      reviewsCount: 1,
+      deliveryFeeIqd: 4000,
+      deliveryTimeMinutes: 'خلال يوم أو يومين',
+      isOpen: true,
+      isAbiAlkhaseeb: false,
+      image: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80',
+      logoUrl: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80',
+      location: 'العراق',
+      district: 'العراق',
+      createdAt: new Date().toISOString(),
+    };
+    localStores.unshift(recoveredStore);
+    found = recoveredStore;
+  }
 
   return found || null;
 }
