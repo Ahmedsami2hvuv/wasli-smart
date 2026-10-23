@@ -33,54 +33,119 @@
   }
 
   // محاولة النقر البرمجي على تبويب معين ثم قراءة محتواه
+    // تنشيط عنصر التبويب في React مع إطلاق كافة الأحداث المطلوبة
+  function activateTabSafely(el) {
+    if (!el) return;
+    try {
+      el.focus();
+      el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+      el.click();
+    } catch (e) {
+      try { el.click(); } catch (e2) {}
+    }
+  }
+
+  // البحث الآمن في DOM بدون قيود CSS Selectors لتجاوز أقواس Radix المائلة «»
+  function findElementByPartialId(partialName) {
+    const all = document.querySelectorAll('*');
+    for (let i = 0; i < all.length; i++) {
+      const id = all[i].id || '';
+      if (id.includes(partialName)) {
+        return all[i];
+      }
+    }
+    return null;
+  }
+
+  // استخراج النصوص من وسوم السكربت الخاصة بـ Next.js كاحتياط موثوق
+  function extractPromoFromScripts() {
+    try {
+      const scripts = Array.from(document.querySelectorAll('script'));
+      for (const s of scripts) {
+        const text = s.textContent || '';
+        // البحث عن حقل detailed_description أو نص ترويجي عربي
+        if (text.includes('detailed_description') || text.includes('وصف ترويجي')) {
+          const match = text.match(/"detailed_description"\s*:\s*"([^"]+)"/);
+          if (match && match[1]) {
+            return JSON.parse('"' + match[1] + '"');
+          }
+        }
+      }
+    } catch (e) {}
+    return '';
+  }
+
+  // استخراج الوصف الترويجي والمواصفات من تبويبات Radix بدقة مطلقة
   async function extractRadixTabsContent() {
     let promoDescription = '';
     let specifications = '';
 
     try {
-      // 1. استخراج الوصف الترويجي من تبويب Radix (detailed_description)
-      const promoBtn = document.querySelector('button[aria-controls*="detailed_description"], button[id*="trigger-detailed_description"]') ||
-        Array.from(document.querySelectorAll('button[role="tab"]')).find(b => (b.textContent || '').trim().includes('وصف ترويجي'));
+      const allButtons = Array.from(document.querySelectorAll('button, [role="tab"]'));
+
+      // 1. استخراج الوصف الترويجي
+      const promoBtn = allButtons.find(b => {
+        const t = (b.textContent || '').trim();
+        const id = b.id || '';
+        const controls = b.getAttribute('aria-controls') || '';
+        return t.includes('وصف ترويجي') || controls.includes('detailed_description') || id.includes('detailed_description');
+      });
 
       if (promoBtn) {
-        promoBtn.click();
-        await new Promise(r => setTimeout(r, 160));
+        activateTabSafely(promoBtn);
+        await new Promise(r => setTimeout(r, 220));
 
-        const controlsId = promoBtn.getAttribute('aria-controls');
-        let promoPanel = controlsId ? document.getElementById(controlsId) : null;
-        if (!promoPanel) {
-          promoPanel = document.querySelector('[id*="content-detailed_description"], [data-slot="tabs-content"][id*="detailed"]');
-        }
-
+        // محاولة العثور على لوحة المحتوى بالـ ID الجزئي
+        const promoPanel = findElementByPartialId('content-detailed_description');
         if (promoPanel) {
           const raw = promoPanel.innerText || promoPanel.textContent || '';
           promoDescription = raw.replace(/نسخ الوصف/g, '').trim();
         }
 
-        // بحث احتياطي دقيق بجانب زر "نسخ الوصف" حصراً
+        // إذا لم نجدها، نبحث بجوار زر "نسخ الوصف" حصراً
         if (!promoDescription) {
-          const copyBtn = Array.from(document.querySelectorAll('button, div, span')).find(el => (el.textContent || '').trim() === 'نسخ الوصف');
+          const copyBtn = Array.from(document.querySelectorAll('*')).find(el => {
+            return el.children.length === 0 && (el.textContent || '').trim() === 'نسخ الوصف';
+          });
           if (copyBtn) {
-            const parentBox = copyBtn.closest('div[class*="pt-"], [role="tabpanel"]') || copyBtn.parentElement;
-            if (parentBox) {
-              promoDescription = (parentBox.innerText || '').replace(/نسخ الوصف/g, '').trim();
+            const container = copyBtn.closest('div[class*="pt-"], [role="tabpanel"]') || copyBtn.parentElement;
+            if (container) {
+              const raw = container.innerText || container.textContent || '';
+              promoDescription = raw.replace(/نسخ الوصف/g, '').trim();
             }
           }
         }
       }
 
-      // 2. استخراج المواصفات الفنية من تبويب Radix (description)
-      const specsBtn = document.querySelector('button[aria-controls*="content-description"], button[id*="trigger-description"]:not([id*="detailed"])') ||
-        Array.from(document.querySelectorAll('button[role="tab"]')).find(b => (b.textContent || '').trim().includes('المواصفات'));
+      // إذا تعذر استخراجه من DOM، نبحث في وسوم السكربت
+      if (!promoDescription) {
+        promoDescription = extractPromoFromScripts();
+      }
+
+      // 2. استخراج المواصفات الفنية
+      const specsBtn = allButtons.find(b => {
+        const t = (b.textContent || '').trim();
+        const id = b.id || '';
+        const controls = b.getAttribute('aria-controls') || '';
+        const isNotDetailed = !controls.includes('detailed') && !id.includes('detailed');
+        return t.includes('المواصفات') || (controls.includes('description') && isNotDetailed);
+      });
 
       if (specsBtn) {
-        specsBtn.click();
-        await new Promise(r => setTimeout(r, 160));
+        activateTabSafely(specsBtn);
+        await new Promise(r => setTimeout(r, 220));
 
-        const controlsId = specsBtn.getAttribute('aria-controls');
-        let specsPanel = controlsId ? document.getElementById(controlsId) : null;
-        if (!specsPanel) {
-          specsPanel = document.querySelector('[id*="content-description"]:not([id*="detailed"]), [data-slot="tabs-content"]:not([id*="detailed"])');
+        // العثور على لوحة المواصفات (التي تحتوي على content-description ولا تحتوي على detailed)
+        const all = document.querySelectorAll('*');
+        let specsPanel = null;
+        for (let i = 0; i < all.length; i++) {
+          const id = all[i].id || '';
+          if (id.includes('content-description') && !id.includes('detailed')) {
+            specsPanel = all[i];
+            break;
+          }
         }
 
         if (specsPanel) {
@@ -280,25 +345,21 @@
       // 8. استخراج "الوصف الترويجي" و "المواصفات"
       const { promoDescription, specifications } = await extractRadixTabsContent();
 
-      if (!promoDescription || !specifications) {
+      if (!specifications) {
         const contentParagraphs = Array.from(document.querySelectorAll('div, p')).filter(el => {
           if (el.children.length > 3) return false;
           const t = (el.textContent || '').trim();
           return t.length > 40 &&
                  !t.includes('الربح:') &&
-                 !t.includes('سعر الزبون المقترح') &&
+                 !t.includes('سعر الزبون') &&
                  !t.includes('سعر الجملة') &&
-                 !t.includes('رابط الفانلز') &&
                  !t.includes('اضف الى السلة') &&
                  !t.includes('احصائيات');
         });
 
         if (contentParagraphs.length > 0) {
           contentParagraphs.sort((a, b) => b.textContent.trim().length - a.textContent.trim().length);
-          const fullProductText = contentParagraphs[0].innerText || contentParagraphs[0].textContent || '';
-
-          if (!promoDescription) promoDescription = fullProductText.trim();
-          if (!specifications) specifications = fullProductText.trim();
+          specifications = (contentParagraphs[0].innerText || contentParagraphs[0].textContent || '').trim();
         }
       }
 
@@ -363,7 +424,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">مورد: فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.1.0</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.1.1</span>
           </div>
           <button type="button" class="wasli-close-btn" id="wasli-modal-close">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
