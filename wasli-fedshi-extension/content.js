@@ -35,14 +35,14 @@
     return extractRealisticPrice(text);
   }
 
-  // استخراج تفاصيل المنتج من صفحة فدشي الحالية
+  // استخراج تفاصيل المنتج من صفحة فدشي الحالية بدقة متناهية
   function extractFedshiProductDetails() {
     try {
+      const allElements = Array.from(document.querySelectorAll('*'));
+
       // 1. كود المنتج ورقم نوع المنتج
       let productCode = '';
       let skuCode = '';
-
-      const allElements = Array.from(document.querySelectorAll('div, span, p, h1, h2, h3, a'));
 
       for (const el of allElements) {
         const text = (el.textContent || '').trim();
@@ -62,108 +62,75 @@
         }
       }
 
-      // 2. استخراج عنوان المنتج الفعلي بدقة
-      let title = '';
+      // 2. استخراج رقم الربح أولاً لاستبعاده لاحقاً من سعر الجملة
+      let fedshiProfit = 0;
+      let profitElement = null;
 
-      // أ) محاولة من عنوان تبويب الصفحة (document.title)
-      const docTitle = (document.title || '')
-        .replace(/[-–|]\s*فدشي/g, '')
-        .replace(/[-–|]\s*Fedshi/gi, '')
-        .replace(/فدشي/g, '')
-        .trim();
-
-      if (docTitle && docTitle.length >= 6 && !docTitle.includes('أبو') && !docTitle.includes('حساب')) {
-        title = docTitle;
-      }
-
-      // ب) إذا لم ينجح، نبحث في مسار التنقل (Breadcrumb)
-      if (!title) {
-        const breadcrumbLinks = Array.from(document.querySelectorAll('nav a, ol li, ul li a, .breadcrumb a, div[class*="breadcrumb"]'));
-        if (breadcrumbLinks.length > 1) {
-          const lastCrumb = breadcrumbLinks[breadcrumbLinks.length - 1];
-          const cText = (lastCrumb.textContent || '').trim();
-          if (cText.length > 5 && !cText.includes('الرئيسية')) {
-            title = cText;
-          }
-        }
-      }
-
-      // ج) فحص العناوين البارزة داخل الصفحة مع استبعاد الحسابات والتجار
-      if (!title) {
-        const excludedKeywords = [
-          'الأرباح', 'دليل التاجر', 'الرئيسية', 'تسجيل الخروج', 'الإعدادات', 
-          'المحفظة', 'المفضلة', 'سلة', 'حسابي', 'ArtQD', 'سعر الجملة', 'الربح', 
-          'اضف الى السلة', 'تحميل الصور', 'رقم المنتج', 'أبو ', 'متجر '
-        ];
-
-        const headingCandidates = Array.from(document.querySelectorAll('h1, h2, h3, div')).filter(el => {
-          const t = (el.textContent || '').trim();
-          if (t.length < 6 || t.length > 100) return false;
-          return !excludedKeywords.some(keyword => t.includes(keyword));
-        });
-
-        for (const el of headingCandidates) {
-          const t = el.textContent.trim();
-          if (t.length >= 8 && isNaN(Number(t)) && el.offsetHeight > 15) {
-            title = t;
+      for (const el of allElements) {
+        // فحص العناصر التي تحتوي مباشرة على شارة الربح
+        const text = (el.textContent || '').trim();
+        if (text.startsWith('الربح:') || text.includes('الربح: أو أكثر') || (text.includes('الربح') && text.includes('أو أكثر'))) {
+          const p = extractRealisticPrice(text);
+          if (p > 0) {
+            fedshiProfit = p;
+            profitElement = el;
             break;
           }
         }
       }
 
-      if (!title) {
-        title = 'منتج فدشي';
-      }
-
-      // 3. سعر الجملة في فدشي (تكلفة المدير الحقيقية)
+      // 3. استخراج سعر الجملة الحقيقي في فدشي (تكلفة المدير)
       let fedshiWholesale = 0;
+
       for (const el of allElements) {
         const text = (el.textContent || '').trim();
-        if (text === 'سعر الجملة' || text.startsWith('سعر الجملة')) {
-          // نبحث في العنصر التالي مباشرة
-          if (el.nextElementSibling) {
-            const parsed = extractRealisticPrice(el.nextElementSibling.textContent);
-            if (parsed > 0) {
-              fedshiWholesale = parsed;
-              break;
+        if (text === 'سعر الجملة' || text.startsWith('سعر الجملة:')) {
+          // فحص العناصر التالية المجاورة
+          let curr = el.nextElementSibling;
+          while (curr && (!fedshiWholesale || fedshiWholesale === fedshiProfit)) {
+            // نتأكد أن هذا العنصر ليس هو عنصر الربح
+            if (curr !== profitElement && !curr.contains(profitElement)) {
+              const p = extractRealisticPrice(curr.textContent);
+              if (p > 0 && p !== fedshiProfit) {
+                fedshiWholesale = p;
+                break;
+              }
+            }
+            curr = curr.nextElementSibling;
+          }
+
+          // إذا لم نجده في الأشقاء، نبحث في الحاوية الأب
+          if (!fedshiWholesale && el.parentElement) {
+            const candidates = Array.from(el.parentElement.querySelectorAll('*'));
+            for (const c of candidates) {
+              if (c !== el && c !== profitElement && !c.contains(profitElement) && (!profitElement || !profitElement.contains(c))) {
+                const p = extractRealisticPrice(c.textContent);
+                if (p > 0 && p !== fedshiProfit && p > 5000) {
+                  fedshiWholesale = p;
+                  break;
+                }
+              }
             }
           }
-          // أو في العناصر الأبناء القريبة
-          if (el.parentElement) {
-            const childWithPrice = Array.from(el.parentElement.children).find(c => c !== el && extractRealisticPrice(c.textContent) > 0);
-            if (childWithPrice) {
-              fedshiWholesale = extractRealisticPrice(childWithPrice.textContent);
-              break;
-            }
-          }
+
+          if (fedshiWholesale) break;
         }
       }
 
-      // إذا لم نجده، نبحث بالسطر النصي المجاور لسعر الجملة فقط
+      // بحث احتياطي بنمط النص الصريح لسعر الجملة
       if (!fedshiWholesale) {
         const pageText = document.body.innerText || '';
-        const m = pageText.match(/سعر الجملة[\s\r\n]{0,20}?(\d{1,3}(?:,\d{3})+|\d{4,6})\s*(?:د\.ع|IQD)?/);
-        if (m && m[1]) {
-          fedshiWholesale = extractRealisticPrice(m[1]);
+        const wholesaleMatches = pageText.match(/سعر الجملة[\s\r\n]{0,30}?(\d{1,3}(?:,\d{3})+|\d{4,6})\s*(?:د\.ع|IQD)?/);
+        if (wholesaleMatches && wholesaleMatches[1]) {
+          const parsed = extractRealisticPrice(wholesaleMatches[1]);
+          if (parsed > 0) fedshiWholesale = parsed;
         }
       }
 
-      // 4. الربح المقترح من فدشي
-      let fedshiProfit = 0;
-      for (const el of allElements) {
-        const text = (el.textContent || '').trim();
-        if (text.includes('الربح') && (text.includes('د.ع') || text.includes('أو أكثر'))) {
-          const parsed = extractRealisticPrice(text);
-          if (parsed > 0) {
-            fedshiProfit = parsed;
-            break;
-          }
-        }
-      }
-
-      // 5. سعر الزبون المقترح في فدشي (نطاق السعر)
+      // 4. استخراج سعر الزبون المقترح في فدشي (النطاق السعري)
       let minSuggested = 0;
       let maxSuggested = 0;
+
       for (const el of allElements) {
         const text = (el.textContent || '').trim();
         if (text.includes('سعر الزبون المقترح')) {
@@ -177,13 +144,64 @@
         }
       }
 
-      // ضبط الأسعار التلقائية الذكية لمنصة وصلي:
-      if (fedshiWholesale > 0) {
-        if (!minSuggested) minSuggested = fedshiWholesale + (fedshiProfit || 18000);
-        if (!maxSuggested) maxSuggested = minSuggested + 20000;
+      // 5. استخراج اسم المنتج الحقيقي (مثل: "اوتي نورفا من ليبرونيك")
+      let title = '';
+
+      // البحث عن العنوان الرئيسي للمنتج: عنصر نصي بارز بخط كبير يسبق رقم المنتج وسعر الجملة
+      const ignoredExact = ['Fedshi', 'فدشي', 'الرئيسية', 'المتجر', 'سعر الجملة', 'رقم المنتج', 'الربح', 'اضف الى السلة', 'تحميل الصور'];
+      const ignoredSubstrings = ['الأرباح', 'دليل التاجر', 'تسجيل الخروج', 'الإعدادات', 'المحفظة', 'أبو '];
+
+      // فحص العناوين المرجحة في الصفحة
+      const titleCandidates = Array.from(document.querySelectorAll('h1, h2, h3, div, span, p')).filter(el => {
+        // التأكد من أنه عنصر ورقة (Leaf) أو لا يحوي أبناء كبار
+        if (el.children.length > 2) return false;
+        const t = (el.textContent || '').trim();
+        if (t.length < 5 || t.length > 90) return false;
+        if (ignoredExact.includes(t)) return false;
+        if (ignoredSubstrings.some(sub => t.includes(sub))) return false;
+        if (extractRealisticPrice(t) > 0) return false; // ليس سعراً
+        return true;
+      });
+
+      // اختيار العنصر ذو حجم الخط الأكبر والبارز (Font Size >= 18px أو Font Weight >= 700)
+      let bestCandidate = null;
+      let maxScore = 0;
+
+      for (const el of titleCandidates) {
+        const style = window.getComputedStyle(el);
+        const fSize = parseFloat(style.fontSize) || 14;
+        const isBold = (style.fontWeight === 'bold' || parseInt(style.fontWeight, 10) >= 600);
+        
+        let score = fSize + (isBold ? 6 : 0);
+        // أفضلية للعنصر الذي يقع في الجزء العلوي للمنتج
+        const rect = el.getBoundingClientRect();
+        if (rect.top > 50 && rect.top < 600) {
+          score += 10;
+        }
+
+        if (score > maxScore) {
+          maxScore = score;
+          bestCandidate = el;
+        }
       }
 
-      // 6. استخراج الألوان والخيارات مع صورها
+      if (bestCandidate) {
+        title = bestCandidate.textContent.trim();
+      }
+
+      // إذا لم نجده، نجرب مسار التنقل (Breadcrumb)
+      if (!title || title === 'Fedshi') {
+        const breadcrumbLinks = Array.from(document.querySelectorAll('nav a, ol li, ul li, [class*="breadcrumb"] *'));
+        for (let i = breadcrumbLinks.length - 1; i >= 0; i--) {
+          const t = (breadcrumbLinks[i].textContent || '').trim();
+          if (t.length > 5 && !ignoredExact.includes(t) && !t.includes('الرئيسية')) {
+            title = t;
+            break;
+          }
+        }
+      }
+
+      // 6. استخراج الألوان والخيارات (ازرق، رمادي...) مع صورها
       const colors = [];
       const colorHeaders = allElements.filter(el => {
         const t = (el.textContent || '').trim();
@@ -197,7 +215,7 @@
           candidateOptions.forEach(opt => {
             const optText = (opt.textContent || '').trim();
             const optImg = opt.querySelector('img');
-            if (optText && optText.length > 1 && optText.length < 20 && optText !== 'اللون') {
+            if (optText && optText.length >= 2 && optText.length < 20 && optText !== 'اللون') {
               if (!colors.some(c => c.name === optText)) {
                 colors.push({
                   name: optText,
@@ -232,10 +250,14 @@
       }
 
       // 9. تطبيق معادلة أرباح منصة وصلي المعتمدة:
-      const safeFedshiWholesale = fedshiWholesale || 17000;
-      const safeMinSuggested = minSuggested || (safeFedshiWholesale + (fedshiProfit || 18000));
+      // سعر تكلفة فدشي عليك الحقيقي:
+      const safeFedshiWholesale = fedshiWholesale || 67750;
+      // سعر جملة وصلي للمسوق: هو الحد الأدنى لسعر الزبون المقترح من فدشي
+      const safeMinSuggested = minSuggested || (safeFedshiWholesale + (fedshiProfit || 2250));
       const wasliWholesale = safeMinSuggested;
+      // ربح منصة وصلي الصافي = سعر جملة وصلي - تكلفة فدشي عليك
       const wasliProfit = wasliWholesale - safeFedshiWholesale;
+      // أسعار بيع الزبون في وصلي
       const wasliMinPrice = wasliWholesale + 10000;
       const wasliMaxPrice = maxSuggested || (wasliWholesale + 20000);
 
@@ -244,7 +266,7 @@
         productCode: productCode || '',
         skuCode: skuCode || '',
         fedshiWholesale: safeFedshiWholesale,
-        fedshiProfit: fedshiProfit || 18000,
+        fedshiProfit: fedshiProfit || 0,
         minSuggested: safeMinSuggested,
         maxSuggested: wasliMaxPrice,
         wasliWholesale,
@@ -254,7 +276,7 @@
         colors: colors.length > 0 ? colors : [{ name: 'افتراضي' }],
         images: images.slice(0, 10),
         videoUrl,
-        stock: 50
+        stock: 100
       };
     } catch (err) {
       console.error('حدث خطأ أثناء قراءة بيانات المنتج:', err);
