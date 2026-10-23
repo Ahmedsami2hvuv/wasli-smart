@@ -312,6 +312,7 @@ export async function updatePlatformProduct(id: string, updates: Partial<Product
       if (updates.stockQuantity !== undefined) updateData.stock_quantity = updates.stockQuantity;
       if (updates.categoryId) updateData.category_id = updates.categoryId;
       if (updates.status) updateData.status = updates.status;
+      if (updates.isAvailable !== undefined) updateData.is_available = updates.isAvailable;
 
       await dbClient.from('products').update(updateData).eq('id', id);
     } catch (err) {

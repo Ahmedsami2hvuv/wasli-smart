@@ -17,7 +17,10 @@ import {
   Trash2,
   ExternalLink,
   Send,
-  RefreshCw
+  RefreshCw,
+  Edit3,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import Link from 'next/link';
 import { Product, Category, Subcategory } from '@/types';
@@ -27,6 +30,113 @@ export default function AdminProductsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+
+  // حالة تعديل المنتج
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [editCategoryId, setEditCategoryId] = useState('');
+  const [editWholesalePrice, setEditWholesalePrice] = useState<number>(0);
+  const [editPlatformPrice, setEditPlatformPrice] = useState<number>(0);
+  const [editMinPrice, setEditMinPrice] = useState<number>(0);
+  const [editMaxPrice, setEditMaxPrice] = useState<number>(0);
+  const [editStock, setEditStock] = useState<number>(0);
+  const [editDescription, setEditDescription] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [togglingStatusId, setTogglingStatusId] = useState<string | null>(null);
+
+  const handleOpenEditModal = (p: Product) => {
+    setEditingProduct(p);
+    setEditName(p.name);
+    setEditCategory(p.category || 'عام');
+    setEditCategoryId(p.categoryId || '');
+    setEditWholesalePrice(p.wholesalePriceIqd || 0);
+    setEditPlatformPrice(p.platformPriceIqd || p.priceIqd || 0);
+    setEditMinPrice(p.minPriceIqd || 0);
+    setEditMaxPrice(p.maxPriceIqd || 0);
+    setEditStock(p.stockQuantity || 50);
+    setEditDescription(p.description || '');
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    setSavingEdit(true);
+
+    try {
+      const res = await fetch(`/api/products/${editingProduct.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editName.trim(),
+          category: editCategory,
+          categoryId: editCategoryId,
+          description: editDescription.trim(),
+          wholesalePriceIqd: editWholesalePrice,
+          platformPriceIqd: editPlatformPrice,
+          priceIqd: editPlatformPrice,
+          minPriceIqd: editMinPrice,
+          maxPriceIqd: editMaxPrice,
+          stockQuantity: editStock,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setProducts(prev => prev.map(p => p.id === editingProduct.id ? {
+          ...p,
+          name: editName.trim(),
+          category: editCategory,
+          categoryId: editCategoryId,
+          description: editDescription.trim(),
+          wholesalePriceIqd: editWholesalePrice,
+          platformPriceIqd: editPlatformPrice,
+          priceIqd: editPlatformPrice,
+          minPriceIqd: editMinPrice,
+          maxPriceIqd: editMaxPrice,
+          stockQuantity: editStock,
+        } : p));
+        setShowEditModal(false);
+        setEditingProduct(null);
+      }
+    } catch (err) {
+      console.error('خطأ في حفظ التعديلات:', err);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleToggleProductStatus = async (prodId: string, currentStatus?: string, currentAvailable?: boolean) => {
+    try {
+      setTogglingStatusId(prodId);
+      const isCurrentlyVisible = currentStatus === 'published' && currentAvailable !== false;
+      const nextStatus = isCurrentlyVisible ? 'draft' : 'published';
+      const nextAvailable = !isCurrentlyVisible;
+
+      // تحديث لحظي مباشر وسريع للواجهة
+      setProducts(prev => prev.map(p => p.id === prodId ? {
+        ...p,
+        status: nextStatus,
+        isAvailable: nextAvailable
+      } : p));
+
+      await fetch(`/api/products/${prodId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: nextStatus,
+          isAvailable: nextAvailable,
+        }),
+      });
+    } catch (err) {
+      console.error('خطأ في تبديل حالة المنتج:', err);
+      fetchInitialData();
+    } finally {
+      setTogglingStatusId(null);
+    }
+  };
 
   // حقول إضافة المنتج
   const [name, setName] = useState('');
@@ -543,6 +653,171 @@ export default function AdminProductsPage() {
           </div>
         )}
 
+                {/* نافذة تعديل بيانات المنتج (Edit Modal) */}
+        {showEditModal && editingProduct && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 my-8">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-6">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">تعديل بيانات المنتج والتسعير</h3>
+                  <p className="text-xs text-slate-500">تحديث تفاصيل المنتج وأسعاره ومخزونه في النظام</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingProduct(null);
+                  }}
+                  className="text-slate-400 hover:text-slate-600 text-sm font-bold p-1 cursor-pointer"
+                >
+                  إغلاق
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveEdit} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">اسم المنتج *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none focus:border-brand-600 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">القسم</label>
+                    <select
+                      value={editCategoryId || ''}
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        setEditCategoryId(selectedId);
+                        const selectedCat = categories.find(c => c.id === selectedId);
+                        if (selectedCat) {
+                          setEditCategory(selectedCat.name);
+                        }
+                      }}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none bg-white focus:border-brand-600"
+                    >
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">وصف ومواصفات المنتج</label>
+                  <textarea
+                    rows={3}
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none focus:border-brand-600"
+                  />
+                </div>
+
+                {/* شبكة الأسعار الدقيقة */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="text-xs font-black text-brand-900 mb-2 flex items-center gap-1.5">
+                    <DollarSign className="w-4 h-4 text-brand-700" />
+                    <span>تعديل الأسعار والحدود (بالدينار العراقي):</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">سعر الجملة (للتاجر)</label>
+                      <input
+                        type="number"
+                        step="500"
+                        required
+                        value={editWholesalePrice}
+                        onChange={(e) => setEditWholesalePrice(Number(e.target.value))}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">سعر المنصة الأساسي</label>
+                      <input
+                        type="number"
+                        step="500"
+                        required
+                        value={editPlatformPrice}
+                        onChange={(e) => setEditPlatformPrice(Number(e.target.value))}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-brand-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">الحد الأدنى للبيع</label>
+                      <input
+                        type="number"
+                        step="500"
+                        required
+                        value={editMinPrice}
+                        onChange={(e) => setEditMinPrice(Number(e.target.value))}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">الحد الأعلى للبيع</label>
+                      <input
+                        type="number"
+                        step="500"
+                        required
+                        value={editMaxPrice}
+                        onChange={(e) => setEditMaxPrice(Number(e.target.value))}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">الكمية المتوفرة في المخزون</label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      value={editStock}
+                      onChange={(e) => setEditStock(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setEditingProduct(null);
+                    }}
+                    className="py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 cursor-pointer"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingEdit}
+                    className="py-2.5 px-6 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {savingEdit ? (
+                      <span>جاري حفظ التعديلات...</span>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 text-emerald-300" />
+                        <span>حفظ التعديلات</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* جدول المنتجات الحالي */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md">
           <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
@@ -621,33 +896,50 @@ export default function AdminProductsPage() {
                           )}
                         </td>
                         <td className="py-3.5 px-3">
-                          <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-1 rounded-full">
-                            منشور ومتاح
-                          </span>
+                          {(() => {
+                            const isVisible = p.status === 'published' && p.isAvailable !== false;
+                            const isUpdating = togglingStatusId === p.id;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleProductStatus(p.id, p.status, p.isAvailable)}
+                                disabled={isUpdating}
+                                title={isVisible ? 'انقر للتحويل إلى مخفي' : 'انقر للتحويل إلى منشور'}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer shadow-2xs ${
+                                  isVisible 
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100' 
+                                    : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'
+                                }`}
+                              >
+                                {isUpdating ? (
+                                  <RefreshCw className="w-3 h-3 animate-spin text-slate-500" />
+                                ) : isVisible ? (
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                                ) : (
+                                  <EyeOff className="w-3 h-3 text-slate-400" />
+                                )}
+                                <span>{isVisible ? 'منشور' : 'مخفي'}</span>
+                              </button>
+                            );
+                          })()}
                         </td>
                         <td className="py-3.5 px-3">
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => handlePublishToTelegram(p.id)}
-                              disabled={publishingId === p.id}
-                              title="نشر هذا المنتج في قناة تيليجرام"
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-lg text-[11px] shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                              onClick={() => handleOpenEditModal(p)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-xl text-xs border border-amber-200 transition-all cursor-pointer shadow-2xs"
                             >
-                              {publishingId === p.id ? (
-                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <Send className="w-3.5 h-3.5" />
-                              )}
-                              <span>نشر بالقناة</span>
+                              <Edit3 className="w-3.5 h-3.5 text-amber-600" />
+                              <span>تعديل</span>
                             </button>
 
                             <Link
                               href={`/p/${p.id}`}
                               target="_blank"
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 font-bold rounded-lg text-[11px] border border-brand-200 transition-colors"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs border border-slate-200 transition-all"
                             >
                               <span>معاينة</span>
-                              <ExternalLink className="w-3.5 h-3.5" />
+                              <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
                             </Link>
                           </div>
                         </td>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllProducts, createPlatformProduct } from '@/lib/services/productService';
+import { getAllProducts, createPlatformProduct, updatePlatformProduct, deleteOrArchiveProduct } from '@/lib/services/productService';
 
 export async function GET() {
   try {
@@ -52,6 +52,38 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, product }, { status: 201 });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { id, ...updates } = body;
+
+    if (!id) {
+      return NextResponse.json({ success: false, message: 'معرف المنتج مطلوب للتعديل' }, { status: 400 });
+    }
+
+    const updated = await updatePlatformProduct(id, updates);
+    return NextResponse.json({ success: true, product: updated });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ success: false, message: 'معرف المنتج مطلوب للحذف' }, { status: 400 });
+    }
+
+    const ok = await deleteOrArchiveProduct(id);
+    return NextResponse.json({ success: ok });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }
