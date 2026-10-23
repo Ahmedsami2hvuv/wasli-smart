@@ -16,6 +16,9 @@ export async function POST(request: NextRequest) {
     const {
       name,
       category,
+      categoryId,
+      subcategory,
+      subcategoryId,
       description,
       shortDescription,
       wholesalePriceIqd,
@@ -34,6 +37,9 @@ export async function POST(request: NextRequest) {
     const product = await createPlatformProduct({
       name,
       category: category || 'عام',
+      categoryId,
+      subcategory,
+      subcategoryId,
       description: description || name,
       shortDescription,
       wholesalePriceIqd: Number(wholesalePriceIqd),

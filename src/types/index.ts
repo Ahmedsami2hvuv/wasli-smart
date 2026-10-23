@@ -12,6 +12,17 @@ export type CategoryId =
   | 'iraq-special'
   | 'abi-alkhaseeb-special';
 
+export interface Subcategory {
+  id: string;
+  categoryId: string;
+  name: string;
+  slug?: string;
+  description?: string;
+  sortOrder?: number;
+  isActive?: boolean;
+  createdAt?: string;
+}
+
 export interface Category {
   id: string;
   name: string;
@@ -20,6 +31,8 @@ export interface Category {
   badge?: string;
   slug?: string;
   sort_order?: number;
+  parentId?: string | null;
+  subcategories?: Subcategory[];
 }
 
 export interface Store {
@@ -89,6 +102,8 @@ export interface Product {
   images?: ProductImage[];
   category: string;
   categoryId?: string;
+  subcategory?: string;
+  subcategoryId?: string;
   brand?: string;
   stockQuantity?: number;
   isStockTracked?: boolean;

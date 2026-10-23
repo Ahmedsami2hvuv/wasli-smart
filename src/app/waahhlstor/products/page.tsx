@@ -17,16 +17,20 @@ import {
   Trash2
 } from 'lucide-react';
 import Link from 'next/link';
-import { Product } from '@/types';
+import { Product, Category, Subcategory } from '@/types';
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
 
   // حقول إضافة المنتج
   const [name, setName] = useState('');
   const [category, setCategory] = useState('إلكترونيات وهواتف');
+  const [categoryId, setCategoryId] = useState('');
+  const [subcategory, setSubcategory] = useState('');
+  const [subcategoryId, setSubcategoryId] = useState('');
   const [description, setDescription] = useState('');
   const [wholesalePrice, setWholesalePrice] = useState<number>(10000);
   const [platformPrice, setPlatformPrice] = useState<number>(12000);
@@ -39,23 +43,38 @@ export default function AdminProductsPage() {
   const [submittingProduct, setSubmittingProduct] = useState(false);
   const [formMsg, setFormMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  const fetchProducts = async () => {
+  const fetchInitialData = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/products');
-      const data = await res.json();
-      if (data.success && data.products) {
-        setProducts(data.products);
+      const [prodRes, catRes] = await Promise.all([
+        fetch('/api/products'),
+        fetch('/api/categories'),
+      ]);
+      const prodData = await prodRes.json();
+      if (prodData.success && prodData.products) {
+        setProducts(prodData.products);
+      }
+
+      const catData = await catRes.json();
+      if (catData.success && catData.categories && catData.categories.length > 0) {
+        setCategories(catData.categories);
+        // تعيين أول قسم كافتراضي
+        setCategory(catData.categories[0].name);
+        setCategoryId(catData.categories[0].id);
+        if (catData.categories[0].subcategories?.length > 0) {
+          setSubcategory(catData.categories[0].subcategories[0].name);
+          setSubcategoryId(catData.categories[0].subcategories[0].id);
+        }
       }
     } catch (err) {
-      console.error('خطأ في جلب المنتجات:', err);
+      console.error('خطأ في جلب البيانات:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchProducts();
+    fetchInitialData();
   }, []);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,6 +147,9 @@ export default function AdminProductsPage() {
         body: JSON.stringify({
           name: name.trim(),
           category,
+          categoryId,
+          subcategory,
+          subcategoryId,
           description: description.trim(),
           wholesalePriceIqd: wholesalePrice,
           platformPriceIqd: platformPrice,
@@ -143,7 +165,7 @@ export default function AdminProductsPage() {
 
       if (data.success) {
         setFormMsg({ text: 'تمت إضافة ونشر المنتج بنجاح في المنصة والكتالوج!', type: 'success' });
-        fetchProducts();
+        fetchInitialData();
         setTimeout(() => {
           setShowAddModal(false);
           // إعادة تعيين الحقول
@@ -175,13 +197,23 @@ export default function AdminProductsPage() {
             <span>العودة للوحة الإدارة العامة</span>
           </Link>
 
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="py-2.5 px-4 bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs rounded-xl shadow-md shadow-brand-700/20 transition-all flex items-center gap-2 cursor-pointer"
-          >
-            <Plus className="w-4 h-4 text-accent-400" />
-            <span>إضافة منتج جديد للمنصة</span>
-          </button>
+          <div className="flex items-center gap-2.5">
+            <Link
+              href="/waahhlstor/categories"
+              className="py-2.5 px-3.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200/80 transition-all flex items-center gap-1.5 shadow-2xs"
+            >
+              <Layers className="w-4 h-4 text-sky-600" />
+              <span>إدارة الأقسام والأفرع</span>
+            </Link>
+
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="py-2.5 px-4 bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs rounded-xl shadow-md shadow-brand-700/20 transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <Plus className="w-4 h-4 text-accent-400" />
+              <span>إضافة منتج جديد للمنصة</span>
+            </button>
+          </div>
         </div>
 
         {/* بطاقة الرأس والتعليمات */}
@@ -231,20 +263,97 @@ export default function AdminProductsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">التصنيف *</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-700">القسم الرئيسي *</label>
+                      <Link 
+                        href="/waahhlstor/categories" 
+                        target="_blank"
+                        className="text-[10px] text-sky-600 hover:text-sky-800 font-bold underline"
+                      >
+                        + إدارة الأقسام
+                      </Link>
+                    </div>
                     <select
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none bg-white"
+                      value={categoryId || ''}
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        setCategoryId(selectedId);
+                        const selectedCat = categories.find(c => c.id === selectedId);
+                        if (selectedCat) {
+                          setCategory(selectedCat.name);
+                          if (selectedCat.subcategories && selectedCat.subcategories.length > 0) {
+                            setSubcategory(selectedCat.subcategories[0].name);
+                            setSubcategoryId(selectedCat.subcategories[0].id);
+                          } else {
+                            setSubcategory('');
+                            setSubcategoryId('');
+                          }
+                        }
+                      }}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none bg-white focus:border-brand-600"
                     >
-                      <option value="إلكترونيات وهواتف">إلكترونيات وهواتف</option>
-                      <option value="أزياء وملابس">أزياء وملابس</option>
-                      <option value="عطور وعناية">عطور وعناية</option>
-                      <option value="مستلزمات منزلية">مستلزمات منزلية</option>
-                      <option value="أغذية وتمور البصرة">أغذية وتمور البصرة</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
+
+                {/* اختيار الفرع التابع للقسم */}
+                {(() => {
+                  const currentCategory = categories.find(c => c.id === categoryId) || categories[0];
+                  const currentSubs = currentCategory?.subcategories || [];
+
+                  return (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold text-slate-700">
+                          الفرع / التصنيف الفرعي (داخل قسم: {currentCategory?.name || 'المحدد'})
+                        </label>
+                        <Link 
+                          href="/waahhlstor/categories" 
+                          target="_blank"
+                          className="text-[10px] text-sky-600 hover:text-sky-800 font-bold"
+                        >
+                          + إضافة فرع جديد
+                        </Link>
+                      </div>
+
+                      {currentSubs.length > 0 ? (
+                        <select
+                          value={subcategoryId}
+                          onChange={(e) => {
+                            const subId = e.target.value;
+                            setSubcategoryId(subId);
+                            const foundSub = currentSubs.find(s => s.id === subId);
+                            setSubcategory(foundSub?.name || '');
+                          }}
+                          className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none bg-white focus:border-sky-600"
+                        >
+                          <option value="">بدون فرع محدد (عام)</option>
+                          {currentSubs.map((sub) => (
+                            <option key={sub.id} value={sub.id}>
+                              {sub.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500">
+                          <span>لا توجد أفرع مضافة في هذا القسم حالياً</span>
+                          <Link
+                            href="/waahhlstor/categories"
+                            target="_blank"
+                            className="text-xs font-bold text-sky-600 hover:underline"
+                          >
+                            إضافة فرع الآن
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">وصف المنتج</label>

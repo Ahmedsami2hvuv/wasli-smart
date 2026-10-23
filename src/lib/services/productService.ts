@@ -86,6 +86,8 @@ export async function createPlatformProduct(productData: {
   name: string;
   category: string;
   categoryId?: string;
+  subcategory?: string;
+  subcategoryId?: string;
   description: string;
   shortDescription?: string;
   wholesalePriceIqd: number;
@@ -121,6 +123,8 @@ export async function createPlatformProduct(productData: {
     image: productData.image,
     category: productData.category,
     categoryId: productData.categoryId,
+    subcategory: productData.subcategory,
+    subcategoryId: productData.subcategoryId,
     brand: productData.brand,
     createdAt: new Date().toISOString(),
   };

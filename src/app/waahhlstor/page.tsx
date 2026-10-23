@@ -16,7 +16,9 @@ import {
   Database,
   ShieldCheck,
   RefreshCw,
-  Plus
+  Plus,
+  Layers,
+  GitBranch
 } from 'lucide-react';
 import Link from 'next/link';
 import { Order, OrderStatus } from '@/types';
@@ -25,6 +27,8 @@ export default function AdminDashboardPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [storesCount, setStoresCount] = useState(0);
   const [productsCount, setProductsCount] = useState(0);
+  const [categoriesCount, setCategoriesCount] = useState(0);
+  const [subcategoriesCount, setSubcategoriesCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -51,6 +55,15 @@ export default function AdminDashboardPage() {
       const prodData = await prodRes.json();
       if (prodData.success && prodData.products) {
         setProductsCount(prodData.products.length);
+      }
+
+      // الأقسام والأفرع
+      const catRes = await fetch('/api/categories');
+      const catData = await catRes.json();
+      if (catData.success && catData.categories) {
+        setCategoriesCount(catData.categories.length);
+        const subsCount = catData.categories.reduce((acc: number, c: any) => acc + (c.subcategories?.length || 0), 0);
+        setSubcategoriesCount(subsCount);
       }
     } catch (err) {
       console.error('خطأ في جلب بيانات الإدارة:', err);
@@ -106,6 +119,13 @@ export default function AdminDashboardPage() {
 
           <div className="flex flex-wrap items-center gap-3">
             <Link
+              href="/waahhlstor/categories"
+              className="py-2.5 px-4 bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
+            >
+              <Layers className="w-4 h-4 text-sky-200" />
+              <span>إدارة الأقسام والأفرع</span>
+            </Link>
+            <Link
               href="/waahhlstor/products"
               className="py-2.5 px-4 bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
             >
@@ -129,7 +149,7 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* بطاقات المؤشرات المالية والتشغيلية */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
             <div className="text-xs font-bold text-slate-500 mb-1">إجمالي المبيعات</div>
             <div className="text-xl font-black text-slate-900">
@@ -169,6 +189,23 @@ export default function AdminDashboardPage() {
             </div>
             <div className="text-[11px] text-slate-400 mt-2">المسجلة في النظام</div>
           </div>
+
+          <Link 
+            href="/waahhlstor/categories"
+            className="bg-white hover:bg-sky-50/50 transition-colors rounded-2xl p-5 border border-slate-200/80 shadow-xs group block"
+          >
+            <div className="text-xs font-bold text-sky-700 mb-1 flex items-center justify-between">
+              <span>الأقسام والأفرع</span>
+              <Layers className="w-3.5 h-3.5 text-sky-600 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xl font-black text-slate-900">
+              {categoriesCount} <span className="text-xs text-slate-400 font-normal">قسم</span> / {subcategoriesCount} <span className="text-xs text-slate-400 font-normal">فرع</span>
+            </div>
+            <div className="text-[11px] text-sky-600 font-bold mt-2 flex items-center gap-1">
+              <span>تعديل وإضافة أفرع</span>
+              <span>&larr;</span>
+            </div>
+          </Link>
         </div>
 
         {/* حالة الخدمات المتصلة */}
