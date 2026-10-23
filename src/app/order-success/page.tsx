@@ -2,12 +2,13 @@
 
 import React, { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { CheckCircle2, Copy, Check, ArrowRight, ShoppingBag, Truck, PhoneCall } from 'lucide-react';
+import { CheckCircle2, Copy, Check, ShoppingBag, Truck, PhoneCall, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 function OrderSuccessContent() {
   const searchParams = useSearchParams();
-  const orderNumber = searchParams.get('orderNumber') || 'WASLI-NEW';
+  const orderNumber = searchParams.get('orderNumber') || 'ORD-SUCCESS';
+  const storeCode = searchParams.get('store');
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -30,7 +31,7 @@ function OrderSuccessContent() {
         </h1>
 
         <p className="text-slate-600 text-sm leading-relaxed mb-6">
-          شكراً لتسوقك معنا عبر منصة وصلي. لقد تم إرسال تفاصيل طلبك إلى قسم التجهيز وسيقوم المندوب بالتواصل معك هاتفياً قبل التوصيل.
+          شكراً لتسوقك معنا. تم إرسال تفاصيل طلبك إلى قسم التجهيز وسيقوم المندوب بالتواصل معك هاتفياً قبل التوصيل للتأكيد.
         </p>
 
         {/* بطاقة رقم الطلب */}
@@ -44,7 +45,7 @@ function OrderSuccessContent() {
             </span>
             <button
               onClick={handleCopy}
-              className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors cursor-pointer"
               title="نسخ رقم الطلب"
             >
               {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
@@ -56,30 +57,36 @@ function OrderSuccessContent() {
         </div>
 
         {/* خطوات التوصيل */}
-        <div className="grid grid-cols-2 gap-3 text-right text-xs text-slate-600 mb-8 bg-brand-50/50 p-4 rounded-2xl border border-brand-100/50">
+        <div className="grid grid-cols-2 gap-3 text-right text-xs text-slate-600 mb-8 bg-slate-50 p-4 rounded-2xl border border-slate-200">
           <div className="flex items-start gap-2">
             <Truck className="w-4 h-4 text-brand-700 shrink-0 mt-0.5" />
             <div>
               <strong className="block text-slate-900">توصيل سريع</strong>
-              <span>يتم التوصيل إلى باب منزلك مباشرة</span>
+              <span>مباشرة إلى باب بيتك أو مكان عملك</span>
             </div>
           </div>
           <div className="flex items-start gap-2">
             <PhoneCall className="w-4 h-4 text-brand-700 shrink-0 mt-0.5" />
             <div>
-              <strong className="block text-slate-900">اتصال تأكيدي</strong>
+              <strong className="block text-slate-900">اتصال المندوب</strong>
               <span>سيتصل بك المندوب لتأكيد العنوان</span>
             </div>
           </div>
         </div>
 
-        <Link
-          href="/"
-          className="w-full py-4 px-6 bg-brand-700 hover:bg-brand-800 text-white font-bold text-sm rounded-xl shadow-md shadow-brand-700/20 transition-all flex items-center justify-center gap-2"
-        >
-          <ShoppingBag className="w-4 h-4" />
-          <span>متابعة التسوق واستعراض منتجات أخرى</span>
-        </Link>
+        {storeCode ? (
+          <Link
+            href={`/s/${storeCode}`}
+            className="w-full py-4 px-6 bg-brand-700 hover:bg-brand-800 text-white font-bold text-sm rounded-xl shadow-md shadow-brand-700/20 transition-all flex items-center justify-center gap-2"
+          >
+            <ShoppingBag className="w-4 h-4" />
+            <span>العودة للمتجر ومتابعة التسوق</span>
+          </Link>
+        ) : (
+          <div className="text-xs text-slate-400">
+            يسعدنا تواصلكم دائماً، نتمنى لكم تجربة تسوق ممتعة.
+          </div>
+        )}
       </div>
     </div>
   );

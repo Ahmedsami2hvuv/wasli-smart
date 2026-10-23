@@ -45,15 +45,15 @@ export async function getAllStores(): Promise<Store[]> {
           totalOrders: Number(item.total_orders || 0),
           balanceEarned: Number(item.balance_earned || 0),
           balanceWithdrawn: Number(item.balance_withdrawn || 0),
-          rating: 4.9,
-          reviewsCount: 38,
-          deliveryFeeIqd: 4000,
-          deliveryTimeMinutes: '30-45 دقيقة',
-          isOpen: true,
-          isAbiAlkhaseeb: false,
+          rating: item.settings?.rating || 4.9,
+          reviewsCount: item.settings?.reviews_count || 38,
+          deliveryFeeIqd: item.settings?.delivery_fee_iqd !== undefined ? Number(item.settings.delivery_fee_iqd) : 4000,
+          deliveryTimeMinutes: item.settings?.delivery_time_minutes || '30-45 دقيقة',
+          isOpen: item.settings?.is_open !== undefined ? item.settings.is_open : true,
+          isAbiAlkhaseeb: item.settings?.is_abi_alkhaseeb ?? false,
           image: item.logo_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80',
-          location: item.city || 'العراق',
-          district: item.city || 'العراق',
+          location: item.settings?.location || item.city || 'العراق',
+          district: item.settings?.district || item.city || 'العراق',
         }));
       }
     } catch (e) {
@@ -155,6 +155,112 @@ export async function createNewStore(params: {
 
   localStores.unshift(newStore);
   return newStore;
+}
+
+/**
+ * تحديث وتعديل بيانات المتجر
+ */
+export async function updateStore(
+  identifier: string,
+  updates: {
+    name?: string;
+    ownerName?: string;
+    phone?: string;
+    city?: string;
+    district?: string;
+    location?: string;
+    description?: string;
+    logoUrl?: string;
+    bannerUrl?: string;
+    deliveryTimeMinutes?: string;
+    deliveryFeeIqd?: number;
+    isOpen?: boolean;
+  }
+): Promise<Store | null> {
+  const stores = await getAllStores();
+  const lower = (identifier || '').toLowerCase();
+  const foundIndex = localStores.findIndex(
+    s => s.id === identifier || s.code?.toLowerCase() === lower || s.slug?.toLowerCase() === lower
+  );
+
+  let targetStore: Store | null = null;
+  if (foundIndex >= 0) {
+    targetStore = localStores[foundIndex];
+  } else {
+    targetStore = stores.find(
+      s => s.id === identifier || s.code?.toLowerCase() === lower || s.slug?.toLowerCase() === lower
+    ) || null;
+  }
+
+  if (!targetStore) {
+    return null;
+  }
+
+  // دمج التحديثات
+  const updatedStore: Store = {
+    ...targetStore,
+    name: updates.name !== undefined ? updates.name.trim() : targetStore.name,
+    ownerName: updates.ownerName !== undefined ? updates.ownerName.trim() : targetStore.ownerName,
+    phone: updates.phone !== undefined ? updates.phone.trim() : targetStore.phone,
+    city: updates.city !== undefined ? updates.city.trim() : targetStore.city,
+    district: updates.district !== undefined ? updates.district.trim() : targetStore.district,
+    location: updates.location !== undefined ? updates.location.trim() : (updates.district ? updates.district.trim() : targetStore.location),
+    description: updates.description !== undefined ? updates.description.trim() : targetStore.description,
+    logoUrl: updates.logoUrl !== undefined ? updates.logoUrl : targetStore.logoUrl,
+    image: updates.logoUrl !== undefined ? updates.logoUrl : (targetStore.image || targetStore.logoUrl),
+    bannerUrl: updates.bannerUrl !== undefined ? updates.bannerUrl : targetStore.bannerUrl,
+    deliveryTimeMinutes: updates.deliveryTimeMinutes !== undefined ? updates.deliveryTimeMinutes : targetStore.deliveryTimeMinutes,
+    deliveryFeeIqd: updates.deliveryFeeIqd !== undefined ? Number(updates.deliveryFeeIqd) : targetStore.deliveryFeeIqd,
+    isOpen: updates.isOpen !== undefined ? Boolean(updates.isOpen) : targetStore.isOpen,
+  };
+
+  if (foundIndex >= 0) {
+    localStores[foundIndex] = updatedStore;
+  } else {
+    localStores.unshift(updatedStore);
+  }
+
+  // التحديث في Supabase إن كان متاحاً
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const dbPayload: any = {
+        name: updatedStore.name,
+        description: updatedStore.description,
+        phone: updatedStore.phone,
+        city: updatedStore.city,
+        logo_url: updatedStore.logoUrl,
+        banner_url: updatedStore.bannerUrl,
+        updated_at: new Date().toISOString(),
+      };
+
+      const settingsPayload: any = {
+        owner_name: updatedStore.ownerName,
+        district: updatedStore.district,
+        location: updatedStore.location,
+        delivery_time_minutes: updatedStore.deliveryTimeMinutes,
+        delivery_fee_iqd: updatedStore.deliveryFeeIqd,
+        is_open: updatedStore.isOpen,
+      };
+
+      dbPayload.settings = settingsPayload;
+
+      if (targetStore.id && !targetStore.id.startsWith('store-')) {
+        await supabase
+          .from('stores')
+          .update(dbPayload)
+          .eq('id', targetStore.id);
+      } else if (targetStore.code) {
+        await supabase
+          .from('stores')
+          .update(dbPayload)
+          .eq('code', targetStore.code);
+      }
+    } catch (dbErr) {
+      console.warn('فشل التحديث في سوبابيس، تم التحديث محلياً:', dbErr);
+    }
+  }
+
+  return updatedStore;
 }
 
 /**

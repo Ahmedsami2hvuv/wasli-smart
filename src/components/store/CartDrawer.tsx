@@ -67,7 +67,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          storeIdentifier: items[0]?.storeCode || 'platform',
+          storeIdentifier: items[0]?.storeCode || 'direct',
           customerName: customerName.trim(),
           customerPhone: customerPhone.trim(),
           governorate: 'العراق',
@@ -147,7 +147,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </div>
                 <h4 className="text-xl font-black text-slate-900">تم استلام طلبك بنجاح!</h4>
                 <p className="text-xs text-slate-600 leading-relaxed max-w-xs mx-auto">
-                  شكراً لثقتك بمنصة «وصلي». تم إرسال الطلب للمتجر وتخصيص المندوب، وسيتواصل معك خلال دقائق للتأكيد.
+                  شكراً لطلبك. تم إرسال الطلب بنجاح وسيتواصل معك المندوب هاتفياً قبل التوصيل للتأكيد.
                 </p>
 
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-right space-y-2 text-xs">
@@ -175,7 +175,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   onClick={handleResetAfterSuccess}
                   className="w-full py-3.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs transition-colors"
                 >
-                  متابعة التسوق في وصلي
+                  متابعة التسوق
                 </button>
               </div>
             ) : items.length === 0 ? (
@@ -186,13 +186,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </div>
                 <h4 className="font-bold text-base text-slate-800">سلتك فارغة حالياً</h4>
                 <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                  تصفح المتاجر العراقية واختر أفضل المنتجات لإضافتها للسلة.
+                  تصفح المنتجات واختر ما يناسبك لإضافته للسلة.
                 </p>
                 <button
                   onClick={onClose}
                   className="mt-2 px-4 py-2 rounded-xl bg-skybrand-50 hover:bg-skybrand-100 text-skybrand-700 font-bold text-xs transition-colors"
                 >
-                  استعراض المتاجر الآن
+                  استعراض المنتجات
                 </button>
               </div>
             ) : (

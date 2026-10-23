@@ -280,11 +280,40 @@ export default function RegisterStorePage() {
                 <span className="text-slate-500">رمز المتجر الفريد:</span>
                 <span className="font-mono font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded">{createdStore.code}</span>
               </div>
-              <div className="flex flex-col gap-1 text-sm pt-1">
-                <span className="text-slate-500">رابط متجرك المباشر:</span>
-                <span className="font-mono text-xs text-skybrand-700 bg-white p-2 rounded-lg border border-slate-200 break-all select-all">
-                  {typeof window !== 'undefined' ? `${window.location.origin}/s/${createdStore.code}` : `/s/${createdStore.code}`}
-                </span>
+              {/* الرابط الأول: رابط لوحة إدارة متجرك */}
+              <div className="flex flex-col gap-1.5 text-sm pt-3 border-t border-slate-200/80">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                    <Store className="w-3.5 h-3.5 text-brand-700" />
+                    <span>رابط لوحة إدارة متجرك (الخاص بك):</span>
+                  </span>
+                  <span className="text-[11px] text-brand-800 bg-brand-50 font-bold px-2 py-0.5 rounded-md">
+                    لوحة التحكم
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 font-mono text-xs text-brand-800 bg-white p-2.5 rounded-xl border border-brand-200/90 break-all select-all">
+                    {typeof window !== 'undefined' ? `${window.location.origin}/merchant?storeCode=${createdStore.code}` : `/merchant?storeCode=${createdStore.code}`}
+                  </span>
+                </div>
+              </div>
+
+              {/* الرابط الثاني: رابط متجرك للزبائن */}
+              <div className="flex flex-col gap-1.5 text-sm pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                    <Share2 className="w-3.5 h-3.5 text-skybrand-600" />
+                    <span>رابط متجرك المباشر (للزبائن والمشترين):</span>
+                  </span>
+                  <span className="text-[11px] text-skybrand-800 bg-skybrand-50 font-bold px-2 py-0.5 rounded-md">
+                    متجر الزبائن
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 font-mono text-xs text-skybrand-700 bg-white p-2.5 rounded-xl border border-skybrand-200/90 break-all select-all">
+                    {typeof window !== 'undefined' ? `${window.location.origin}/s/${createdStore.code}` : `/s/${createdStore.code}`}
+                  </span>
+                </div>
               </div>
             </div>
 

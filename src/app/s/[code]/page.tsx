@@ -1,10 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { 
   Store as StoreIcon, 
-  MapPin, 
   Phone, 
   Share2, 
   Search, 
@@ -23,7 +22,9 @@ import { Store, Product } from '@/types';
 export default function PublicStorePage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const code = params?.code as string;
+  const queryName = searchParams?.get('name') || searchParams?.get('n') || '';
 
   const [store, setStore] = useState<Store | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -39,18 +40,86 @@ export default function PublicStorePage() {
       if (!code) return;
       try {
         setLoading(true);
-        // جلب تفاصيل المتجر
-        const storeRes = await fetch(`/api/stores`);
-        const storeData = await storeRes.json();
-        const found = storeData.stores?.find(
-          (s: any) => s.code?.toLowerCase() === code.toLowerCase() || s.slug?.toLowerCase() === code.toLowerCase()
-        );
-
-        if (found) {
-          setStore(found);
+        // 1. محاولة جلب تفاصيل المتجر من السيرفر
+        let foundStore: Store | null = null;
+        try {
+          const storeRes = await fetch(`/api/stores`);
+          const storeData = await storeRes.json();
+          if (storeData.stores && Array.isArray(storeData.stores)) {
+            const found = storeData.stores.find(
+              (s: any) => s.code?.toLowerCase() === code.toLowerCase() || s.slug?.toLowerCase() === code.toLowerCase()
+            );
+            if (found) {
+              foundStore = found;
+            }
+          }
+        } catch (e) {
+          console.warn('تعذر جلب المتاجر من الخادم، جاري الفحص المحلي:', e);
         }
 
-        // جلب المنتجات
+        // 2. إذا لم يعثر عليه من السيرفر، الفحص في التخزين المحلي للمتصفح
+        if (!foundStore && typeof window !== 'undefined') {
+          // فحص المتجر الحالي
+          try {
+            const savedCurrent = localStorage.getItem('wasli_current_store');
+            if (savedCurrent) {
+              const parsed = JSON.parse(savedCurrent);
+              if (parsed.code?.toLowerCase() === code.toLowerCase() || parsed.slug?.toLowerCase() === code.toLowerCase()) {
+                foundStore = parsed;
+              }
+            }
+          } catch (e) {}
+
+          // فحص سجل المتاجر المنشأة محلياً
+          if (!foundStore) {
+            try {
+              const registry = localStorage.getItem('wasli_stores_registry');
+              if (registry) {
+                const parsedRegistry = JSON.parse(registry);
+                if (Array.isArray(parsedRegistry)) {
+                  const matched = parsedRegistry.find((s: any) => s.code?.toLowerCase() === code.toLowerCase());
+                  if (matched) {
+                    foundStore = matched;
+                  }
+                }
+              }
+            } catch (e) {}
+          }
+        }
+
+        // 3. إذا توفر اسم من الرابط (Query Param) ولم نجد كائن متجر مكتمل
+        if (!foundStore && queryName) {
+          foundStore = {
+            id: `store-${code}`,
+            name: queryName,
+            code: code,
+            slug: code,
+            description: `أهلاً بكم في ${queryName}! تسوق أفضل المنتجات الأصلية بتوصيل مباشر لباب منزلك ودفع عند الاستلام.`,
+            city: 'العراق',
+            phone: '',
+            status: 'active',
+            rating: 5.0,
+            reviewsCount: 1,
+            deliveryFeeIqd: 4000,
+            deliveryTimeMinutes: 'خلال يوم أو يومين',
+            isOpen: true,
+            isAbiAlkhaseeb: false,
+            image: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=300&q=80',
+            logoUrl: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=300&q=80',
+            location: 'العراق',
+            district: 'العراق',
+            totalSales: 0,
+            totalOrders: 0,
+            balanceEarned: 0,
+            balanceWithdrawn: 0,
+          } as Store;
+        }
+
+        if (foundStore) {
+          setStore(foundStore);
+        }
+
+        // جلب المنتجات المتاحة
         const prodRes = await fetch('/api/products');
         const prodData = await prodRes.json();
         if (prodData.success && prodData.products) {
@@ -64,19 +133,21 @@ export default function PublicStorePage() {
     }
 
     loadStoreData();
-  }, [code]);
+  }, [code, queryName]);
+
+  const activeStoreName = store?.name || queryName || 'المتجر';
 
   const handleShare = async () => {
     const url = typeof window !== 'undefined' ? window.location.href : '';
-    const title = store ? `متجر ${store.name} على منصة وصلي` : 'منصة وصلي';
-    const text = `تفضل بزيارة متجر ${store?.name || ''} للتسوق وطلب المنتجات بتوصيل سريع!`;
+    const title = activeStoreName;
+    const text = `تفضل بزيارة متجر ${activeStoreName} للتسوق وطلب المنتجات بتوصيل سريع ودفع عند الاستلام!`;
 
     if (navigator.share) {
       try {
         await navigator.share({ title, text, url });
         return;
       } catch (e) {
-        // تم الإلغاء أو غير مدعوم
+        // تم الإلغاء
       }
     }
 
@@ -126,11 +197,11 @@ export default function PublicStorePage() {
   const cartItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const proceedToCheckout = () => {
-    // حفظ السالة وهوية المتجر
+    // حفظ السلة وهوية المتجر الخاصة بالتاجر فقط
     if (typeof window !== 'undefined') {
       localStorage.setItem('wasli_cart', JSON.stringify({
         storeCode: code,
-        storeName: store?.name || 'متجر وصلي',
+        storeName: activeStoreName,
         items: cart.map(i => ({
           productId: i.product.id,
           name: i.product.name,
@@ -156,22 +227,20 @@ export default function PublicStorePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-28">
-      {/* هيدر المتجر العلوي الفاخر */}
-      <div className="bg-gradient-to-b from-brand-900 via-brand-800 to-slate-900 text-white pt-6 pb-12 px-4 sm:px-6 lg:px-8 shadow-md">
+      {/* هيدر المتجر العلوي الخاص بالتاجر بنسبة 100% وبدون أي روابط خارجية */}
+      <div className="bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white pt-6 pb-12 px-4 sm:px-6 lg:px-8 shadow-md">
         <div className="max-w-6xl mx-auto">
-          {/* رابط المنصة وصلي الصغير */}
+          
+          {/* شريط الأدوات العلوي للمتجر: حالة المتجر وزر المشاركة فقط */}
           <div className="flex items-center justify-between mb-6">
-            <Link 
-              href="/" 
-              className="inline-flex items-center gap-1.5 text-xs text-skybrand-200 hover:text-white transition-colors bg-white/10 px-3 py-1.5 rounded-full backdrop-blur-sm"
-            >
-              <ArrowRight className="w-3.5 h-3.5" />
-              <span>منصة وصلي الرئيسية</span>
-            </Link>
+            <div className="inline-flex items-center gap-2 text-xs font-semibold text-slate-300 bg-white/10 px-3.5 py-1.5 rounded-full backdrop-blur-sm">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>المتجر مفتوح ويستقبل الطلبات الآن</span>
+            </div>
 
             <button
               onClick={handleShare}
-              className="inline-flex items-center gap-1.5 text-xs font-bold bg-white text-slate-900 hover:bg-slate-100 px-3.5 py-1.5 rounded-full shadow-sm transition-all"
+              className="inline-flex items-center gap-1.5 text-xs font-bold bg-white text-slate-900 hover:bg-slate-100 px-3.5 py-1.5 rounded-full shadow-sm transition-all cursor-pointer"
             >
               {copied ? (
                 <>
@@ -187,42 +256,40 @@ export default function PublicStorePage() {
             </button>
           </div>
 
-          {/* بطاقة معلومات المتجر */}
+          {/* بطاقة معلومات المتجر وهوية التاجر المستقلة */}
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 text-center sm:text-right">
             <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-white p-1 shadow-lg shrink-0 overflow-hidden border-2 border-white/20">
               <img 
                 src={store?.image || store?.logoUrl || 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=300&q=80'} 
-                alt={store?.name || 'متجر وصلي'} 
+                alt={activeStoreName} 
                 className="w-full h-full object-cover rounded-xl"
               />
             </div>
 
             <div className="flex-1">
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-2">
-                <span className="bg-skybrand-500/20 text-skybrand-200 text-xs px-2.5 py-0.5 rounded-full font-medium border border-skybrand-400/30">
-                  متجر معتمد على وصلي
+                <span className="bg-white/10 text-slate-200 text-xs px-2.5 py-0.5 rounded-full font-medium border border-white/20">
+                  متجر رسمي معتمد
                 </span>
                 <span className="bg-emerald-500/20 text-emerald-300 text-xs px-2.5 py-0.5 rounded-full font-semibold border border-emerald-400/30">
-                  توصيل لكافة محافظات العراق
+                  توصيل سريع لكافة المحافظات
                 </span>
               </div>
 
+              {/* اسم المتجر الحقيقي فقط */}
               <h1 className="text-2xl sm:text-3xl font-black mb-2 text-white">
-                {store?.name || 'متجر وصلي المميز'}
+                {activeStoreName}
               </h1>
 
               <p className="text-slate-300 text-sm max-w-2xl mb-4 leading-relaxed">
-                {store?.description || 'تسوق أحدث المنتجات الأصلية بتوصيل مباشر وسريع لباب منزلك مع ضمان الجودة.'}
+                {store?.description || `تسوق أفضل المنتجات الأصلية من ${activeStoreName} مع توصيل مباشر لباب منزلك والدفع نقداً عند الاستلام.`}
               </p>
 
+              {/* ميزات التوصيل والضمان (تمت إزالة عنوان المتجر بالكامل وتحديث مدة التوصيل) */}
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 text-xs text-slate-300">
                 <div className="flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4 text-skybrand-400" />
-                  <span>{store?.city || 'توصيل لجميع محافظات العراق'}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-accent-400" />
-                  <span>توصيل خلال {store?.deliveryTimeMinutes || '30-45 دقيقة'}</span>
+                  <Clock className="w-4 h-4 text-amber-400" />
+                  <span>التوصيل خلال يوم أو يومين</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
@@ -356,7 +423,7 @@ export default function PublicStorePage() {
           <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-2xl flex items-center justify-between border border-white/10">
             <div>
               <div className="text-xs text-slate-400">سلتك الحالية ({cartItemsCount} منتج)</div>
-              <div className="text-base font-black text-accent-400">
+              <div className="text-base font-black text-amber-400">
                 {cartTotal.toLocaleString('ar-IQ')} د.ع
               </div>
             </div>
@@ -385,7 +452,7 @@ export default function PublicStorePage() {
               <div className="p-4 sm:p-6 border-b border-slate-200 flex items-center justify-between bg-slate-50">
                 <div className="flex items-center gap-2">
                   <ShoppingBag className="w-5 h-5 text-brand-700" />
-                  <h3 className="font-bold text-slate-900 text-base">سلة مشترياتك من {store?.name}</h3>
+                  <h3 className="font-bold text-slate-900 text-base">سلة مشترياتك من {store?.name || 'المتجر'}</h3>
                 </div>
                 <button 
                   onClick={() => setIsCartOpen(false)}

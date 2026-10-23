@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllStores, createNewStore } from '@/lib/services/storeService';
+import { getAllStores, createNewStore, updateStore } from '@/lib/services/storeService';
 
 export async function GET() {
   try {
@@ -31,4 +31,29 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { id, code, ...updates } = body;
+
+    const identifier = id || code;
+    if (!identifier) {
+      return NextResponse.json({ success: false, message: 'معرف المتجر أو كود المتجر مطلوب' }, { status: 400 });
+    }
+
+    const updated = await updateStore(identifier, updates);
+    if (!updated) {
+      return NextResponse.json({ success: false, message: 'لم يتم العثور على المتجر المطلوب' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, store: updated, message: 'تم تحديث بيانات المتجر بنجاح' });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, message: error.message || 'حدث خطأ أثناء تعديل المتجر' }, { status: 500 });
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  return PATCH(request);
 }

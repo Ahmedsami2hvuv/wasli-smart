@@ -8,7 +8,7 @@ let localProfitEntries: ProfitEntry[] = [];
 let localNotifications: NotificationItem[] = [
   {
     id: 'notif-1',
-    title: 'مرحباً بك في منصة وصلي',
+    title: 'مرحباً بك في المنصة',
     message: 'تم تفعيل نظام المتاجر المتعددة والتسويق بنجاح. يمكنك استعراض الكتالوج وإضافة المنتجات لمتجرك.',
     type: 'system',
     isRead: false,
@@ -16,10 +16,10 @@ let localNotifications: NotificationItem[] = [
   }
 ];
 
-// توليد رقم طلب فريد ومنظم مثل WASLI-10492
+// توليد رقم طلب فريد ومحايد تماماً لحماية هوية المتجر (White-Label) مثل ORD-10492
 export function generateOrderNumber(): string {
   const randomNum = Math.floor(10000 + Math.random() * 90000);
-  return `WASLI-${randomNum}`;
+  return `ORD-${randomNum}`;
 }
 
 export interface CreateOrderParams {
@@ -54,9 +54,9 @@ export async function createOrder(params: CreateOrderParams): Promise<{
 
   // 1. التحقق من هوية المتجر المسوّق
   const store = await getStoreBySlugOrCode(storeIdentifier);
-  const storeId = store ? store.id : 'main-platform';
-  const storeName = store ? store.name : 'متجر منصة وصلي المباشر';
-  const storeCode = store ? store.code : 'platform';
+  const storeId = store ? store.id : 'direct-store';
+  const storeName = store ? store.name : 'متجر إلكتروني';
+  const storeCode = store ? store.code : 'store';
 
   let subtotal = 0;
   let totalWholesaleCost = 0;
@@ -108,7 +108,7 @@ export async function createOrder(params: CreateOrderParams): Promise<{
     });
   }
 
-  const deliveryFee = 4000; // أجور التوصيل المعتمدة لمحافظة البصرة وعموم العراق
+  const deliveryFee = 4000; // أجور التوصيل المعتمدة لعموم العراق
   const totalAmount = subtotal + deliveryFee;
 
   // 3. بناء كائن الطلب النهائي
@@ -189,7 +189,7 @@ export async function createOrder(params: CreateOrderParams): Promise<{
       await sendStoreOrderNotification(store.telegramChatId, notificationPayload);
     }
 
-    // إشعار إدارة منصة وصلي
+    // إشعار إدارة المنصة
     await sendAdminOrderNotification(notificationPayload);
   } catch (err) {
     console.warn('تعذر إرسال إشعار تيليجرام للطلب ولكن تم حفظ الطلب بنجاح:', err);
