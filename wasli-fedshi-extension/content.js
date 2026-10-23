@@ -62,8 +62,9 @@
         }
       }
 
-      // 2. استخراج الأسعار ونطاقات الأرباح من نص الصفحة مباشرة بدقة متناهية
-      const pageText = document.body.innerText || '';
+      // 2. استخراج الأسعار ونطاقات الأرباح من الصفحة بدقة فائقة
+      const pageText = (document.body.innerText || '')
+        .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' '); // توحيد جميع أنواع المسافات
 
       const cleanNum = (str) => {
         if (!str) return 0;
@@ -73,14 +74,14 @@
 
       // أ) سعر الجملة في فدشي (تكلفة فدشي عليك)
       let fedshiWholesale = 0;
-      const wm = pageText.match(/سعر الجملة[\s\r\n]*([0-9,]+)/);
+      const wm = pageText.match(/سعر الجملة[\s\S]{0,30}?(\d{1,3}(?:,\d{3})+|\d{4,6})/);
       if (wm && wm[1]) {
         fedshiWholesale = cleanNum(wm[1]);
       }
 
       // ب) الربح في فدشي
       let fedshiProfit = 0;
-      const pm = pageText.match(/الربح[\s\S]*?([0-9,]+)\s*(?:د\.ع|IQD)/);
+      const pm = pageText.match(/الربح[\s\S]{0,30}?(\d{1,3}(?:,\d{3})+|\d{3,6})/);
       if (pm && pm[1]) {
         fedshiProfit = cleanNum(pm[1]);
       }
@@ -88,25 +89,59 @@
       // ج) سعر الزبون المقترح في فدشي (الحد الأدنى والحد الأعلى)
       let minSuggested = 0;
       let maxSuggested = 0;
-      const sm = pageText.match(/سعر الزبون المقترح[\s\r\n]*([0-9,]+)\s*[-–]\s*([0-9,]+)/);
+      const sm = pageText.match(/سعر الزبون المقترح[\s\S]{0,40}?(\d{1,3}(?:,\d{3})+|\d{4,6})\s*[-–—]\s*(\d{1,3}(?:,\d{3})+|\d{4,6})/);
       if (sm && sm[1] && sm[2]) {
         minSuggested = cleanNum(sm[1]);
         maxSuggested = cleanNum(sm[2]);
       }
 
-      // 3. تطبيق معادلة أرباح منصة وصلي المعتمدة بدقة تامة:
+      // فحص إضافي عبر عناصر DOM إذا لم يلتقطه النص العام
+      if (!minSuggested || !maxSuggested) {
+        const allDom = Array.from(document.querySelectorAll('*'));
+        for (const el of allDom) {
+          const t = (el.textContent || '').trim();
+          if (t.includes('سعر الزبون المقترح') || t.includes('المقترح')) {
+            const combined = t + ' ' + (el.nextElementSibling ? el.nextElementSibling.textContent : '');
+            const m = combined.match(/(\d{1,3}(?:,\d{3})+|\d{4,6})\s*[-–—]\s*(\d{1,3}(?:,\d{3})+|\d{4,6})/);
+            if (m && m[1] && m[2]) {
+              minSuggested = cleanNum(m[1]);
+              maxSuggested = cleanNum(m[2]);
+              break;
+            }
+          }
+        }
+      }
+
+      // 3. تطبيق معادلة أرباح منصة وصلي بدقة تامة وبحد أقصى للربح 3,000 د.ع:
       // تكلفة فدشي عليك كمدير (مثال: 67,750 د.ع)
       const costOnYou = fedshiWholesale || 67750;
 
-      // سعر جملة وصلي لمسوقك = الحد الأدنى من سعر الزبون المقترح في فدشي (مثال: 70,000 د.ع)
-      const wasliWholesale = minSuggested || (costOnYou + fedshiProfit);
+      // تحديد سعر جملة وصلي للمسوق:
+      // إذا كان الحد الأدنى المقترح من فدشي واضحاً (مثل 70,000 د.ع):
+      let wasliWholesale = 0;
+      if (minSuggested && minSuggested > costOnYou) {
+        wasliWholesale = minSuggested; // 70,000 د.ع
+      } else if (fedshiProfit > 0) {
+        wasliWholesale = costOnYou + fedshiProfit;
+      } else {
+        // افتراض إضافة 3,000 د.ع كربح صافي كما طلب المدير
+        wasliWholesale = costOnYou + 3000;
+      }
 
-      // ربحك الصافي كمدير منصة وصلي = (سعر جملة وصلي - تكلفة فدشي عليك) = 70,000 - 67,750 = +2,250 د.ع
-      const wasliProfit = wasliWholesale - costOnYou;
+      // ربح المنصة الصافي = سعر جملة وصلي - تكلفة فدشي عليك
+      let wasliProfit = wasliWholesale - costOnYou;
 
-      // حدود بيع الزبون لصاحب المتجر (المسوق): بين 80,000 د.ع و 90,000 د.ع
-      const wasliMinPrice = wasliWholesale + 10000; // 80,000 د.ع
-      const wasliMaxPrice = maxSuggested || (wasliWholesale + 20000); // 90,000 د.ع
+      // التأكد من أن ربح المدير لا يقل عن ربح فدشي ولا يكون صفراً (إذا كان صفراً يضبط على 3,000 د.ع)
+      if (wasliProfit <= 0) {
+        wasliProfit = 3000;
+        wasliWholesale = costOnYou + 3000;
+      }
+
+      // حدود بيع الزبون لصاحب المتجر (المسوق):
+      // الحد الأدنى: 80,000 د.ع (أو جملة وصلي + 10,000)
+      const wasliMinPrice = (minSuggested && minSuggested >= 70000) ? 80000 : (wasliWholesale + 10000);
+      // الحد الأعلى: 90,000 د.ع (المقترح في فدشي)
+      const wasliMaxPrice = maxSuggested || (wasliMinPrice + 10000);
 
       // 5. استخراج اسم المنتج الحقيقي (مثل: "اوتي نورفا من ليبرونيك")
       let title = '';
@@ -270,7 +305,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">مورد: فدشي</span>
-            <span class="wasli-badge-source" style="background: #e2e8f0; color: #334155;">إصدار 1.0.1</span>
+            <span class="wasli-badge-source" style="background: #e2e8f0; color: #334155;">إصدار 1.0.2</span>
           </div>
           <button type="button" class="wasli-close-btn" id="wasli-modal-close">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
