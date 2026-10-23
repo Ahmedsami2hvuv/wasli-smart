@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { 
   ShoppingBag, 
@@ -32,6 +32,8 @@ function ProductDetailContent() {
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
   const [copied, setCopied] = useState(false);
+  const [activeImage, setActiveImage] = useState<string>('');
+  const [selectedColor, setSelectedColor] = useState<any>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -39,16 +41,22 @@ function ProductDetailContent() {
       try {
         setLoading(true);
         // جلب تفاصيل المنتج
-        const res = await fetch(`/api/products`);
+        const res = await fetch('/api/products');
         const data = await res.json();
         if (data.success && data.products) {
           const found = data.products.find((p: any) => p.id === productId || p.slug === productId);
-          if (found) setProduct(found);
+          if (found) {
+            setProduct(found);
+            setActiveImage(found.image || '');
+            if (found.colors && found.colors.length > 0) {
+              setSelectedColor(found.colors[0]);
+            }
+          }
         }
 
         // جلب تفاصيل المتجر المحيل إن وجد
         if (storeRef) {
-          const storeRes = await fetch(`/api/stores`);
+          const storeRes = await fetch('/api/stores');
           const storeData = await storeRes.json();
           const foundStore = storeData.stores?.find(
             (s: any) => s.code?.toLowerCase() === storeRef.toLowerCase() || s.slug?.toLowerCase() === storeRef.toLowerCase()
@@ -63,6 +71,7 @@ function ProductDetailContent() {
                 const spFound = spData.products.find((p: any) => p.id === productId || p.slug === productId);
                 if (spFound) {
                   setProduct(spFound);
+                  setActiveImage(spFound.image || '');
                 }
               }
             } catch (e) {}
@@ -77,6 +86,28 @@ function ProductDetailContent() {
 
     loadData();
   }, [productId, storeRef]);
+
+  // قائمة جميع صور المنتج للمعرض
+  const allImages = useMemo(() => {
+    if (!product) return [];
+    const list: string[] = [];
+    if (product.image) list.push(product.image);
+    if (product.images && Array.isArray(product.images)) {
+      for (const img of product.images) {
+        const url = typeof img === 'string' ? img : ((img as any).localUrl || (img as any).url);
+        if (url && !list.includes(url)) list.push(url);
+      }
+    }
+    // إضافة صور الألوان إن وجدت
+    if (product.colors && Array.isArray(product.colors)) {
+      for (const c of product.colors) {
+        if (c.image && !list.includes(c.image)) {
+          list.push(c.image);
+        }
+      }
+    }
+    return list;
+  }, [product]);
 
   const handleShare = async () => {
     if (!product) return;
@@ -112,7 +143,8 @@ function ProductDetailContent() {
           productId: product.id,
           name: product.name,
           priceIqd: product.priceIqd,
-          image: product.image,
+          image: activeImage || product.image,
+          selectedColor: selectedColor?.name || '',
           quantity: quantity,
         }],
       }));
@@ -151,6 +183,23 @@ function ProductDetailContent() {
     );
   }
 
+  // فلترة المواصفات لضمان عدم ظهور النص الترويجي الموجه للتجار
+  const displaySpecs = (() => {
+    if (product.specifications) {
+      if (Array.isArray(product.specifications)) return product.specifications.join('\n');
+      return String(product.specifications);
+    }
+    if (product.description) {
+      // إزالة أي إشارة للنص الترويجي إذا كان مدمجاً
+      const desc = String(product.description);
+      if (desc.includes('الوصف الترويجي:')) {
+        return desc.split('الوصف الترويجي:')[0].trim();
+      }
+      return desc;
+    }
+    return 'منتج أصلي عالي الجودة متوفر للشحن المباشر مع حق المعاينة والفحص عند الاستلام.';
+  })();
+
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8 pb-24">
       <div className="max-w-5xl mx-auto">
@@ -167,7 +216,7 @@ function ProductDetailContent() {
           ) : (
             <button 
               onClick={() => router.back()}
-              className="inline-flex items-center gap-2 text-sm font-bold text-slate-700 hover:text-brand-700 transition-colors bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-xs"
+              className="inline-flex items-center gap-2 text-sm font-bold text-slate-700 hover:text-brand-700 transition-colors bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-xs cursor-pointer"
             >
               <ArrowRight className="w-4 h-4" />
               <span>الرجوع للمتجر</span>
@@ -194,11 +243,11 @@ function ProductDetailContent() {
 
         {/* بطاقة تفاصيل المنتج الرئيسية */}
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-md overflow-hidden grid grid-cols-1 md:grid-cols-2 gap-8 p-6 sm:p-8">
-          {/* صورة المنتج */}
-          <div className="flex flex-col gap-4">
-            <div className="aspect-square rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 relative group">
+          {/* معرض صور المنتج */}
+          <div className="flex flex-col gap-3">
+            <div className="aspect-square rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 relative group shadow-xs">
               <img 
-                src={product.image} 
+                src={activeImage || product.image} 
                 alt={product.name} 
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               />
@@ -206,6 +255,29 @@ function ProductDetailContent() {
                 {product.category}
               </div>
             </div>
+
+            {/* شريط مصغرات الصور لعرض كافة صور المنتج */}
+            {allImages.length > 1 && (
+              <div className="flex items-center gap-2.5 overflow-x-auto pb-1 pt-1">
+                {allImages.map((imgUrl, idx) => {
+                  const isCurrent = (activeImage || product.image) === imgUrl;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setActiveImage(imgUrl)}
+                      className={`relative w-16 h-16 rounded-xl overflow-hidden shrink-0 border transition-all cursor-pointer ${
+                        isCurrent 
+                          ? 'border-brand-700 ring-2 ring-brand-700 ring-offset-2 scale-105 shadow-xs' 
+                          : 'border-slate-200 hover:border-slate-400 opacity-70 hover:opacity-100'
+                      }`}
+                    >
+                      <img src={imgUrl} alt={`صورة ${idx + 1}`} className="w-full h-full object-cover" />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* معلومات المنتج والطلب */}
@@ -234,51 +306,61 @@ function ProductDetailContent() {
                 </span>
               </div>
 
-              {/* الألوان والخيارات إن وجدت */}
+              {/* اختيار الألوان والخيارات التفاعلي */}
               {product.colors && product.colors.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-xs font-bold text-slate-700 mb-2.5">الألوان والخيارات المتاحة:</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {product.colors.map((c, idx) => (
-                      <div 
-                        key={idx} 
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-800"
-                      >
-                        {c.image && (
-                          <img src={c.image} alt={c.name} className="w-5 h-5 rounded-md object-cover border border-slate-200" />
-                        )}
-                        <span>{c.name}</span>
-                      </div>
-                    ))}
+                <div className="mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <h3 className="text-xs font-bold text-slate-700">اختر اللون أو الموديل:</h3>
+                    {selectedColor && (
+                      <span className="text-xs font-black text-brand-700">
+                        المحدد: {selectedColor.name}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2.5">
+                    {product.colors.map((c, idx) => {
+                      const isSelected = selectedColor?.name === c.name || (!selectedColor && idx === 0);
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setSelectedColor(c);
+                            if (c.image) {
+                              setActiveImage(c.image);
+                            }
+                          }}
+                          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                            isSelected
+                              ? 'border-brand-700 bg-brand-50 text-brand-900 shadow-xs ring-1 ring-brand-700'
+                              : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                          }`}
+                        >
+                          {c.image ? (
+                            <img src={c.image} alt={c.name} className="w-5 h-5 rounded-md object-cover border border-slate-200" />
+                          ) : (
+                            <span 
+                              className="w-3.5 h-3.5 rounded-full border border-slate-300 inline-block shrink-0"
+                              style={{ backgroundColor: (c as any).code || '#94a3b8' }}
+                            />
+                          )}
+                          <span>{c.name}</span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-brand-700 shrink-0 mr-1" />}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
-              {/* تفاصيل ومواصفات المنتج للزبون (بدون الوصف الترويجي المخصص للتجار فقط) */}
+              {/* تفاصيل ومواصفات المنتج للزبون (المواصفات الفنية الحقيقية) */}
               <div className="mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
                 <h3 className="text-xs font-black text-slate-800 mb-2.5 flex items-center gap-1.5">
                   <span>المواصفات الفنية وتفاصيل المنتج:</span>
                 </h3>
-                {product.specifications ? (
-                  Array.isArray(product.specifications) ? (
-                    <ul className="space-y-1.5 text-xs text-slate-600">
-                      {product.specifications.map((spec, sIdx) => (
-                        <li key={sIdx} className="flex items-start gap-2">
-                          <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                          <span>{spec}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
-                      {product.specifications}
-                    </div>
-                  )
-                ) : (
-                  <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
-                    {product.description || 'منتج عالي الجودة متوفر للتسليم المباشر مع فحص عند الاستلام.'}
-                  </p>
-                )}
+                <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-line space-y-1.5">
+                  {displaySpecs}
+                </div>
               </div>
 
               {/* مميزات سريعة */}
@@ -301,14 +383,14 @@ function ProductDetailContent() {
                 <div className="flex items-center border border-slate-300 rounded-xl bg-white overflow-hidden">
                   <button 
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="w-10 h-10 flex items-center justify-center text-slate-600 hover:bg-slate-100 font-bold"
+                    className="w-10 h-10 flex items-center justify-center text-slate-600 hover:bg-slate-100 font-bold cursor-pointer"
                   >
                     <Minus className="w-4 h-4" />
                   </button>
                   <span className="w-12 text-center font-bold text-slate-900 text-sm">{quantity}</span>
                   <button 
                     onClick={() => setQuantity(quantity + 1)}
-                    className="w-10 h-10 flex items-center justify-center text-slate-600 hover:bg-slate-100 font-bold"
+                    className="w-10 h-10 flex items-center justify-center text-slate-600 hover:bg-slate-100 font-bold cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
