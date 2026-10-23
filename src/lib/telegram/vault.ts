@@ -52,11 +52,11 @@ export async function optimizeProductImage(inputBuffer: Buffer): Promise<Process
  * دوال مساعدة لجلب إعدادات بوت مستودع الصور وبوت إشعارات المتاجر
  */
 export function getVaultBotToken(): string | undefined {
-  return process.env.TELEGRAM_VAULT_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+  return process.env.TELEGRAM_VAULT_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || '8862218858:AAHPyAOmL4_Y1R3um05z1CXbNd1UmdM-wk4';
 }
 
 export function getVaultChannelId(): string | undefined {
-  return process.env.TELEGRAM_VAULT_CHANNEL_ID || process.env.TELEGRAM_CHANNEL_ID;
+  return process.env.TELEGRAM_VAULT_CHANNEL_ID || process.env.TELEGRAM_CHANNEL_ID || '-1003906281269';
 }
 
 export function getOrdersBotToken(): string | undefined {

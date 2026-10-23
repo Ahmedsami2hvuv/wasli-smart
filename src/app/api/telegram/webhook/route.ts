@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getVaultBotToken } from '@/lib/telegram/vault';
+import { getVaultBotToken, getOrdersBotToken } from '@/lib/telegram/vault';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
     const update = await req.json();
+    const url = new URL(req.url);
+    const botType = url.searchParams.get('bot');
 
     if (update && update.message) {
       const message = update.message;
@@ -13,29 +15,36 @@ export async function POST(req: NextRequest) {
       const text = message.text || '';
       const firstName = message.from?.first_name || 'صديقنا';
 
-      const botToken = getVaultBotToken();
-      if (!botToken) {
-        return NextResponse.json({ ok: false, error: 'No bot token' }, { status: 500 });
+      // تحديد البوت الذي سيرد
+      let activeToken = botType === 'orders' 
+        ? getOrdersBotToken() 
+        : getVaultBotToken();
+
+      if (!activeToken) {
+        activeToken = getVaultBotToken() || getOrdersBotToken();
       }
+
+      const botName = botType === 'orders' ? 'إشعارات طلبات وصلي' : 'مستودع منتجات وصلي';
 
       // الرد على زر /start
       if (text.startsWith('/start')) {
         const welcomeMessage = [
-          `أهلاً بك يا ${firstName} في بوت منصة وصلي للتجارة الذكية`,
+          `أهلاً بك يا ${firstName} في بوت (${botName})`,
           '==============================',
-          'البوت متصل بنجاح بالسيرفر وهو يعمل الآن بشكل ممتاز!',
+          'البوت متصل بنجاح بالسيرفر ومستعد للعمل فوراً!',
           '',
-          'وظائف هذا البوت في منصة وصلي:',
-          '1. نشر المنتجات الجديدة تلقائياً في قناتك الخاصة على تيليجرام فور استيرادها.',
-          '2. متابعة وإرسال إشعارات الطلبات الجديدة في المنصة.',
+          botType === 'orders' 
+            ? 'وظيفة هذا البوت: إرسال تنبيهات فورية للمدير بكل طلب جديد يتم في المنصة.'
+            : 'وظيفة هذا البوت: النشر التلقائي للمنتجات المستوردة مع صورها وأسعارها داخل قناتك.',
           '------------------------------',
-          `معرف هذه المحادثة (Chat ID): ${chatId}`,
+          `معرف محادثتك (Chat ID): ${chatId}`,
           'نوع المحادثة: ' + (message.chat.type === 'private' ? 'محادثة خاصة' : message.chat.type),
           '==============================',
-          'يمكنك الآن إضافة هذا البوت مشرفاً (Admin) في قناتك لنشر المنتجات مباشرة.'
+          'شكراً لاستخدامك منصة وصلي للتجارة الذكية والدروب شيبينغ في العراق.'
         ].join('\n');
 
-        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        // إرسال الرد بالتوكن النشط
+        await fetch(`https://api.telegram.org/bot${activeToken}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -47,12 +56,11 @@ export async function POST(req: NextRequest) {
         // الرد على أي رسالة أخرى
         const replyText = [
           `مرحباً ${firstName}!`,
-          'تم استلام رسالتك في سيرفر منصة وصلي.',
-          `معرفك هو: ${chatId}`,
-          'البوت مخصص لخدمة منصة وصلي ونشر المنتجات تلقائياً في القناة.'
+          `تم استلام رسالتك في سيرفر منصة وصلي عبر بوت (${botName}).`,
+          `معرف محادثتك هو: ${chatId}`
         ].join('\n');
 
-        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        await fetch(`https://api.telegram.org/bot${activeToken}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
