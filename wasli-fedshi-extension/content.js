@@ -248,6 +248,46 @@
         videoUrl = videoEl.src || videoEl.getAttribute('src') || '';
       }
 
+      // 9. استخراج الوصف الترويجي والمواصفات الفنية
+      let promoDescription = '';
+      let specifications = '';
+
+      for (const el of allElements) {
+        const text = (el.textContent || '').trim();
+        // أ) الوصف الترويجي
+        if (!promoDescription && (text === 'الوصف الترويجي' || text.startsWith('الوصف الترويجي') || text === 'النص الترويجي' || text === 'الوصف التسويقي')) {
+          const sibling = el.nextElementSibling;
+          if (sibling) {
+            const content = (sibling.innerText || sibling.textContent || '').trim();
+            if (content.length > 15 && !content.includes('المواصفات')) {
+              promoDescription = content;
+            }
+          }
+        }
+
+        // ب) المواصفات الفنية
+        if (!specifications && (text === 'المواصفات' || text.startsWith('المواصفات') || text === 'المواصفات الفنية')) {
+          const sibling = el.nextElementSibling;
+          if (sibling) {
+            const content = (sibling.innerText || sibling.textContent || '').trim();
+            if (content.length > 10) {
+              specifications = content;
+            }
+          }
+        }
+      }
+
+      // إذا لم يتم العثور على الوصف الترويجي بشكل منفصل، نبحث في فقرات الوصف السفلية
+      if (!promoDescription) {
+        const descSections = Array.from(document.querySelectorAll('p, div')).filter(p => {
+          const t = (p.textContent || '').trim();
+          return t.length > 40 && t.length < 600 && !t.includes('الأرباح') && !t.includes('سعر الجملة') && !t.includes('فدشي');
+        });
+        if (descSections.length > 0) {
+          promoDescription = descSections[0].textContent.trim();
+        }
+      }
+
       return {
         title: title || 'منتج مستورد من فدشي',
         productCode: productCode || '',
@@ -260,6 +300,8 @@
         wasliProfit: wasliProfit,
         wasliMinPrice: wasliMinPrice,
         wasliMaxPrice: wasliMaxPrice,
+        promoDescription: promoDescription || 'منتج أصلي عالي الجودة بتصميم عصري وأداء ممتاز مناسب للاستخدام اليومي مع ضمان وفحص عند الاستلام.',
+        specifications: specifications || 'خامات عالية الجودة\nأداء قوي ومثالي\nسهل الاستخدام والتنظيف\nتصميم حديث ومريح',
         colors: colors.length > 0 ? colors : [{ name: 'افتراضي' }],
         images: images.slice(0, 10),
         videoUrl,
@@ -305,7 +347,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">مورد: فدشي</span>
-            <span class="wasli-badge-source" style="background: #e2e8f0; color: #334155;">إصدار 1.0.2</span>
+            <span class="wasli-badge-source" style="background: #e2e8f0; color: #334155;">إصدار 1.0.3</span>
           </div>
           <button type="button" class="wasli-close-btn" id="wasli-modal-close">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -451,6 +493,17 @@
         </div>
       </div>
 
+      <!-- الوصف الترويجي والمواصفات الفنية -->
+      <div class="wasli-field-group">
+        <label class="wasli-label">الوصف الترويجي التسويقي للزبون:</label>
+        <textarea class="wasli-input" id="wasli-inp-promo" rows="2" style="font-size: 11px; resize: vertical; line-height: 1.4;">${data.promoDescription}</textarea>
+      </div>
+
+      <div class="wasli-field-group">
+        <label class="wasli-label">المواصفات الفنية للمنتج:</label>
+        <textarea class="wasli-input" id="wasli-inp-specs" rows="2" style="font-size: 11px; resize: vertical; line-height: 1.4;">${data.specifications}</textarea>
+      </div>
+
       <!-- الألوان المكتشفة -->
       ${data.colors && data.colors.length > 0 ? `
         <div class="wasli-field-group">
@@ -502,6 +555,8 @@
       const minPrice = parseInt(overlay.querySelector('#wasli-inp-min').value, 10);
       const maxPrice = parseInt(overlay.querySelector('#wasli-inp-max').value, 10);
       const stock = parseInt(overlay.querySelector('#wasli-inp-stock').value, 10) || 50;
+      const promoText = (overlay.querySelector('#wasli-inp-promo')?.value || data.promoDescription || '').trim();
+      const specsText = (overlay.querySelector('#wasli-inp-specs')?.value || data.specifications || '').trim();
 
       const payload = {
         name: productTitle,
@@ -516,6 +571,9 @@
         minPriceIqd: minPrice,
         maxPriceIqd: maxPrice,
         category: category,
+        description: promoText || productTitle,
+        promoDescription: promoText,
+        specifications: specsText,
         colors: data.colors,
         images: data.images,
         videoUrl: data.videoUrl,

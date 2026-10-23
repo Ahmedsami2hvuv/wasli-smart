@@ -60,6 +60,12 @@ export async function getAllProducts(): Promise<Product[]> {
           image: item.images?.[0]?.local_url || 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=600&q=80',
           category: item.category?.name || 'عام',
           categoryId: item.category_id,
+          promoDescription: item.metadata?.promoDescription || item.description,
+          specifications: item.metadata?.specifications || null,
+          supplierPriceIqd: item.metadata?.supplierPriceIqd ? Number(item.metadata.supplierPriceIqd) : undefined,
+          supplierCode: item.metadata?.supplierCode,
+          colors: item.metadata?.colors,
+          variants: item.metadata?.variants,
         }));
       }
     } catch (e) {
@@ -90,6 +96,8 @@ export async function createPlatformProduct(productData: {
   subcategoryId?: string;
   description: string;
   shortDescription?: string;
+  promoDescription?: string;
+  specifications?: string[] | string;
   wholesalePriceIqd: number;
   platformPriceIqd: number;
   minPriceIqd: number;
@@ -118,6 +126,8 @@ export async function createPlatformProduct(productData: {
     slug: slug,
     description: productData.description,
     shortDescription: productData.shortDescription || productData.description.slice(0, 80),
+    promoDescription: productData.promoDescription || productData.description,
+    specifications: productData.specifications,
     priceIqd: productData.platformPriceIqd,
     wholesalePriceIqd: productData.wholesalePriceIqd,
     platformPriceIqd: productData.platformPriceIqd,
@@ -171,6 +181,8 @@ export async function createPlatformProduct(productData: {
           supplierCode: newProduct.supplierCode,
           supplierSku: newProduct.supplierSku,
           supplierSource: newProduct.supplierSource,
+          promoDescription: newProduct.promoDescription,
+          specifications: newProduct.specifications,
           colors: newProduct.colors,
           variants: newProduct.variants,
           videoUrl: newProduct.videoUrl,

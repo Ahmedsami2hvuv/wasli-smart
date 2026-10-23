@@ -92,6 +92,8 @@ export interface Product {
   slug?: string;
   description: string;
   shortDescription?: string;
+  promoDescription?: string; // الوصف الترويجي التسويقي
+  specifications?: string[] | string; // المواصفات الفنية للمنتج
   priceIqd: number; // السعر الظاهر للزبون
   originalPriceIqd?: number;
   wholesalePriceIqd?: number; // سعر الجملة للمنصة (الذي يشتري به المسوق)
