@@ -138,17 +138,31 @@ export default function HomePage() {
             </div>
 
             {/* العنوان العريض الرئيسي */}
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.2]">
+            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.25]">
               امتلك متجرك الإلكتروني اليوم <br className="hidden sm:inline" />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-700 via-skybrand-600 to-brand-800">
-                بدون رأس مال وبدون شراء بضاعة!
+                بدون رأس مال وبدون شراء بضاعة
+              </span>
+              <br />
+              <span className="text-2xl sm:text-4xl text-slate-800 font-black mt-2 block">
+                بدون تخزين وبدون توصيل !
               </span>
             </h1>
 
+            {/* شارة مجاناً البارزة */}
+            <div className="pt-2 flex justify-center">
+              <div className="inline-flex items-center gap-2.5 px-6 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-amber-400/25 to-amber-500/15 border-2 border-amber-400 text-amber-700 shadow-md">
+                <Sparkles className="w-5 h-5 text-amber-600 animate-spin" style={{ animationDuration: '6s' }} />
+                <span className="text-xl sm:text-3xl font-black tracking-widest text-amber-700">
+                  مجااااااااااااااااااااااناً
+                </span>
+                <Sparkles className="w-5 h-5 text-amber-600 animate-spin" style={{ animationDuration: '6s' }} />
+              </div>
+            </div>
+
             {/* النص التوضيحي */}
             <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto">
-              نوفر لك المنتجات الأصلية بسعر الجملة، ونخزنها، ونوصلها لباب زبونك في قضاء أبي الخصيب وعموم العراق.
-              دورك فقط هو إنشاء متجرك باسمك وتحديد أسعارك واستلام أرباحك الصافية!
+              نوفر لك المنتجات الأصلية بسعر الجملة، ونخزنها، ونوصلها لباب زبونك في عموم العراق. دورك فقط هو إنشاء متجرك باسمك وتحديد أسعارك ونشر متجرك ومنتجاتك واستلام أرباحك الصافية!
             </p>
 
             {/* أزرار التحرك السريع */}
