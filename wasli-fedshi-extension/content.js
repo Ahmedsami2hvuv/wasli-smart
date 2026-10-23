@@ -237,58 +237,6 @@
     }
   }
 
-      allImages.forEach(img => {
-        if (!images.includes(img.src)) {
-          images.push(img.src);
-        }
-      });
-
-      // 8. استخراج رابط الفيديو إن وجد
-      let videoUrl = '';
-      const videoEl = document.querySelector('video source, video');
-      if (videoEl) {
-        videoUrl = videoEl.src || videoEl.getAttribute('src') || '';
-      }
-
-      // 9. المخزون والتوفر
-      let stock = 50;
-      const stockMatch = pageText.match(/متبقية[:\s]*(\d+)[-–](\d+)/);
-      if (stockMatch && stockMatch[1]) {
-        stock = parseInt(stockMatch[1], 10);
-      }
-
-      // تطبيق معادلة أسعار وصلي:
-      // سعر جملة وصلي لمسوقينا = الحد الأدنى لفدشي
-      const wasliWholesale = minSuggested || (fedshiWholesale + 18000);
-      // ربح منصة وصلي الصافي = سعر جملة وصلي - تكلفة فدشي
-      const wasliProfit = wasliWholesale - fedshiWholesale;
-      // أسعار بيع الزبون في وصلي
-      const wasliMinPrice = wasliWholesale + 10000;
-      const wasliMaxPrice = maxSuggested || (wasliWholesale + 20000);
-
-      return {
-        title: title || 'منتج مستورد من فدشي',
-        productCode,
-        skuCode,
-        fedshiWholesale,
-        fedshiProfit,
-        minSuggested,
-        maxSuggested,
-        wasliWholesale,
-        wasliProfit,
-        wasliMinPrice,
-        wasliMaxPrice,
-        colors,
-        images: images.slice(0, 10), // حفظ أول 10 صور عالية الدقة
-        videoUrl,
-        stock
-      };
-    } catch (err) {
-      console.error('حدث خطأ أثناء قراءة بيانات المنتج:', err);
-      return null;
-    }
-  }
-
   // إنشاء واجهة الزر العائم والنافذة المنبثقة
   function initWasliUI() {
     if (document.getElementById('wasli-importer-container')) return;
