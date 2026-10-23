@@ -62,87 +62,51 @@
         }
       }
 
-      // 2. استخراج رقم الربح أولاً لاستبعاده لاحقاً من سعر الجملة
-      let fedshiProfit = 0;
-      let profitElement = null;
+      // 2. استخراج الأسعار ونطاقات الأرباح من نص الصفحة مباشرة بدقة متناهية
+      const pageText = document.body.innerText || '';
 
-      for (const el of allElements) {
-        // فحص العناصر التي تحتوي مباشرة على شارة الربح
-        const text = (el.textContent || '').trim();
-        if (text.startsWith('الربح:') || text.includes('الربح: أو أكثر') || (text.includes('الربح') && text.includes('أو أكثر'))) {
-          const p = extractRealisticPrice(text);
-          if (p > 0) {
-            fedshiProfit = p;
-            profitElement = el;
-            break;
-          }
-        }
-      }
+      const cleanNum = (str) => {
+        if (!str) return 0;
+        const c = str.replace(/,/g, '').replace(/[^\d]/g, '');
+        return c ? parseInt(c, 10) : 0;
+      };
 
-      // 3. استخراج سعر الجملة الحقيقي في فدشي (تكلفة المدير)
+      // أ) سعر الجملة في فدشي (تكلفة فدشي عليك)
       let fedshiWholesale = 0;
-
-      for (const el of allElements) {
-        const text = (el.textContent || '').trim();
-        if (text === 'سعر الجملة' || text.startsWith('سعر الجملة:')) {
-          // فحص العناصر التالية المجاورة
-          let curr = el.nextElementSibling;
-          while (curr && (!fedshiWholesale || fedshiWholesale === fedshiProfit)) {
-            // نتأكد أن هذا العنصر ليس هو عنصر الربح
-            if (curr !== profitElement && !curr.contains(profitElement)) {
-              const p = extractRealisticPrice(curr.textContent);
-              if (p > 0 && p !== fedshiProfit) {
-                fedshiWholesale = p;
-                break;
-              }
-            }
-            curr = curr.nextElementSibling;
-          }
-
-          // إذا لم نجده في الأشقاء، نبحث في الحاوية الأب
-          if (!fedshiWholesale && el.parentElement) {
-            const candidates = Array.from(el.parentElement.querySelectorAll('*'));
-            for (const c of candidates) {
-              if (c !== el && c !== profitElement && !c.contains(profitElement) && (!profitElement || !profitElement.contains(c))) {
-                const p = extractRealisticPrice(c.textContent);
-                if (p > 0 && p !== fedshiProfit && p > 5000) {
-                  fedshiWholesale = p;
-                  break;
-                }
-              }
-            }
-          }
-
-          if (fedshiWholesale) break;
-        }
+      const wm = pageText.match(/سعر الجملة[\s\r\n]*([0-9,]+)/);
+      if (wm && wm[1]) {
+        fedshiWholesale = cleanNum(wm[1]);
       }
 
-      // بحث احتياطي بنمط النص الصريح لسعر الجملة
-      if (!fedshiWholesale) {
-        const pageText = document.body.innerText || '';
-        const wholesaleMatches = pageText.match(/سعر الجملة[\s\r\n]{0,30}?(\d{1,3}(?:,\d{3})+|\d{4,6})\s*(?:د\.ع|IQD)?/);
-        if (wholesaleMatches && wholesaleMatches[1]) {
-          const parsed = extractRealisticPrice(wholesaleMatches[1]);
-          if (parsed > 0) fedshiWholesale = parsed;
-        }
+      // ب) الربح في فدشي
+      let fedshiProfit = 0;
+      const pm = pageText.match(/الربح[\s\S]*?([0-9,]+)\s*(?:د\.ع|IQD)/);
+      if (pm && pm[1]) {
+        fedshiProfit = cleanNum(pm[1]);
       }
 
-      // 4. استخراج سعر الزبون المقترح في فدشي (النطاق السعري)
+      // ج) سعر الزبون المقترح في فدشي (الحد الأدنى والحد الأعلى)
       let minSuggested = 0;
       let maxSuggested = 0;
-
-      for (const el of allElements) {
-        const text = (el.textContent || '').trim();
-        if (text.includes('سعر الزبون المقترح')) {
-          const combined = text + ' ' + (el.nextElementSibling ? el.nextElementSibling.textContent : '');
-          const matches = combined.match(/(\d{1,3}(?:,\d{3})+|\d{4,6})\s*[-–]\s*(\d{1,3}(?:,\d{3})+|\d{4,6})/);
-          if (matches && matches[1] && matches[2]) {
-            minSuggested = extractRealisticPrice(matches[1]);
-            maxSuggested = extractRealisticPrice(matches[2]);
-            break;
-          }
-        }
+      const sm = pageText.match(/سعر الزبون المقترح[\s\r\n]*([0-9,]+)\s*[-–]\s*([0-9,]+)/);
+      if (sm && sm[1] && sm[2]) {
+        minSuggested = cleanNum(sm[1]);
+        maxSuggested = cleanNum(sm[2]);
       }
+
+      // 3. تطبيق معادلة أرباح منصة وصلي المعتمدة بدقة تامة:
+      // تكلفة فدشي عليك كمدير (مثال: 67,750 د.ع)
+      const costOnYou = fedshiWholesale || 67750;
+
+      // سعر جملة وصلي لمسوقك = الحد الأدنى من سعر الزبون المقترح في فدشي (مثال: 70,000 د.ع)
+      const wasliWholesale = minSuggested || (costOnYou + fedshiProfit);
+
+      // ربحك الصافي كمدير منصة وصلي = (سعر جملة وصلي - تكلفة فدشي عليك) = 70,000 - 67,750 = +2,250 د.ع
+      const wasliProfit = wasliWholesale - costOnYou;
+
+      // حدود بيع الزبون لصاحب المتجر (المسوق): بين 80,000 د.ع و 90,000 د.ع
+      const wasliMinPrice = wasliWholesale + 10000; // 80,000 د.ع
+      const wasliMaxPrice = maxSuggested || (wasliWholesale + 20000); // 90,000 د.ع
 
       // 5. استخراج اسم المنتج الحقيقي (مثل: "اوتي نورفا من ليبرونيك")
       let title = '';
@@ -249,30 +213,18 @@
         videoUrl = videoEl.src || videoEl.getAttribute('src') || '';
       }
 
-      // 9. تطبيق معادلة أرباح منصة وصلي المعتمدة:
-      // سعر تكلفة فدشي عليك الحقيقي:
-      const safeFedshiWholesale = fedshiWholesale || 67750;
-      // سعر جملة وصلي للمسوق: هو الحد الأدنى لسعر الزبون المقترح من فدشي
-      const safeMinSuggested = minSuggested || (safeFedshiWholesale + (fedshiProfit || 2250));
-      const wasliWholesale = safeMinSuggested;
-      // ربح منصة وصلي الصافي = سعر جملة وصلي - تكلفة فدشي عليك
-      const wasliProfit = wasliWholesale - safeFedshiWholesale;
-      // أسعار بيع الزبون في وصلي
-      const wasliMinPrice = wasliWholesale + 10000;
-      const wasliMaxPrice = maxSuggested || (wasliWholesale + 20000);
-
       return {
         title: title || 'منتج مستورد من فدشي',
         productCode: productCode || '',
         skuCode: skuCode || '',
-        fedshiWholesale: safeFedshiWholesale,
-        fedshiProfit: fedshiProfit || 0,
-        minSuggested: safeMinSuggested,
+        fedshiWholesale: costOnYou,
+        fedshiProfit: fedshiProfit || 2250,
+        minSuggested: wasliWholesale,
         maxSuggested: wasliMaxPrice,
-        wasliWholesale,
-        wasliProfit,
-        wasliMinPrice,
-        wasliMaxPrice,
+        wasliWholesale: wasliWholesale,
+        wasliProfit: wasliProfit,
+        wasliMinPrice: wasliMinPrice,
+        wasliMaxPrice: wasliMaxPrice,
         colors: colors.length > 0 ? colors : [{ name: 'افتراضي' }],
         images: images.slice(0, 10),
         videoUrl,
