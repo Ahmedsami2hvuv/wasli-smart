@@ -1,7 +1,7 @@
 import { Order, OrderItem, OrderStatus, ProfitEntry, NotificationItem } from '@/types';
 import { getProductByIdOrSlug } from './productService';
 import { getStoreBySlugOrCode } from './storeService';
-import { sendAdminOrderNotification } from '@/lib/telegram/vault';
+import { sendAdminOrderNotification, sendStoreOrderNotification } from '@/lib/telegram/vault';
 
 let localOrders: Order[] = [];
 let localProfitEntries: ProfitEntry[] = [];
@@ -164,18 +164,33 @@ export async function createOrder(params: CreateOrderParams): Promise<{
     createdAt: new Date().toISOString(),
   });
 
-  // 6. إرسال إشعار تلغرام للمشرف بصورة تلقائية
+  // 6. إرسال إشعار تلغرام الفوري للمتجر ولإدارة المنصة عبر بوت الإشعارات
   try {
-    await sendAdminOrderNotification({
+    const notificationPayload = {
       orderNumber: newOrder.orderNumber,
       customerName: newOrder.customerName,
       customerPhone: newOrder.customerPhone,
       governorate: newOrder.governorate,
+      city: newOrder.city,
+      address: newOrder.address,
       storeName: storeName,
       totalAmount: newOrder.totalAmount,
       merchantProfit: newOrder.merchantProfit,
       itemsCount: newOrder.items.length,
-    });
+      itemsList: newOrder.items.map(item => ({
+        name: item.productName,
+        quantity: item.quantity,
+        price: item.sellingPrice,
+      })),
+    };
+
+    // إشعار صاحب المتجر في حال كان حسابه مربوطاً بمعرف تيليجرام
+    if (store && store.telegramChatId) {
+      await sendStoreOrderNotification(store.telegramChatId, notificationPayload);
+    }
+
+    // إشعار إدارة منصة وصلي
+    await sendAdminOrderNotification(notificationPayload);
   } catch (err) {
     console.warn('تعذر إرسال إشعار تيليجرام للطلب ولكن تم حفظ الطلب بنجاح:', err);
   }

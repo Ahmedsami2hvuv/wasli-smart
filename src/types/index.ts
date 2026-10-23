@@ -53,6 +53,8 @@ export interface Store {
   totalOrders?: number;
   balanceEarned?: number;
   balanceWithdrawn?: number;
+  telegramChatId?: string; // أيدي محادثة تيليجرام لصاحب المتجر لتلقي إشعارات الطلبات
+  telegramUsername?: string; // معرف يوزر تيليجرام لصاحب المتجر
   tags?: string[];
   createdAt?: string;
 }

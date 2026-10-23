@@ -49,6 +49,26 @@ export async function optimizeProductImage(inputBuffer: Buffer): Promise<Process
 }
 
 /**
+ * دوال مساعدة لجلب إعدادات بوت مستودع الصور وبوت إشعارات المتاجر
+ */
+export function getVaultBotToken(): string | undefined {
+  return process.env.TELEGRAM_VAULT_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+}
+
+export function getVaultChannelId(): string | undefined {
+  return process.env.TELEGRAM_VAULT_CHANNEL_ID || process.env.TELEGRAM_CHANNEL_ID;
+}
+
+export function getOrdersBotToken(): string | undefined {
+  return (
+    process.env.TELEGRAM_ORDERS_BOT_TOKEN ||
+    process.env.TELEGRAM_NOTIFICATIONS_BOT_TOKEN ||
+    process.env.TELEGRAM_VAULT_BOT_TOKEN ||
+    process.env.TELEGRAM_BOT_TOKEN
+  );
+}
+
+/**
  * رفع صورة واحدة أو مجموعة صور إلى قناة مستودع تيليجرام
  */
 export async function uploadImageToTelegramVault(
@@ -56,11 +76,11 @@ export async function uploadImageToTelegramVault(
   fileName: string = 'product.webp',
   caption?: string
 ): Promise<TelegramImageUploadResult> {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const channelId = process.env.TELEGRAM_CHANNEL_ID;
+  const botToken = getVaultBotToken();
+  const channelId = getVaultChannelId();
 
   if (!botToken || !channelId) {
-    throw new Error('إعدادات بوت أو قناة تيليجرام غير مكتملة في متغيرات البيئة.');
+    throw new Error('إعدادات بوت أو قناة مستودع صور تيليجرام غير مكتملة في متغيرات البيئة.');
   }
 
   const formData = new FormData();
@@ -101,9 +121,9 @@ export async function uploadImageToTelegramVault(
  * جلب مسار الصورة من تيليجرام لتحميلها عبر الخادم الوسيط
  */
 export async function getTelegramFileStream(fileId: string): Promise<{ buffer: Buffer; contentType: string }> {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const botToken = getVaultBotToken();
   if (!botToken) {
-    throw new Error('رمز البوت غير متوفر.');
+    throw new Error('رمز بوت مستودع الصور غير متوفر.');
   }
 
   // 1. الحصول على مسار الملف
@@ -131,37 +151,105 @@ export async function getTelegramFileStream(fileId: string): Promise<{ buffer: B
 }
 
 /**
- * إرسال إشعار فوري لمدير المنصة عند وصول طلب جديد
+ * بيانات إشعار الطلب
  */
-export async function sendAdminOrderNotification(orderData: {
+export interface OrderNotificationPayload {
   orderNumber: string;
   customerName: string;
   customerPhone: string;
   governorate: string;
+  city?: string;
+  address?: string;
   storeName: string;
   totalAmount: number;
   merchantProfit: number;
   itemsCount: number;
-}): Promise<boolean> {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  itemsList?: Array<{ name: string; quantity: number; price: number }>;
+}
+
+/**
+ * إرسال إشعار فوري لصاحب المتجر عند وصول طلب جديد لمتجره
+ */
+export async function sendStoreOrderNotification(
+  storeChatId: string,
+  orderData: OrderNotificationPayload
+): Promise<boolean> {
+  const botToken = getOrdersBotToken();
+  if (!botToken || !storeChatId) {
+    return false;
+  }
+
+  const itemsSummary = orderData.itemsList && orderData.itemsList.length > 0
+    ? orderData.itemsList.map(item => `- ${item.name} (عدد: ${item.quantity})`).join('\n')
+    : `عدد المنتجات: ${orderData.itemsCount}`;
+
+  const messageText = [
+    'طلب جديد وارد لمتجرك في منصة وصلي',
+    '==============================',
+    `رقم الطلب: ${orderData.orderNumber}`,
+    `اسم المتجر: ${orderData.storeName}`,
+    '------------------------------',
+    `اسم الزبون: ${orderData.customerName}`,
+    `المحافظة / العنوان: ${orderData.governorate}${orderData.city ? ' - ' + orderData.city : ''}`,
+    '------------------------------',
+    'المنتجات المطلوبة:',
+    itemsSummary,
+    '------------------------------',
+    `إجمالي مبلغ الطلب: ${orderData.totalAmount.toLocaleString('ar-IQ')} د.ع`,
+    `صافي أرباحك من هذا الطلب: ${orderData.merchantProfit.toLocaleString('ar-IQ')} د.ع`,
+    '==============================',
+    'تم تسجيل الطلب وبدء إجراءات التجهيز والتوصيل عبر المنصة.'
+  ].join('\n');
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: storeChatId,
+        text: messageText,
+      }),
+    });
+    const resData = await response.json();
+    return resData.ok === true;
+  } catch (err) {
+    console.error('خطأ في إرسال إشعار تيليجرام لمتجر:', err);
+    return false;
+  }
+}
+
+/**
+ * إرسال إشعار فوري لمدير المنصة عند وصول طلب جديد
+ */
+export async function sendAdminOrderNotification(orderData: OrderNotificationPayload): Promise<boolean> {
+  const botToken = getOrdersBotToken();
   const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
 
   if (!botToken || !adminChatId) {
     return false;
   }
 
-  const text = `📦 طلب جديد في منصة وصلي!
-━━━━━━━━━━━━━━
-🔹 رقم الطلب: ${orderData.orderNumber}
-🏪 المتجر: ${orderData.storeName}
-👤 الزبون: ${orderData.customerName}
-📞 الهاتف: ${orderData.customerPhone}
-📍 المحافظة: ${orderData.governorate}
-🛍️ عدد المنتجات: ${orderData.itemsCount}
-💰 الإجمالي: ${orderData.totalAmount.toLocaleString('ar-IQ')} د.ع
-📈 ربح المسوّق: ${orderData.merchantProfit.toLocaleString('ar-IQ')} د.ع
-━━━━━━━━━━━━━━
-يرجى الدخول إلى لوحة الإدارة لمراجعة وتأكيد الطلب.`;
+  const itemsSummary = orderData.itemsList && orderData.itemsList.length > 0
+    ? orderData.itemsList.map(item => `- ${item.name} (${item.quantity} × ${item.price.toLocaleString('ar-IQ')} د.ع)`).join('\n')
+    : `عدد المنتجات: ${orderData.itemsCount}`;
+
+  const messageText = [
+    'إشعار إداري: طلب جديد في منصة وصلي',
+    '==============================',
+    `رقم الطلب: ${orderData.orderNumber}`,
+    `المتجر المسوّق: ${orderData.storeName}`,
+    `الزبون: ${orderData.customerName}`,
+    `رقم الهاتف: ${orderData.customerPhone}`,
+    `العنوان: ${orderData.governorate} - ${orderData.city || ''} ${orderData.address || ''}`,
+    '------------------------------',
+    'المنتجات المطلوبة:',
+    itemsSummary,
+    '------------------------------',
+    `إجمالي المبلغ: ${orderData.totalAmount.toLocaleString('ar-IQ')} د.ع`,
+    `ربح المتجر: ${orderData.merchantProfit.toLocaleString('ar-IQ')} د.ع`,
+    '==============================',
+    'يرجى مراجعة لوحة الإدارة لمتابعة وتأكيد الطلب.'
+  ].join('\n');
 
   try {
     const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -169,7 +257,7 @@ export async function sendAdminOrderNotification(orderData: {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: adminChatId,
-        text: text,
+        text: messageText,
       }),
     });
     const resData = await response.json();
