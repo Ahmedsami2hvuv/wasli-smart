@@ -87,16 +87,23 @@ function StorePageContent() {
           }
         }
 
-        // 3. إذا توفر اسم من الرابط (Query Param) ولم نجد كائن متجر مكتمل
-        if (!foundStore && queryName) {
+        // تحديث اسم المتجر إذا كان الكائن المسترجع يحمل اسماً عاماً والرابط يحمل الاسم الحقيقي
+        if (foundStore && queryName && (foundStore.name === 'متجري الإلكتروني' || foundStore.name === 'متجر إلكتروني' || !foundStore.name)) {
+          foundStore.name = queryName;
+          foundStore.description = `أهلاً بكم في ${queryName}! تسوق أفضل المنتجات الأصلية بتوصيل مباشر لباب منزلك ودفع عند الاستلام.`;
+        }
+
+        // 3. إذا لم نجد كائن متجر مكتمل ننشئه فوراً بالاسم الحقيقي
+        if (!foundStore) {
+          const actualName = queryName || (code === 'w-arjad8q' ? 'متجر ارجد' : `متجر ${code}`);
           foundStore = {
             id: `store-${code}`,
-            name: queryName,
+            name: actualName,
             code: code,
             slug: code,
-            description: `أهلاً بكم في ${queryName}! تسوق أفضل المنتجات الأصلية بتوصيل مباشر لباب منزلك ودفع عند الاستلام.`,
-            city: 'العراق',
-            phone: '',
+            description: `أهلاً بكم في ${actualName}! تسوق أفضل المنتجات الأصلية بتوصيل مباشر لباب منزلك ودفع عند الاستلام.`,
+            city: searchParams?.get('city') || searchParams?.get('c') || 'العراق',
+            phone: searchParams?.get('phone') || searchParams?.get('p') || '',
             status: 'active',
             rating: 5.0,
             reviewsCount: 1,

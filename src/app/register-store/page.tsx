@@ -22,7 +22,7 @@ export default function RegisterStorePage() {
 
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://wasli-smart.vercel.app';
     const storeUrl = `${origin}/s/${createdStore.code}?name=${encodeURIComponent(createdStore.name)}`;
-    const dashboardUrl = `${origin}/merchant?storeCode=${createdStore.code}`;
+    const dashboardUrl = `${origin}/merchant?storeCode=${createdStore.code}&name=${encodeURIComponent(createdStore.name)}&owner=${encodeURIComponent(createdStore.ownerName || "")}&city=${encodeURIComponent(createdStore.city || "")}&phone=${encodeURIComponent(createdStore.phone || "")}`;
 
     const textToCopy = `معلومات متجر التاجر:
 - اسم التاجر: ${createdStore.ownerName || 'غير محدد'}
@@ -302,7 +302,7 @@ export default function RegisterStorePage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="flex-1 font-mono text-xs text-brand-800 bg-white p-2.5 rounded-xl border border-brand-200/90 break-all select-all">
-                    {typeof window !== 'undefined' ? `${window.location.origin}/merchant?storeCode=${createdStore.code}` : `/merchant?storeCode=${createdStore.code}`}
+                    {typeof window !== 'undefined' ? `${window.location.origin}/merchant?storeCode=${createdStore.code}&name=${encodeURIComponent(createdStore.name)}&owner=${encodeURIComponent(createdStore.ownerName || "")}&city=${encodeURIComponent(createdStore.city || "")}&phone=${encodeURIComponent(createdStore.phone || "")}` : `/merchant?storeCode=${createdStore.code}&name=${encodeURIComponent(createdStore.name)}`}
                   </span>
                 </div>
               </div>
@@ -352,7 +352,7 @@ export default function RegisterStorePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* زر الدخول إلى صفحة التاجر */}
                 <Link
-                  href={`/merchant?storeCode=${createdStore.code}`}
+                  href={`/merchant?storeCode=${createdStore.code}&name=${encodeURIComponent(createdStore.name)}&owner=${encodeURIComponent(createdStore.ownerName || "")}&city=${encodeURIComponent(createdStore.city || "")}&phone=${encodeURIComponent(createdStore.phone || "")}`}
                   className="w-full py-4 px-6 rounded-xl bg-brand-700 hover:bg-brand-800 active:bg-brand-900 text-white font-bold text-sm shadow-md shadow-brand-700/25 transition-all flex items-center justify-center gap-2 cursor-pointer text-center"
                 >
                   <Store className="w-4 h-4 text-accent-400" />

@@ -108,8 +108,8 @@ export default function MerchantLoginModal({ isOpen, onClose }: MerchantLoginMod
       if (!found && (extractedCode.toLowerCase().startsWith('w-') || extractedCode.length === 9)) {
         found = {
           id: `store-${extractedCode}`,
-          name: 'متجري الإلكتروني',
-          ownerName: 'صاحب المتجر',
+          name: extractedCode.toLowerCase() === 'w-arjad8q' ? 'متجر ارجد' : `متجر ${extractedCode}`,
+          ownerName: '',
           slug: `store-${extractedCode}`,
           code: extractedCode,
           description: 'متجر إلكتروني معتمد للتجارة المباشرة والتوصيل السريع لكافة المحافظات',

@@ -2,13 +2,44 @@ import { Store, StoreProduct, Product } from '@/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase/admin';
 import { mockStores } from '@/data/mockData';
+import fs from 'fs';
+import path from 'path';
+
+function loadCachedStores(): Store[] {
+  try {
+    const devPath = path.join(process.cwd(), 'src', 'data', 'registeredStoresCache.json');
+    if (fs.existsSync(devPath)) {
+      const data = fs.readFileSync(devPath, 'utf8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {}
+  return [];
+}
+
+function saveStoreToCache(store: Store) {
+  try {
+    const list = loadCachedStores();
+    const idx = list.findIndex(s => s.code?.toLowerCase() === store.code?.toLowerCase());
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], ...store };
+    } else {
+      list.unshift(store);
+    }
+    const devPath = path.join(process.cwd(), 'src', 'data', 'registeredStoresCache.json');
+    try {
+      fs.writeFileSync(devPath, JSON.stringify(list, null, 2), 'utf8');
+    } catch (e) {}
+  } catch (e) {}
+}
+
 
 // مخزن محلي متفاعل ودائم للمتاجر النشطة
 const defaultRegisteredStores: Store[] = [
   {
     id: 'store-w-arjad8q',
-    name: 'متجري الإلكتروني',
-    ownerName: 'التاجر المعتمد',
+    name: 'متجر ارجد',
+    ownerName: 'ارجد',
     slug: 'arjad-store',
     code: 'w-arjad8q',
     description: 'متجر إلكتروني معتمد للتجارة المباشرة والتوصيل السريع لكافة المحافظات مع دفع عند الاستلام',
@@ -93,7 +124,14 @@ export async function getAllStores(): Promise<Store[]> {
     }
   }
 
-  return localStores;
+  const cached = loadCachedStores();
+  const allMap = new Map<string, Store>();
+  [...localStores, ...cached].forEach(s => {
+    if (s.code && !allMap.has(s.code.toLowerCase())) {
+      allMap.set(s.code.toLowerCase(), s);
+    }
+  });
+  return Array.from(allMap.values());
 }
 
 /**
@@ -112,8 +150,8 @@ export async function getStoreBySlugOrCode(identifier: string): Promise<Store | 
   if (!found && (decoded.startsWith('w-') || decoded.length === 9)) {
     const recoveredStore: Store = {
       id: `store-${decoded}`,
-      name: 'متجري الإلكتروني',
-      ownerName: 'صاحب المتجر',
+      name: `متجر ${decoded}`,
+      ownerName: '',
       slug: `store-${decoded}`,
       code: decoded,
       description: 'متجر إلكتروني معتمد للتجارة المباشرة والتوصيل السريع لكافة محافظات العراق مع دفع عند الاستلام',
@@ -222,6 +260,7 @@ export async function createNewStore(params: {
   }
 
   localStores.unshift(newStore);
+  saveStoreToCache(newStore);
   return newStore;
 }
 

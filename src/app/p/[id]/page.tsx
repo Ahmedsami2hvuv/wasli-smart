@@ -254,24 +254,13 @@ function ProductDetailContent() {
                 </div>
               )}
 
-              {/* الوصف الترويجي التسويقي */}
-              <div className="mb-6 bg-gradient-to-br from-blue-50/50 to-sky-50/30 p-4 rounded-2xl border border-blue-100">
-                <div className="flex items-center gap-2 text-xs font-black text-brand-800 mb-2">
-                  <Sparkles className="w-4 h-4 text-accent-500" />
-                  <span>الوصف الترويجي والمميزات</span>
-                </div>
-                <p className="text-slate-700 text-xs sm:text-sm leading-relaxed whitespace-pre-line font-medium">
-                  {product.promoDescription || product.description}
-                </p>
-              </div>
-
-              {/* المواصفات الفنية إن وجدت */}
-              {product.specifications && (
-                <div className="mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
-                  <h3 className="text-xs font-black text-slate-800 mb-2.5 flex items-center gap-1.5">
-                    <span>المواصفات الفنية والتفاصيل:</span>
-                  </h3>
-                  {Array.isArray(product.specifications) ? (
+              {/* تفاصيل ومواصفات المنتج للزبون (بدون الوصف الترويجي المخصص للتجار فقط) */}
+              <div className="mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+                <h3 className="text-xs font-black text-slate-800 mb-2.5 flex items-center gap-1.5">
+                  <span>المواصفات الفنية وتفاصيل المنتج:</span>
+                </h3>
+                {product.specifications ? (
+                  Array.isArray(product.specifications) ? (
                     <ul className="space-y-1.5 text-xs text-slate-600">
                       {product.specifications.map((spec, sIdx) => (
                         <li key={sIdx} className="flex items-start gap-2">
@@ -284,9 +273,13 @@ function ProductDetailContent() {
                     <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
                       {product.specifications}
                     </div>
-                  )}
-                </div>
-              )}
+                  )
+                ) : (
+                  <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
+                    {product.description || 'منتج عالي الجودة متوفر للتسليم المباشر مع فحص عند الاستلام.'}
+                  </p>
+                )}
+              </div>
 
               {/* مميزات سريعة */}
               <div className="grid grid-cols-2 gap-3 mb-6 text-xs text-slate-600 bg-slate-50 p-3.5 rounded-xl border border-slate-200/60">

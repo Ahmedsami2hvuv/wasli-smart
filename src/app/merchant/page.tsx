@@ -63,6 +63,10 @@ function MerchantDashboardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const urlStoreCode = searchParams.get('storeCode');
+  const urlName = searchParams.get('name') || searchParams.get('n') || '';
+  const urlOwner = searchParams.get('owner') || searchParams.get('o') || '';
+  const urlCity = searchParams.get('city') || searchParams.get('c') || '';
+  const urlPhone = searchParams.get('phone') || searchParams.get('p') || '';
 
   const [currentStore, setCurrentStore] = useState<StoreType | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -144,17 +148,33 @@ function MerchantDashboardContent() {
           } catch (e) {}
         }
 
-        // إذا كان الكود كود متجر وصلي صالح w-[code] نعتمد المتجر فوراً
+        if (found) {
+          // تحديث بيانات المتجر إذا كانت تحمل قيماً افتراضية وكان الرابط يحمل البيانات الحقيقية
+          if (urlName && (found.name === 'متجري الإلكتروني' || found.name === 'متجر إلكتروني' || !found.name)) {
+            found.name = urlName;
+          }
+          if (urlOwner && (found.ownerName === 'التاجر المعتمد' || found.ownerName === 'صاحب المتجر' || found.ownerName === 'التاجر' || !found.ownerName)) {
+            found.ownerName = urlOwner;
+          }
+          if (urlCity && (found.city === 'العراق' || !found.city)) {
+            found.city = urlCity;
+          }
+          if (urlPhone && !found.phone) {
+            found.phone = urlPhone;
+          }
+        }
+
+        // إذا كان الكود كود متجر وصلي صالح w-[code] نعتمد المتجر فوراً بالبيانات الحقيقية
         if (!found && code && (code.toLowerCase().startsWith('w-') || code.length === 9)) {
           found = {
             id: `store-${code}`,
-            name: 'متجري الإلكتروني',
-            ownerName: 'التاجر',
+            name: urlName || (code === 'w-arjad8q' ? 'متجر ارجد' : `متجر ${code}`),
+            ownerName: urlOwner || '',
             slug: `store-${code}`,
             code: code,
-            description: 'متجر إلكتروني معتمد للتجارة المباشرة والتوصيل السريع لكافة المحافظات',
-            city: 'العراق',
-            phone: '',
+            description: urlName ? `متجر ${urlName} الإلكتروني للتسوق المباشر والتوصيل السريع والدفع عند الاستلام` : 'متجر إلكتروني معتمد للتجارة المباشرة والتوصيل السريع لكافة المحافظات',
+            city: urlCity || 'العراق',
+            phone: urlPhone || '',
             status: 'active',
             totalSales: 0,
             totalOrders: 0,
@@ -168,16 +188,35 @@ function MerchantDashboardContent() {
             isAbiAlkhaseeb: false,
             image: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80',
             logoUrl: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80',
-            location: 'العراق',
-            district: 'العراق',
+            location: urlCity || 'العراق',
+            district: urlCity || 'العراق',
             createdAt: new Date().toISOString(),
           };
         }
 
         if (found) {
           setCurrentStore(found);
+          setEditForm(prev => ({
+            ...prev,
+            name: found.name || prev.name,
+            ownerName: found.ownerName || prev.ownerName,
+            phone: found.phone || prev.phone,
+            city: found.city || prev.city,
+            description: found.description || prev.description,
+          }));
           if (typeof window !== 'undefined') {
             localStorage.setItem('wasli_current_store', JSON.stringify(found));
+            try {
+              const regStr = localStorage.getItem('wasli_stores_registry');
+              const reg = regStr ? JSON.parse(regStr) : [];
+              const idx = reg.findIndex((s: any) => s.code?.toLowerCase() === found.code?.toLowerCase());
+              if (idx >= 0) {
+                reg[idx] = { ...reg[idx], ...found };
+              } else {
+                reg.unshift(found);
+              }
+              localStorage.setItem('wasli_stores_registry', JSON.stringify(reg));
+            } catch (e) {}
           }
           // جلب طلبات هذا المتجر
           const ordersRes = await fetch(`/api/orders?storeId=${found.id}`);
@@ -305,8 +344,8 @@ function MerchantDashboardContent() {
       if (!found && (extractedCode.toLowerCase().startsWith('w-') || extractedCode.length === 9)) {
         found = {
           id: `store-${extractedCode}`,
-          name: 'متجري الإلكتروني',
-          ownerName: 'التاجر',
+          name: extractedCode.toLowerCase() === 'w-arjad8q' ? 'متجر ارجد' : `متجر ${extractedCode}`,
+          ownerName: '',
           slug: `store-${extractedCode}`,
           code: extractedCode,
           description: 'متجر إلكتروني معتمد للتجارة المباشرة والتوصيل السريع لكافة المحافظات',
