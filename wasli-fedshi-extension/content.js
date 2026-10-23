@@ -33,32 +33,49 @@
   }
 
   // محاولة النقر البرمجي على تبويب معين ثم قراءة محتواه
-  function readTabContent(tabName) {
+  async function readTabContentAsync(tabName) {
     try {
-      const allTabs = Array.from(document.querySelectorAll('button, [role="tab"], div, a, span'));
-      const targetTab = allTabs.find(el => {
+      const allElements = Array.from(document.querySelectorAll('button, [role="tab"], div, a, span'));
+      const targetTab = allElements.find(el => {
         const text = (el.textContent || '').trim();
         return text === tabName;
       });
 
       if (!targetTab) return '';
 
-      // النقر على التبويب لتنشيطه
+      // النقر على التبويب لتنشيطه في React
       targetTab.click();
+      await new Promise(r => setTimeout(r, 200));
 
-      // البحث عن الحاوية أو الفقرة التي تلي التبويب أو حاوية التبويبات
+      // إذا كان التبويب هو "وصف ترويجي"، نبحث عن زر "نسخ الوصف"
+      if (tabName.includes('ترويجي')) {
+        const copyBtn = Array.from(document.querySelectorAll('button, div, span')).find(el => {
+          return (el.textContent || '').trim().includes('نسخ الوصف');
+        });
+        if (copyBtn) {
+          let textContainer = copyBtn.previousElementSibling || copyBtn.parentElement;
+          if (textContainer) {
+            const raw = textContainer.innerText || textContainer.textContent || '';
+            const clean = raw.replace('نسخ الوصف', '').trim();
+            if (clean.length > 20) return clean;
+          }
+        }
+      }
+
+      // البحث في الحاوية النشطة الحالية
       let container = targetTab.closest('[role="tablist"]')?.parentElement || targetTab.parentElement?.parentElement;
       if (!container) container = targetTab.parentElement;
 
-      // جمع النصوص المفيدة وتجاهل نصوص الأزرار والأسعار
-      const paragraphs = Array.from(container.querySelectorAll('p, div, li')).filter(p => {
+      const paragraphs = Array.from(container.querySelectorAll('p, div, li, span')).filter(p => {
         const t = (p.textContent || '').trim();
         return t.length > 30 &&
                !t.includes('سعر الجملة') &&
                !t.includes('سعر الزبون') &&
                !t.includes('الربح:') &&
                !t.includes('اضف الى السلة') &&
-               !t.includes('احصائيات');
+               !t.includes('احصائيات') &&
+               !t.includes('نسخ الوصف') &&
+               p.children.length <= 4;
       });
 
       if (paragraphs.length > 0) {
@@ -74,7 +91,7 @@
   }
 
   // استخراج تفاصيل المنتج من صفحة فدشي بالاعتماد المباشر على هيكلية عناصر F12
-  function extractFedshiProductDetails() {
+  async function extractFedshiProductDetails() {
     try {
       // 1. استخراج اسم المنتج الحقيقي مباشرة من الوسم المكتشف في F12: <main> <h1>
       let title = '';
@@ -257,8 +274,8 @@
       }
 
       // 8. استخراج "الوصف الترويجي" و "المواصفات"
-      let promoDescription = readTabContent('وصف ترويجي');
-      let specifications = readTabContent('المواصفات');
+      let promoDescription = await readTabContentAsync('وصف ترويجي');
+      let specifications = await readTabContentAsync('المواصفات');
 
       if (!promoDescription || !specifications) {
         const contentParagraphs = Array.from(document.querySelectorAll('div, p')).filter(el => {
@@ -343,7 +360,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">مورد: فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.0.8</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.0.9</span>
           </div>
           <button type="button" class="wasli-close-btn" id="wasli-modal-close">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -382,14 +399,20 @@
     });
 
     // فتح المودال عند النقر على الزر العائم
-    floatingBtn.addEventListener('click', () => {
-      const data = extractFedshiProductDetails();
-      if (!data) {
-        alert('تعذر قراءة بيانات المنتج، تأكد أنك في صفحة منتج داخل فدشي.');
-        return;
+    floatingBtn.addEventListener('click', async () => {
+      const originalHtml = floatingBtn.innerHTML;
+      floatingBtn.innerHTML = '<span>جاري قراءة تفاصيل ووصف المنتج...</span>';
+      try {
+        const data = await extractFedshiProductDetails();
+        if (!data) {
+          alert('تعذر قراءة بيانات المنتج، تأكد أنك في صفحة منتج داخل فدشي.');
+          return;
+        }
+        renderModalData(data, modalOverlay);
+        modalOverlay.classList.add('wasli-active');
+      } finally {
+        floatingBtn.innerHTML = originalHtml;
       }
-      renderModalData(data, modalOverlay);
-      modalOverlay.classList.add('wasli-active');
     });
   }
 
@@ -491,12 +514,12 @@
 
       <!-- الوصف الترويجي والمواصفات الفنية -->
       <div class="wasli-field-group">
-        <label class="wasli-label">الوصف الترويجي التسويقي (يظهر للزبون):</label>
+        <label class="wasli-label">الوصف الترويجي التسويقي (خاص بالتاجر وقناة التيليجرام فقط):</label>
         <textarea class="wasli-input" id="wasli-inp-promo" rows="3" style="font-size: 11px; resize: vertical; line-height: 1.5;">${data.promoDescription}</textarea>
       </div>
 
       <div class="wasli-field-group">
-        <label class="wasli-label">المواصفات الفنية والتفاصيل (تظهر للزبون):</label>
+        <label class="wasli-label">المواصفات الفنية وتفاصيل المنتج (تظهر للزبون في المتجر):</label>
         <textarea class="wasli-input" id="wasli-inp-specs" rows="3" style="font-size: 11px; resize: vertical; line-height: 1.5;">${data.specifications}</textarea>
       </div>
 
