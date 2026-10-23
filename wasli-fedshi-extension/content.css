@@ -1,0 +1,376 @@
+/* أنماط وتنسيقات أداة سحب منتجات فدشي - منصة وصلي */
+
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
+
+.wasli-root {
+  font-family: 'Cairo', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  direction: rtl !important;
+  text-align: right !important;
+  box-sizing: border-box !important;
+}
+
+.wasli-root *, .wasli-root *::before, .wasli-root *::after {
+  box-sizing: border-box !important;
+  font-family: inherit !important;
+}
+
+/* الزر العائم في زاوية الشاشة */
+.wasli-floating-btn {
+  position: fixed !important;
+  bottom: 24px !important;
+  left: 24px !important;
+  z-index: 999999 !important;
+  background: linear-gradient(135deg, #1D4ED8 0%, #0284C7 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 9999px !important;
+  padding: 12px 20px !important;
+  box-shadow: 0 10px 25px -5px rgba(29, 78, 216, 0.4), 0 8px 10px -6px rgba(29, 78, 216, 0.2) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  cursor: pointer !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  user-select: none !important;
+}
+
+.wasli-floating-btn:hover {
+  transform: translateY(-3px) scale(1.02) !important;
+  box-shadow: 0 15px 30px -5px rgba(29, 78, 216, 0.5) !important;
+  background: linear-gradient(135deg, #1E40AF 0%, #0369A1 100%) !important;
+}
+
+.wasli-floating-btn svg {
+  width: 18px !important;
+  height: 18px !important;
+  flex-shrink: 0 !important;
+}
+
+/* النافذة المنبثقة لمراجعة المنتج والأسعار */
+.wasli-modal-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  background: rgba(15, 23, 42, 0.65) !important;
+  backdrop-filter: blur(6px) !important;
+  z-index: 1000000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 16px !important;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease !important;
+}
+
+.wasli-modal-overlay.wasli-active {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+.wasli-modal-card {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  width: 100% !important;
+  max-width: 620px !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+  border-radius: 20px !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+  border: 1px solid #e2e8f0 !important;
+  transform: scale(0.95);
+  transition: transform 0.25s ease !important;
+}
+
+.wasli-modal-overlay.wasli-active .wasli-modal-card {
+  transform: scale(1) !important;
+}
+
+.wasli-modal-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 18px 24px !important;
+  background: #f8fafc !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.wasli-brand-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  color: #1e40af !important;
+}
+
+.wasli-badge-source {
+  background: #e0f2fe !important;
+  color: #0369a1 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  padding: 3px 8px !important;
+  border-radius: 6px !important;
+}
+
+.wasli-close-btn {
+  background: none !important;
+  border: none !important;
+  cursor: pointer !important;
+  color: #64748b !important;
+  padding: 6px !important;
+  border-radius: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.15s ease !important;
+}
+
+.wasli-close-btn:hover {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+.wasli-modal-body {
+  padding: 20px 24px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 18px !important;
+}
+
+/* بطاقة ملخص المنتج المستخرج */
+.wasli-product-summary {
+  display: flex !important;
+  gap: 16px !important;
+  background: #f8fafc !important;
+  padding: 14px !important;
+  border-radius: 14px !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.wasli-thumb {
+  width: 76px !important;
+  height: 76px !important;
+  border-radius: 10px !important;
+  object-fit: cover !important;
+  border: 1px solid #cbd5e1 !important;
+  background: #ffffff !important;
+  flex-shrink: 0 !important;
+}
+
+.wasli-summary-info {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  flex-grow: 1 !important;
+}
+
+.wasli-summary-name {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  line-height: 1.4 !important;
+}
+
+.wasli-codes-row {
+  display: flex !important;
+  gap: 12px !important;
+  font-size: 11px !important;
+  color: #64748b !important;
+}
+
+.wasli-code-pill {
+  background: #e2e8f0 !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-weight: 600 !important;
+  color: #334155 !important;
+}
+
+/* جدول الحسابات والأرباح الذكية */
+.wasli-finance-box {
+  background: #f0fdf4 !important;
+  border: 1px solid #bbf7d0 !important;
+  border-radius: 14px !important;
+  padding: 14px 16px !important;
+}
+
+.wasli-finance-title {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #166534 !important;
+  margin-bottom: 10px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.wasli-finance-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 10px !important;
+}
+
+.wasli-finance-item {
+  background: #ffffff !important;
+  padding: 8px 10px !important;
+  border-radius: 8px !important;
+  border: 1px solid #dcfce7 !important;
+}
+
+.wasli-finance-label {
+  font-size: 11px !important;
+  color: #64748b !important;
+  margin-bottom: 2px !important;
+}
+
+.wasli-finance-val {
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
+}
+
+.wasli-highlight-green {
+  color: #15803d !important;
+}
+
+.wasli-highlight-blue {
+  color: #1d4ed8 !important;
+}
+
+/* حقول الأسعار القابلة للتعديل */
+.wasli-inputs-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 12px !important;
+}
+
+.wasli-field-group {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+
+.wasli-label {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #334155 !important;
+}
+
+.wasli-input, .wasli-select {
+  padding: 9px 12px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+  outline: none !important;
+  color: #0f172a !important;
+  background: #ffffff !important;
+  transition: border-color 0.15s ease !important;
+}
+
+.wasli-input:focus, .wasli-select:focus {
+  border-color: #0284c7 !important;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15) !important;
+}
+
+/* عناصر الألوان المكتشفة */
+.wasli-colors-preview {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  margin-top: 4px !important;
+}
+
+.wasli-color-tag {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  background: #f1f5f9 !important;
+  padding: 4px 10px !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.wasli-color-tag img {
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 4px !important;
+  object-fit: cover !important;
+}
+
+/* تذييل المودال وأزرار الإجراء */
+.wasli-modal-footer {
+  padding: 16px 24px !important;
+  background: #f8fafc !important;
+  border-top: 1px solid #e2e8f0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+.wasli-submit-btn {
+  background: #1d4ed8 !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 12px !important;
+  padding: 11px 22px !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  transition: all 0.2s ease !important;
+}
+
+.wasli-submit-btn:hover {
+  background: #1e40af !important;
+}
+
+.wasli-submit-btn:disabled {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+}
+
+.wasli-cancel-btn {
+  background: #ffffff !important;
+  color: #475569 !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  padding: 11px 18px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+}
+
+.wasli-cancel-btn:hover {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+/* شارة الحالة والنجاح */
+.wasli-status-bar {
+  padding: 10px 14px !important;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.wasli-status-bar.success {
+  background: #ecfdf5 !important;
+  color: #065f46 !important;
+  border: 1px solid #a7f3d0 !important;
+}
+
+.wasli-status-bar.error {
+  background: #fef2f2 !important;
+  color: #991b1b !important;
+  border: 1px solid #fecaca !important;
+}

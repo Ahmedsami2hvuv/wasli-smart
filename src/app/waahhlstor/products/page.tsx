@@ -513,47 +513,67 @@ export default function AdminProductsPage() {
               <table className="w-full text-right text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-400 uppercase">
-                    <th className="py-3 px-3">المنتج</th>
+                    <th className="py-3 px-3">المنتج والمصدر</th>
                     <th className="py-3 px-3">التصنيف</th>
-                    <th className="py-3 px-3">سعر الجملة</th>
-                    <th className="py-3 px-3">سعر المنصة</th>
-                    <th className="py-3 px-3">الحدود المسموحة</th>
-                    <th className="py-3 px-3">المخزون</th>
+                    <th className="py-3 px-3">تكلفة المورد</th>
+                    <th className="py-3 px-3">سعر الجملة (للمسوق)</th>
+                    <th className="py-3 px-3">ربح المنصة الصافي</th>
+                    <th className="py-3 px-3">حدود بيع الزبون</th>
+                    <th className="py-3 px-3">المخزون والخيارات</th>
                     <th className="py-3 px-3">الحالة</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {products.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-3">
-                        <div className="flex items-center gap-3">
-                          <img src={p.image} alt={p.name} className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0" />
-                          <div>
-                            <div className="font-bold text-slate-900 line-clamp-1">{p.name}</div>
-                            <div className="text-[10px] text-slate-400 font-mono">{p.id}</div>
+                  {products.map((p) => {
+                    const platformProfit = (p.wholesalePriceIqd || 0) - (p.supplierPriceIqd || 0);
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3.5 px-3">
+                          <div className="flex items-center gap-3">
+                            <img src={p.image} alt={p.name} className="w-11 h-11 rounded-xl object-cover border border-slate-200 shrink-0" />
+                            <div>
+                              <div className="font-bold text-slate-900 line-clamp-1">{p.name}</div>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                {p.supplierCode ? (
+                                  <span className="bg-sky-50 text-sky-700 text-[10px] font-bold px-1.5 py-0.5 rounded border border-sky-200">
+                                    فدشي: {p.supplierCode}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 font-mono">{p.id}</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-3 text-slate-600 font-medium">{p.category}</td>
-                      <td className="py-3.5 px-3 font-semibold text-slate-700">
-                        {p.wholesalePriceIqd?.toLocaleString('ar-IQ')} د.ع
-                      </td>
-                      <td className="py-3.5 px-3 font-black text-brand-800">
-                        {p.platformPriceIqd?.toLocaleString('ar-IQ')} د.ع
-                      </td>
-                      <td className="py-3.5 px-3 text-slate-500 font-mono">
-                        {p.minPriceIqd?.toLocaleString('ar-IQ')} - {p.maxPriceIqd?.toLocaleString('ar-IQ')} د.ع
-                      </td>
-                      <td className="py-3.5 px-3">
-                        <span className="font-bold text-slate-800">{p.stockQuantity || 100}</span> قطعة
-                      </td>
-                      <td className="py-3.5 px-3">
-                        <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2 py-0.5 rounded-full">
-                          منشور ومتاح
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="py-3.5 px-3 text-slate-600 font-medium">{p.category}</td>
+                        <td className="py-3.5 px-3 font-semibold text-slate-600">
+                          {p.supplierPriceIqd ? `${p.supplierPriceIqd.toLocaleString('ar-IQ')} د.ع` : '-'}
+                        </td>
+                        <td className="py-3.5 px-3 font-bold text-brand-800">
+                          {p.wholesalePriceIqd?.toLocaleString('ar-IQ')} د.ع
+                        </td>
+                        <td className="py-3.5 px-3 font-black text-emerald-700">
+                          {p.supplierPriceIqd ? `+${platformProfit.toLocaleString('ar-IQ')} د.ع` : '-'}
+                        </td>
+                        <td className="py-3.5 px-3 text-slate-600 font-mono text-[11px]">
+                          {p.minPriceIqd?.toLocaleString('ar-IQ')} - {p.maxPriceIqd?.toLocaleString('ar-IQ')} د.ع
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <div className="font-bold text-slate-800">{p.stockQuantity || 50} قطعة</div>
+                          {p.colors && p.colors.length > 0 && (
+                            <div className="text-[10px] text-slate-400 mt-0.5">
+                              {p.colors.length} ألوان ({p.colors.map(c => c.name).slice(0, 2).join('، ')}{p.colors.length > 2 ? '...' : ''})
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-1 rounded-full">
+                            منشور ومتاح
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

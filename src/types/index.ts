@@ -94,10 +94,17 @@ export interface Product {
   shortDescription?: string;
   priceIqd: number; // السعر الظاهر للزبون
   originalPriceIqd?: number;
-  wholesalePriceIqd?: number; // سعر الجملة للمنصة
+  wholesalePriceIqd?: number; // سعر الجملة للمنصة (الذي يشتري به المسوق)
   platformPriceIqd?: number; // سعر المنصة الأساسي
   minPriceIqd?: number; // الحد الأدنى للبيع
   maxPriceIqd?: number; // الحد الأعلى للبيع
+  supplierPriceIqd?: number; // سعر التكلفة من المورد (مثل فدشي)
+  supplierCode?: string; // كود المنتج في منصة المورد (مثل AFRCX)
+  supplierSku?: string; // رمز النوع أو المتغير في منصة المورد
+  supplierSource?: string; // اسم منصة التوريد (مثل 'fedshi')
+  colors?: { name: string; image?: string; stock?: number }[];
+  variants?: { id?: string; name: string; sku?: string; price?: number; stock?: number; image?: string }[];
+  videoUrl?: string;
   image: string;
   images?: ProductImage[];
   category: string;

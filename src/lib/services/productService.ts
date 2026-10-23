@@ -94,6 +94,13 @@ export async function createPlatformProduct(productData: {
   platformPriceIqd: number;
   minPriceIqd: number;
   maxPriceIqd: number;
+  supplierPriceIqd?: number;
+  supplierCode?: string;
+  supplierSku?: string;
+  supplierSource?: string;
+  colors?: { name: string; image?: string; stock?: number }[];
+  variants?: { id?: string; name: string; sku?: string; price?: number; stock?: number; image?: string }[];
+  videoUrl?: string;
   stockQuantity: number;
   image: string;
   images?: string[];
@@ -116,11 +123,25 @@ export async function createPlatformProduct(productData: {
     platformPriceIqd: productData.platformPriceIqd,
     minPriceIqd: productData.minPriceIqd,
     maxPriceIqd: productData.maxPriceIqd,
+    supplierPriceIqd: productData.supplierPriceIqd,
+    supplierCode: productData.supplierCode,
+    supplierSku: productData.supplierSku,
+    supplierSource: productData.supplierSource || 'manual',
+    colors: productData.colors,
+    variants: productData.variants,
+    videoUrl: productData.videoUrl,
     stockQuantity: productData.stockQuantity,
     isStockTracked: true,
     isAvailable: true,
     status: 'published',
     image: productData.image,
+    images: productData.images?.map((url, i) => ({
+      id: `img-${Date.now()}-${i}`,
+      productId: `prod-${Date.now()}`,
+      localUrl: url,
+      isPrimary: i === 0,
+      sortOrder: i,
+    })),
     category: productData.category,
     categoryId: productData.categoryId,
     subcategory: productData.subcategory,
@@ -128,6 +149,38 @@ export async function createPlatformProduct(productData: {
     brand: productData.brand,
     createdAt: new Date().toISOString(),
   };
+
+  // محاولة الإدخال في سوبابيس إن كان مهيأ
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from('products').insert({
+        id: newProduct.id,
+        title: newProduct.name,
+        slug: newProduct.slug,
+        description: newProduct.description,
+        short_description: newProduct.shortDescription,
+        wholesale_price: newProduct.wholesalePriceIqd,
+        platform_price: newProduct.platformPriceIqd,
+        min_price: newProduct.minPriceIqd,
+        max_price: newProduct.maxPriceIqd,
+        stock_quantity: newProduct.stockQuantity,
+        category_id: newProduct.categoryId || null,
+        status: 'published',
+        metadata: {
+          supplierPriceIqd: newProduct.supplierPriceIqd,
+          supplierCode: newProduct.supplierCode,
+          supplierSku: newProduct.supplierSku,
+          supplierSource: newProduct.supplierSource,
+          colors: newProduct.colors,
+          variants: newProduct.variants,
+          videoUrl: newProduct.videoUrl,
+          images: productData.images,
+        }
+      });
+    } catch (dbErr) {
+      console.warn('تعذر الحفظ المباشر في سوبابيس، تم الاكتفاء بالحفظ المحلي النشط:', dbErr);
+    }
+  }
 
   localProducts.unshift(newProduct);
   return newProduct;

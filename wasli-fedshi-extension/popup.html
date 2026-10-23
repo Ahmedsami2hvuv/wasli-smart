@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>إعدادات مستورد فدشي - منصة وصلي</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-card">
+    <div class="popup-header">
+      <div class="brand">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1D4ED8" stroke-width="2.5">
+          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <path d="M16 10a4 4 0 0 1-8 0"></path>
+        </svg>
+        <div class="brand-text">
+          <h1>منصة وصلي</h1>
+          <p>مستورد منتجات فدشي الذكي</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="popup-body">
+      <div class="field-box">
+        <label for="serverUrl">رابط خادم منصة وصلي</label>
+        <input type="text" id="serverUrl" placeholder="http://localhost:3000 أو رابط فيرسل" value="http://localhost:3000">
+        <div class="hint">مثال للموقع المباشر: https://wasli-smart.vercel.app</div>
+      </div>
+
+      <div class="action-row">
+        <button type="button" class="btn-primary" id="saveBtn">حفظ الرابط</button>
+        <button type="button" class="btn-secondary" id="testBtn">فحص الاتصال</button>
+      </div>
+
+      <div id="statusAlert" class="status-box"></div>
+
+      <div class="info-card">
+        <h3>معادلة الأسعار والأرباح المعتمدة:</h3>
+        <ul>
+          <li><strong>تكلفة فدشي:</strong> سعر الجملة الأصلي للمورد.</li>
+          <li><strong>جملة وصلي:</strong> سعر الشراء المتاح لمسوقيك.</li>
+          <li><strong>ربحك كمدير:</strong> (جملة وصلي - تكلفة فدشي) تلقائياً.</li>
+          <li><strong>بيع الزبون:</strong> يتراوح بين 45,000 و 55,000 د.ع.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "وصلي - سحب منتجات فدشي الذكي",
+  "version": "1.0.0",
+  "description": "إضافة ذكية لنقل واستيراد منتجات فدشي بضغطة زر إلى منصة وصلي مع ضبط معادلات الأرباح وسحب الألوان والخيارات تلقائياً.",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://web.fedshi.com/*",
+    "http://localhost:3000/*",
+    "http://127.0.0.1:3000/*",
+    "https://*.vercel.app/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "إعدادات منصة وصلي"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://web.fedshi.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
