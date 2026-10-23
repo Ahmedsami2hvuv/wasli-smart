@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPlatformProduct } from '@/lib/services/productService';
 import { findOrCreateCategoryAndSubcategory } from '@/lib/services/categoryService';
+import { publishProductToTelegramChannel } from '@/lib/telegram/vault';
 
 // دعم طلبات CORS المسبقة للمتصفح وإضافة كروم
 export async function OPTIONS() {
@@ -137,11 +138,31 @@ export async function POST(request: NextRequest) {
     const platformProfit = wholesalePrice - supplierCost;
     const merchantProfitRange = `${minPrice - wholesalePrice} - ${maxPrice - wholesalePrice}`;
 
+    // نشر المنتج المستورد فوراً في قناة تيليجرام للمسوقين
+    let telegramResult = null;
+    try {
+      telegramResult = await publishProductToTelegramChannel({
+        name: product.name,
+        image: primaryImage,
+        wholesalePriceIqd: wholesalePrice,
+        minPriceIqd: minPrice,
+        maxPriceIqd: maxPrice,
+        promoDescription: promoDescription || description || name,
+        specifications: specifications,
+        supplierCode: fedshiCode || '',
+        category: finalCategoryName,
+        productId: product.id,
+      });
+    } catch (tgErr) {
+      console.warn('تعذر النشر في تيليجرام:', tgErr);
+    }
+
     return NextResponse.json(
       { 
         success: true, 
         message: 'تم استيراد وحفظ منتج فدشي بنجاح في منصة وصلي',
         product,
+        telegramBroadcast: telegramResult,
         financials: {
           supplierCost,
           wholesalePrice,

@@ -322,7 +322,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">مورد: فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.0.6 (F12)</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.0.7</span>
           </div>
           <button type="button" class="wasli-close-btn" id="wasli-modal-close">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -571,17 +571,33 @@
         const result = await response.json();
 
         if (response.ok && result.success) {
+          const prodId = result.product?.id || '';
+          const previewUrl = prodId ? `${targetUrl}/p/${prodId}` : targetUrl;
+          const adminUrl = `${targetUrl}/waahhlstor/products`;
+
+          const tgMsg = result.telegramBroadcast?.success 
+            ? `<div style="color: #059669; font-size: 11px; font-weight: 700;">تم نشر المنتج في قناة تيليجرام بنجاح</div>`
+            : (result.telegramBroadcast?.error 
+                ? `<div style="color: #d97706; font-size: 10px;">ملاحظة البوت: ${result.telegramBroadcast.error}</div>` 
+                : '');
+
           statusBox.innerHTML = `
-            <div class="wasli-status-bar success" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+            <div class="wasli-status-bar success" style="flex-direction: column; align-items: flex-start; gap: 8px;">
               <div style="display: flex; align-items: center; gap: 6px;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
-                <span>تم استيراد وحفظ المنتج في منصة وصلي بنجاح! ربح المنصة الصافي: ${result.financials.platformProfit.toLocaleString()} د.ع</span>
+                <span>تم استيراد وحفظ المنتج في منصة وصلي بنجاح! ربحك الصافي كمدير: ${result.financials?.platformProfit?.toLocaleString() || '3,000'} د.ع</span>
               </div>
-              <a href="https://wasli-smart.vercel.app/waahhlstor/products" target="_blank" style="color: #065f46; font-weight: 800; text-decoration: underline; font-size: 11px;">
-                فتح صفحة المنتجات في لوحة الإدارة لرؤية المنتج المستورد
-              </a>
+              ${tgMsg}
+              <div style="display: flex; gap: 8px; width: 100%; margin-top: 4px;">
+                <a href="${previewUrl}" target="_blank" style="flex: 1; text-align: center; background: #0284c7; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 800; text-decoration: none; font-size: 11px;">
+                  معاينة صفحة المنتج للزبون
+                </a>
+                <a href="${adminUrl}" target="_blank" style="flex: 1; text-align: center; background: #1e40af; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 800; text-decoration: none; font-size: 11px;">
+                  لوحة إدارة المنتجات للمدير
+                </a>
+              </div>
             </div>
           `;
           confirmBtn.innerHTML = `<span>تم الحفظ في منصتك بنجاح</span>`;
@@ -589,7 +605,7 @@
             overlay.classList.remove('wasli-active');
             confirmBtn.disabled = false;
             confirmBtn.innerHTML = `<span>تأكيد ونقل المنتج إلى منصتي الآن</span>`;
-          }, 3000);
+          }, 4500);
         } else {
           throw new Error(result.message || 'حدث خطأ غير معروف في السيرفر');
         }

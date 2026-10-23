@@ -267,3 +267,79 @@ export async function sendAdminOrderNotification(orderData: OrderNotificationPay
     return false;
   }
 }
+
+
+/**
+ * نشر المنتج المستورد تلقائياً في قناة تيليجرام
+ */
+export async function publishProductToTelegramChannel(product: {
+  name: string;
+  image?: string;
+  wholesalePriceIqd: number;
+  minPriceIqd: number;
+  maxPriceIqd: number;
+  promoDescription?: string;
+  specifications?: string;
+  supplierCode?: string;
+  category?: string;
+  productId?: string;
+}): Promise<{ success: boolean; messageId?: number; error?: string }> {
+  const botToken = getVaultBotToken() || getOrdersBotToken();
+  const channelId = getVaultChannelId() || process.env.TELEGRAM_ADMIN_CHAT_ID;
+
+  if (!botToken || !channelId) {
+    return { 
+      success: false, 
+      error: 'متغيرات بيئة بوت تيليجرام أو معرّف القناة غير معينة في فيرسل (TELEGRAM_BOT_TOKEN أو TELEGRAM_CHANNEL_ID)' 
+    };
+  }
+
+  const caption = [
+    `منتج جديد متاح للتسويق: ${product.name}`,
+    '==============================',
+    `القسم: ${product.category || 'عام'}`,
+    product.supplierCode ? `كود المورد: ${product.supplierCode}` : '',
+    '------------------------------',
+    `سعر الجملة للمسوق: ${product.wholesalePriceIqd.toLocaleString('ar-IQ')} د.ع`,
+    `سعر البيع المقترح للزبون: ${product.minPriceIqd.toLocaleString('ar-IQ')} - ${product.maxPriceIqd.toLocaleString('ar-IQ')} د.ع`,
+    `هامش ربحك المتوقع: ${(product.minPriceIqd - product.wholesalePriceIqd).toLocaleString('ar-IQ')} - ${(product.maxPriceIqd - product.wholesalePriceIqd).toLocaleString('ar-IQ')} د.ع`,
+    '------------------------------',
+    product.promoDescription ? `الوصف والمميزات:\n${product.promoDescription.slice(0, 350)}` : '',
+    '==============================',
+    'متوفر الآن للطلب والشحن المباشر لكافة محافظات العراق والدفع عند الاستلام.'
+  ].filter(Boolean).join('\n');
+
+  try {
+    if (product.image && (product.image.startsWith('http://') || product.image.startsWith('https://'))) {
+      const photoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: channelId,
+          photo: product.image,
+          caption: caption.slice(0, 1024),
+        }),
+      });
+
+      const photoData = await photoRes.json();
+      if (photoData.ok) {
+        return { success: true, messageId: photoData.result?.message_id };
+      }
+    }
+
+    const msgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: channelId,
+        text: caption,
+      }),
+    });
+
+    const msgData = await msgRes.json();
+    return { success: msgData.ok === true, messageId: msgData.result?.message_id, error: msgData.description };
+  } catch (err: any) {
+    console.error('خطأ في نشر المنتج على قناة تيليجرام:', err);
+    return { success: false, error: err.message };
+  }
+}

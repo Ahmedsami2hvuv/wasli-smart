@@ -14,7 +14,8 @@ import {
   Layers,
   Image as ImageIcon,
   CheckCircle2,
-  Trash2
+  Trash2,
+  ExternalLink
 } from 'lucide-react';
 import Link from 'next/link';
 import { Product, Category, Subcategory } from '@/types';
@@ -521,6 +522,7 @@ export default function AdminProductsPage() {
                     <th className="py-3 px-3">حدود بيع الزبون</th>
                     <th className="py-3 px-3">المخزون والخيارات</th>
                     <th className="py-3 px-3">الحالة</th>
+                    <th className="py-3 px-3">رابط المنتج</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -570,6 +572,16 @@ export default function AdminProductsPage() {
                           <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-1 rounded-full">
                             منشور ومتاح
                           </span>
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <Link
+                            href={`/p/${p.id}`}
+                            target="_blank"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 font-bold rounded-lg text-[11px] border border-brand-200 transition-colors"
+                          >
+                            <span>معاينة</span>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </Link>
                         </td>
                       </tr>
                     );
