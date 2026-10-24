@@ -112,6 +112,31 @@
   box-shadow: 0 20px 42px -6px rgba(22, 163, 74, 0.55) !important;
 }
 
+/* وضع التأكيد الفوري للزر الرئيسي (عند النقر عليه ليصبح هو نفسه زر التأكيد) */
+.wasli-floating-btn.wasli-confirm-state {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+  border: 2.5px solid rgba(255, 255, 255, 0.5) !important;
+  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.35), 0 20px 45px -6px rgba(22, 163, 74, 0.65) !important;
+  animation: wasliConfirmPulse 1.8s infinite ease-in-out !important;
+  cursor: pointer !important;
+}
+
+.wasli-floating-btn.wasli-confirm-state:hover {
+  background: linear-gradient(135deg, #15803d 0%, #166534 100%) !important;
+  box-shadow: 0 0 0 6px rgba(22, 163, 74, 0.45), 0 24px 50px -6px rgba(22, 163, 74, 0.75) !important;
+}
+
+@keyframes wasliConfirmPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.35), 0 20px 45px -6px rgba(22, 163, 74, 0.65);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(22, 163, 74, 0.45), 0 24px 50px -6px rgba(22, 163, 74, 0.75);
+    transform: scale(1.025);
+  }
+}
+
 /* مقبض التكبير والتصغير المشترك للزرين */
 .wasli-resize-handle {
   position: absolute !important;

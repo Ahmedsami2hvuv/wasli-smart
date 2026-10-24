@@ -985,7 +985,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.8</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.9</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -1023,6 +1023,10 @@
     container.appendChild(modalOverlay);
     document.body.appendChild(container);
 
+    // إلغاء أي زر عائم قديم إن وجد
+    const oldDraggable = document.getElementById('wasli-btn-confirm-draggable');
+    if (oldDraggable) oldDraggable.remove();
+
     // فحص ما إذا كان المنتج الحالي في هذه الصفحة مسحوباً ومرفوعاً مسبقاً في منصة وصلي
     const pathParts = window.location.pathname.split('/').filter(Boolean);
     const pageCode = pathParts[pathParts.length - 1] || '';
@@ -1034,89 +1038,60 @@
       });
     }
 
-    // إنشاء زر السحب العائم المربع والقابل للتحريك والتكبير داخل المودال
-    const draggableConfirmBtn = document.createElement('button');
-    draggableConfirmBtn.type = 'button';
-    draggableConfirmBtn.className = 'wasli-draggable-btn';
-    draggableConfirmBtn.id = 'wasli-btn-confirm-draggable';
-    draggableConfirmBtn.title = 'اسحب هذا الزر لأي مكان، أو كبره من الزاوية - سيتم حفظ مكانه وحجمه تلقائياً!';
-    draggableConfirmBtn.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-        <polyline points="7 10 12 15 17 10"></polyline>
-        <line x1="12" y1="15" x2="12" y2="3"></line>
-      </svg>
-      <span class="wasli-draggable-title">تأكيد وسحب</span>
-      <span class="wasli-draggable-badge">للمنصة فوراً</span>
-    `;
-    draggableConfirmBtn.style.display = 'none';
-    modalOverlay.appendChild(draggableConfirmBtn);
-
-    // دالة محاذاة زر تأكيد السحب ليكون مباشرة فوق زر استيراد المنتج الأول
-    function alignConfirmBtnAboveFloatingBtn() {
-      if (!floatingBtn || !draggableConfirmBtn) return;
-      const floatRect = floatingBtn.getBoundingClientRect();
-      const confirmW = draggableConfirmBtn.offsetWidth || 130;
-      const confirmH = draggableConfirmBtn.offsetHeight || 130;
-
-      // محاذاة أفقية متطابقة مع منتصف زر الاستيراد
-      let targetLeft = floatRect.left + (floatRect.width - confirmW) / 2;
-      // موضع فوق زر الاستيراد مباشرة مع مسافة 14 بكسل
-      let targetTop = floatRect.top - confirmH - 14;
-
-      // إذا كان الموضع خارج الشاشة من الأعلى، نضعه أسفل زر الاستيراد
-      if (targetTop < 15) {
-        targetTop = floatRect.bottom + 14;
-      }
-
-      const maxL = Math.max(10, window.innerWidth - confirmW - 10);
-      const maxT = Math.max(10, window.innerHeight - confirmH - 10);
-
-      targetLeft = Math.max(10, Math.min(targetLeft, maxL));
-      targetTop = Math.max(10, Math.min(targetTop, maxT));
-
-      draggableConfirmBtn.style.left = `${Math.round(targetLeft)}px`;
-      draggableConfirmBtn.style.top = `${Math.round(targetTop)}px`;
-      draggableConfirmBtn.style.right = 'auto';
-      draggableConfirmBtn.style.bottom = 'auto';
-    }
-
-    // تفعيل السحب والتكبير وحفظ الموقع والحجم لزر التأكيد داخل المودال (فوق زر الاستيراد الأول)
-    makeElementDraggableAndResizable(draggableConfirmBtn, {
-      posKey: 'wasli_confirm_btn_pos',
-      sizeKey: 'wasli_confirm_btn_size',
-      defaultPos: (w, h) => {
-        const floatRect = floatingBtn.getBoundingClientRect();
-        let left = floatRect.left + (floatRect.width - (w || 130)) / 2;
-        let top = floatRect.top - (h || 130) - 14;
-        if (top < 15) top = floatRect.bottom + 14;
-        return {
-          left: Math.max(10, Math.min(left, window.innerWidth - (w || 130) - 10)),
-          top: Math.max(10, Math.min(top, window.innerHeight - (h || 130) - 10))
-        };
-      },
-      defaultSize: { width: 130, height: 130 },
-      minWidth: 90,
-      minHeight: 90,
-      maxWidth: 400,
-      maxHeight: 400,
-      onClick: () => executeBackgroundImport(draggableConfirmBtn),
-    });
+    // إدارة حالة زر التأكيد التفاعلي المباشر (نفس الزر يتحول لزر التأكيد)
+    let isConfirmMode = false;
+    let activeExecuteImport = null;
 
     // ربط أحداث الإغلاق
     const closeModal = () => {
       modalOverlay.classList.remove('wasli-active');
-      draggableConfirmBtn.style.display = 'none';
+      isConfirmMode = false;
+      floatingBtn.classList.remove('wasli-confirm-state');
+
+      // إعادة الزر لشكله الطبيعي
+      const pathCode = (window.location.pathname.split('/').pop() || '').trim();
+      if (pathCode && importedCodesSet.has(pathCode)) {
+        updateFloatingButtonToImported(floatingBtn);
+      } else {
+        floatingBtn.classList.remove('wasli-already-imported');
+        const contentBox = floatingBtn.querySelector('.wasli-btn-content-box');
+        if (contentBox) {
+          contentBox.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <div class="wasli-btn-text-group">
+              <span class="wasli-btn-main-text">استيراد المنتج إلى وصلي</span>
+              <span class="wasli-btn-sub-text">انقر للسحب والتسعير الذكي</span>
+            </div>
+          `;
+        }
+      }
     };
+
     modalOverlay.querySelector('#wasli-modal-close').addEventListener('click', closeModal);
     modalOverlay.querySelector('#wasli-btn-cancel').addEventListener('click', closeModal);
     modalOverlay.addEventListener('click', (e) => {
       if (e.target === modalOverlay) closeModal();
     });
 
-    // فتح المودال عند النقر على الزر العائم (فقط في حال لم يكن سحباً)
-    const handleOpenModal = async () => {
-      const isAlready = floatingBtn.classList.contains('wasli-already-imported');
+    // معالج النقر المباشر على الزر العائم:
+    // النقرة الأولى تفتح النافذة وتجعل الزر نفسه زر التأكيد.
+    // النقرة الثانية على نفس الزر تؤكد وتنقل المنتج فوراً!
+    const handleFloatingBtnAction = async () => {
+      // إذا كان الزر في وضع التأكيد: ينفذ السحب فوراً!
+      if (isConfirmMode && typeof activeExecuteImport === 'function') {
+        activeExecuteImport(floatingBtn);
+        isConfirmMode = false;
+        return;
+      }
+
+      // إذا كان الزر في الوضع العادي: نفتح المودال ونحول الزر نفسه لزر التأكيد
+      const pathCode = (window.location.pathname.split('/').pop() || '').trim();
+      const isAlready = Boolean(pathCode && importedCodesSet.has(pathCode));
+
       const mainTextEl = floatingBtn.querySelector('.wasli-btn-main-text');
       const originalText = mainTextEl ? mainTextEl.textContent : '';
       if (mainTextEl) mainTextEl.textContent = 'جاري فحص الصفحة...';
@@ -1125,19 +1100,34 @@
         const data = await extractFedshiProductDetails();
         if (!data || (!data.title && !data.fedshiWholesale)) {
           alert('تعذر قراءة بيانات المنتج الحالي. يرجى التأكد من أنك داخل صفحة منتج مفتوحة في فدشي وبها السعر والمعلومات.');
+          if (mainTextEl) mainTextEl.textContent = isAlready ? 'المنتج مرفوع مسبقاً ✓' : 'استيراد المنتج إلى وصلي';
           return;
         }
-        renderModalData(data, modalOverlay);
-        draggableConfirmBtn.style.display = 'flex';
-        alignConfirmBtnAboveFloatingBtn();
+
+        // رسم محتوى المودال
+        renderModalData(data, modalOverlay, (fn) => {
+          activeExecuteImport = fn;
+        });
         modalOverlay.classList.add('wasli-active');
-      } finally {
-        const pathCode = (window.location.pathname.split('/').pop() || '').trim();
-        if (isAlready || (pathCode && importedCodesSet.has(pathCode))) {
-          updateFloatingButtonToImported(floatingBtn);
-        } else {
-          if (mainTextEl) mainTextEl.textContent = originalText || 'استيراد المنتج إلى وصلي';
+
+        // تحويل الزر نفسه في مكانه فوراً لزر التأكيد الأخضر المتوهج
+        isConfirmMode = true;
+        floatingBtn.classList.add('wasli-confirm-state');
+        const contentBox = floatingBtn.querySelector('.wasli-btn-content-box');
+        if (contentBox) {
+          contentBox.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <div class="wasli-btn-text-group">
+              <span class="wasli-btn-main-text">${isAlready ? 'تأكيد وتحديث المنتج ✓' : 'تأكيد ونقل المنتج الآن ✓'}</span>
+              <span class="wasli-btn-sub-text">انقر هنا لإتمام النقل فوراً</span>
+            </div>
+          `;
         }
+      } catch (err) {
+        console.error('خطأ عند فتح تفاصيل المنتج:', err);
+        if (mainTextEl) mainTextEl.textContent = isAlready ? 'المنتج مرفوع مسبقاً ✓' : 'استيراد المنتج إلى وصلي';
       }
     };
 
@@ -1151,12 +1141,12 @@
       minHeight: 55,
       maxWidth: 650,
       maxHeight: 400,
-      onClick: handleOpenModal,
+      onClick: handleFloatingBtnAction,
     });
   }
 
   // رسم وتعبئة بيانات المنتج والأرباح في المودال
-  function renderModalData(data, overlay) {
+  function renderModalData(data, overlay, onReady) {
     const content = overlay.querySelector('#wasli-modal-content');
     const firstImg = (data.images && data.images[0]) || (data.colors && data.colors[0] && data.colors[0].image) || '';
     const isAlreadyImported = Boolean(data.productCode && importedCodesSet.has(data.productCode));
@@ -1403,8 +1393,6 @@
       // 4. إغلاق المودال بعد 120ms ليرى المستخدم تأكيد النقر بوضوح
       setTimeout(() => {
         overlay.classList.remove('wasli-active');
-        const draggableBtn = overlay.querySelector('#wasli-btn-confirm-draggable');
-        if (draggableBtn) draggableBtn.style.display = 'none';
       }, 120);
 
       // 5. إظهار الإشعار المربع الصغير على اليمين
@@ -1444,10 +1432,14 @@
       })();
     };
 
-    // ربط زر التأكيد العلوي وزر التأكيد السفلي والزر العائم المربع القابل للتحريك
+    // تسجيل دالة تنفيذ السحب ليتمكن الزر العائم نفسه من تشغيلها كزر تأكيد
+    if (typeof onReady === 'function') {
+      onReady(executeBackgroundImport);
+    }
+
+    // ربط زر التأكيد العلوي وزر التأكيد السفلي داخل المودال
     const confirmBtnTop = overlay.querySelector('#wasli-btn-confirm-top');
     const confirmBtn = overlay.querySelector('#wasli-btn-confirm');
-    const confirmBtnDraggable = overlay.querySelector('#wasli-btn-confirm-draggable');
 
     if (isAlreadyImported) {
       if (confirmBtnTop) {
@@ -1460,10 +1452,6 @@
         const spanMain = confirmBtn.querySelector('span');
         if (spanMain) spanMain.textContent = 'تحديث بيانات المنتج في منصتي ✓';
       }
-      if (confirmBtnDraggable) {
-        const titleEl = confirmBtnDraggable.querySelector('.wasli-draggable-title');
-        if (titleEl) titleEl.textContent = 'تحديث وسحب';
-      }
     } else {
       if (confirmBtnTop) {
         confirmBtnTop.classList.remove('wasli-update-btn');
@@ -1475,23 +1463,10 @@
         const spanMain = confirmBtn.querySelector('span');
         if (spanMain) spanMain.textContent = 'تأكيد ونقل المنتج إلى منصتي الآن';
       }
-      if (confirmBtnDraggable) {
-        const titleEl = confirmBtnDraggable.querySelector('.wasli-draggable-title');
-        if (titleEl) titleEl.textContent = 'تأكيد وسحب';
-      }
     }
 
     if (confirmBtnTop) confirmBtnTop.onclick = () => executeBackgroundImport(confirmBtnTop);
     if (confirmBtn) confirmBtn.onclick = () => executeBackgroundImport(confirmBtn);
-    if (confirmBtnDraggable) {
-      confirmBtnDraggable.onclick = () => {
-        if (confirmBtnDraggable.getAttribute('data-has-moved') === 'true') {
-          confirmBtnDraggable.removeAttribute('data-has-moved');
-          return;
-        }
-        executeBackgroundImport(confirmBtnDraggable);
-      };
-    }
   }
 
   // ========================================================
