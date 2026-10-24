@@ -2,7 +2,7 @@ import { Category, Subcategory } from '@/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase/admin';
 
-// الأقسام والأفرع النموذجية المعتمدة لمنصة وصلي للتجارة والدروب شيبينغ
+// الأقسام والأفرع المعتمدة لمنصة وصلي (نظيفة وخالية من أي أقسام غير مرغوبة)
 const initialCategories: (Category & { subcategories: Subcategory[] })[] = [
   {
     id: 'cat-electronics',
@@ -76,44 +76,86 @@ const initialCategories: (Category & { subcategories: Subcategory[] })[] = [
     ]
   }
 ];
-      { id: 'sub-sunglasses', categoryId: 'cat-watches-gifts', name: 'نظارات شمسية عصرية', isActive: true },
-      { id: 'sub-accessories', categoryId: 'cat-watches-gifts', name: 'أساور وخواتم ومجوهرات بديلة', isActive: true },
-      { id: 'sub-gift-sets', categoryId: 'cat-watches-gifts', name: 'أطقم وبكجات هدايا جاهزة', isActive: true },
-    ]
-  }
-];
 
 let localCategories = [...initialCategories];
 
 /**
- * جلب جميع الأقسام مع أفرعها التابعة لها
+ * جلب جميع الأقسام مع أفرعها التابعة لها من سوبابيس مع دمج الذاكرة المحلية
  */
 export async function getCategoriesWithSubcategories(): Promise<Category[]> {
-  if (isSupabaseConfigured && supabase) {
+  const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+
+  if (activeSupabase) {
     try {
-      // محاولة جلب الأقسام من سوبابيس
-      const { data: catData, error: catError } = await supabase
+      const { data: catData, error: catError } = await activeSupabase
         .from('categories')
         .select('*')
         .order('sort_order', { ascending: true });
 
       if (!catError && catData && catData.length > 0) {
-        // تقسيم البيانات إلى أقسام رئيسية وأفرع حسب parent_id
-        const mainCats = catData.filter((c: any) => !c.parent_id);
-        const subCats = catData.filter((c: any) => !!c.parent_id);
+        // فلترة أي سجلات قديمة غير مرغوبة
+        const validCats = catData.filter((c: any) => {
+          const name = (c.name || '').toLowerCase();
+          const desc = (c.description || '').toLowerCase();
+          return !name.includes('تمور') && !desc.includes('الخصيب');
+        });
 
-        const mapped: Category[] = mainCats.map((main: any) => {
-          const subs: Subcategory[] = subCats
-            .filter((s: any) => s.parent_id === main.id)
-            .map((s: any) => ({
+        // تمييز الأفرع: إما بحقل parent_id أو بوسم [PARENT:xxx] في الوصف أو slug يبدأ بـ sub-
+        const subCatsList: Array<{ id: string; categoryId: string; name: string; slug?: string; description?: string; createdAt?: string }> = [];
+        const mainCatsList: any[] = [];
+
+        validCats.forEach((c: any) => {
+          const desc = c.description || '';
+          const parentTagMatch = desc.match(/\[PARENT:([a-zA-Z0-9_-]+)\]/);
+
+          if (c.parent_id) {
+            subCatsList.push({
+              id: c.id,
+              categoryId: c.parent_id,
+              name: c.name,
+              slug: c.slug,
+              description: desc,
+              createdAt: c.created_at,
+            });
+          } else if (parentTagMatch) {
+            const parentId = parentTagMatch[1];
+            const cleanDesc = desc.replace(/\[PARENT:[a-zA-Z0-9_-]+\]\s*/, '').trim();
+            subCatsList.push({
+              id: c.id,
+              categoryId: parentId,
+              name: c.name,
+              slug: c.slug,
+              description: cleanDesc,
+              createdAt: c.created_at,
+            });
+          } else if ((c.slug || '').startsWith('sub-')) {
+            // فرع بمعرف slug
+            const parts = (c.slug || '').split('-');
+            const parentId = parts[1] || '';
+            subCatsList.push({
+              id: c.id,
+              categoryId: parentId,
+              name: c.name,
+              slug: c.slug,
+              description: desc,
+              createdAt: c.created_at,
+            });
+          } else {
+            mainCatsList.push(c);
+          }
+        });
+
+        const mapped: Category[] = mainCatsList.map((main: any) => {
+          const subs: Subcategory[] = subCatsList
+            .filter(s => s.categoryId === main.id || (main.slug && s.categoryId === main.slug))
+            .map(s => ({
               id: s.id,
               categoryId: main.id,
               name: s.name,
               slug: s.slug,
               description: s.description,
-              sortOrder: s.sort_order,
-              isActive: s.is_active ?? true,
-              createdAt: s.created_at,
+              isActive: true,
+              createdAt: s.createdAt,
             }));
 
           return {
@@ -128,7 +170,6 @@ export async function getCategoriesWithSubcategories(): Promise<Category[]> {
           };
         });
 
-        // إذا كان هناك أقسام في سوبابيس، نقوم بإرجاعها
         if (mapped.length > 0) {
           return mapped;
         }
@@ -156,7 +197,7 @@ export async function createMainCategory(params: {
     .replace(/[^\u0621-\u064Aa-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') + `-${Date.now().toString().slice(-4)}`;
 
-  const newCat: Category = {
+  const newCat: Category & { subcategories: Subcategory[] } = {
     id: `cat-${Date.now()}`,
     name: params.name.trim(),
     slug: slug,
@@ -166,15 +207,24 @@ export async function createMainCategory(params: {
     subcategories: [],
   };
 
-  if (isSupabaseConfigured && supabase) {
+  const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+  if (activeSupabase) {
     try {
-      await supabase.from('categories').insert({
-        name: newCat.name,
-        slug: newCat.slug,
-        icon: newCat.iconName,
-        description: newCat.description,
-        is_active: true,
-      });
+      const { data, error } = await activeSupabase
+        .from('categories')
+        .insert({
+          name: newCat.name,
+          slug: newCat.slug,
+          icon: newCat.iconName,
+          description: newCat.description,
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (data && !error) {
+        newCat.id = data.id;
+      }
     } catch (err) {
       console.warn('تعذر الحفظ السحابي في سوبابيس للقسم، تم الحفظ محلياً بنجاح:', err);
     }
@@ -192,43 +242,56 @@ export async function createSubcategory(params: {
   name: string;
   description?: string;
 }): Promise<Subcategory | null> {
-  const targetCategory = localCategories.find(c => c.id === params.categoryId);
-  if (!targetCategory) return null;
-
-  const slug = params.name
-    .trim()
+  const cleanName = params.name.trim();
+  const cleanSlug = cleanName
     .toLowerCase()
     .replace(/[^\u0621-\u064Aa-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') + `-${Date.now().toString().slice(-4)}`;
+    .replace(/^-+|-+$/g, '');
+
+  const slug = `sub-${params.categoryId.slice(0, 8)}-${cleanSlug}-${Date.now().toString().slice(-4)}`;
+  const taggedDescription = `[PARENT:${params.categoryId}] ${params.description?.trim() || ''}`.trim();
 
   const newSub: Subcategory = {
     id: `sub-${Date.now()}`,
     categoryId: params.categoryId,
-    name: params.name.trim(),
+    name: cleanName,
     slug: slug,
     description: params.description?.trim() || '',
     isActive: true,
     createdAt: new Date().toISOString(),
   };
 
-  if (isSupabaseConfigured && supabase) {
+  const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+  if (activeSupabase) {
     try {
-      await supabase.from('categories').insert({
-        parent_id: params.categoryId,
-        name: newSub.name,
-        slug: newSub.slug,
-        description: newSub.description,
-        is_active: true,
-      });
+      const { data, error } = await activeSupabase
+        .from('categories')
+        .insert({
+          name: newSub.name,
+          slug: newSub.slug,
+          description: taggedDescription,
+          icon: 'GitBranch',
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (data && !error) {
+        newSub.id = data.id;
+      }
     } catch (err) {
-      console.warn('تعذر الحفظ السحابي للفرع، تم الحفظ محلياً بنجاح:', err);
+      console.warn('تنبيه حفظ الفرع في سوبابيس:', err);
     }
   }
 
-  if (!targetCategory.subcategories) {
-    targetCategory.subcategories = [];
+  // تحديث الذاكرة المحلية
+  const targetCategory = localCategories.find(c => c.id === params.categoryId);
+  if (targetCategory) {
+    if (!targetCategory.subcategories) {
+      targetCategory.subcategories = [];
+    }
+    targetCategory.subcategories.push(newSub);
   }
-  targetCategory.subcategories.push(newSub);
 
   return newSub;
 }
@@ -238,67 +301,147 @@ export async function createSubcategory(params: {
  */
 export async function updateCategory(id: string, updates: Partial<Category>): Promise<Category | null> {
   const cat = localCategories.find(c => c.id === id);
-  if (!cat) return null;
+  if (cat) {
+    Object.assign(cat, updates);
+  }
 
-  Object.assign(cat, updates);
-
-  if (isSupabaseConfigured && supabase) {
+  const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+  if (activeSupabase) {
     try {
-      await supabase.from('categories').update({
-        name: cat.name,
-        icon: cat.iconName,
-        description: cat.description,
-      }).eq('id', id);
+      const dbPayload: any = {};
+      if (updates.name) dbPayload.name = updates.name;
+      if (updates.iconName) dbPayload.icon = updates.iconName;
+      if (updates.description !== undefined) dbPayload.description = updates.description;
+
+      await activeSupabase
+        .from('categories')
+        .update(dbPayload)
+        .eq('id', id);
     } catch (err) {
       console.warn('خطأ تحديث القسم في سوبابيس:', err);
     }
   }
 
-  return cat;
+  return cat || null;
 }
 
 /**
- * تعديل فرع تتبع قسم رئيسي
- */
-export async function updateSubcategory(
-  categoryId: string, 
-  subcategoryId: string, 
-  updates: Partial<Subcategory>
-): Promise<Subcategory | null> {
-  const cat = localCategories.find(c => c.id === categoryId);
-  if (!cat || !cat.subcategories) return null;
-
-  const sub = cat.subcategories.find(s => s.id === subcategoryId);
-  if (!sub) return null;
-
-  Object.assign(sub, updates);
-  return sub;
-}
-
-/**
- * حذف قسم رئيسي مع كافة أفرعه
+ * حذف قسم رئيسي مع كافة أفرعه نهائياً
  */
 export async function deleteCategory(id: string): Promise<boolean> {
-  // 1. الحذف من قاعدة بيانات سوبابيس
   const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+
   if (activeSupabase) {
     try {
-      // حذف أي أفرع تابعة لهذا القسم أولاً
-      await activeSupabase.from('categories').delete().eq('parent_id', id);
-      // ثم حذف القسم نفسه
-      await activeSupabase.from('categories').delete().eq('id', id);
+      // 1. حذف أي أفرع مرتبطة بهذا القسم في سوبابيس
+      await activeSupabase
+        .from('categories')
+        .delete()
+        .or(`description.ilike.%[PARENT:${id}]%,slug.ilike.sub-${id.slice(0, 8)}%`);
+
+      // 2. حذف القسم الرئيسي نفسه
+      await activeSupabase
+        .from('categories')
+        .delete()
+        .eq('id', id);
     } catch (err) {
       console.warn('تنبيه أثناء حذف القسم من سوبابيس:', err);
     }
   }
 
-  // 2. الحذف من المخزن المحلي
+  // 3. الحذف من الذاكرة المحلية
   const idx = localCategories.findIndex(c => c.id === id);
   if (idx !== -1) {
     localCategories.splice(idx, 1);
   }
 
   return true;
+}
+
+/**
+ * حذف فرع تتبع لقسم نهائياً
+ */
+export async function deleteSubcategory(categoryId: string, subcategoryId: string): Promise<boolean> {
+  const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+
+  if (activeSupabase) {
+    try {
+      await activeSupabase
+        .from('categories')
+        .delete()
+        .or(`id.eq.${subcategoryId},slug.eq.${subcategoryId}`);
+    } catch (err) {
+      console.warn('تنبيه أثناء حذف الفرع من سوبابيس:', err);
+    }
+  }
+
+  // الحذف من الذاكرة المحلية
+  const cat = localCategories.find(c => c.id === categoryId);
+  if (cat && cat.subcategories) {
+    const subIdx = cat.subcategories.findIndex(s => s.id === subcategoryId);
+    if (subIdx !== -1) {
+      cat.subcategories.splice(subIdx, 1);
+    }
+  }
+
+  return true;
+}
+
+/**
+ * تعديل فرع تابع لقسم
+ */
+export async function updateSubcategory(
+  firstParam: string,
+  secondParam: any,
+  thirdParam?: any
+): Promise<Subcategory | null> {
+  let categoryId: string | undefined = undefined;
+  let subcategoryId: string;
+  let updates: { name?: string; description?: string; isActive?: boolean } = {};
+
+  if (thirdParam !== undefined) {
+    categoryId = firstParam;
+    subcategoryId = secondParam;
+    updates = thirdParam || {};
+  } else {
+    subcategoryId = firstParam;
+    updates = secondParam || {};
+  }
+
+  const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+  if (activeSupabase) {
+    try {
+      const updateData: any = {};
+      if (updates.name) updateData.name = updates.name.trim();
+      if (updates.description !== undefined) {
+        if (categoryId) {
+          updateData.description = `[PARENT:${categoryId}] ${updates.description.trim()}`.trim();
+        } else {
+          updateData.description = updates.description.trim();
+        }
+      }
+      if (updates.isActive !== undefined) updateData.is_active = updates.isActive;
+
+      await activeSupabase
+        .from('categories')
+        .update(updateData)
+        .or(`id.eq.${subcategoryId},slug.eq.${subcategoryId}`);
+    } catch (e) {
+      console.warn('تنبيه عند تعديل الفرع في سوبابيس:', e);
+    }
+  }
+
+  for (const cat of localCategories) {
+    if (categoryId && cat.id !== categoryId) continue;
+    const sub = cat.subcategories?.find(s => s.id === subcategoryId);
+    if (sub) {
+      if (updates.name) sub.name = updates.name.trim();
+      if (updates.description !== undefined) sub.description = updates.description.trim();
+      if (updates.isActive !== undefined) sub.isActive = updates.isActive;
+      return sub;
+    }
+  }
+  return null;
 }
 
 /**
@@ -350,27 +493,4 @@ export async function findOrCreateCategoryAndSubcategory(
     subcategoryId: subId,
     subcategoryName: subName,
   };
-}
-
-/**
- * حذف فرع تتبع لقسم
- */
-export async function deleteSubcategory(categoryId: string, subcategoryId: string): Promise<boolean> {
-  const cat = localCategories.find(c => c.id === categoryId);
-  if (!cat || !cat.subcategories) return false;
-
-  const subIdx = cat.subcategories.findIndex(s => s.id === subcategoryId);
-  if (subIdx === -1) return false;
-
-  cat.subcategories.splice(subIdx, 1);
-
-  if (isSupabaseConfigured && supabase) {
-    try {
-      await supabase.from('categories').delete().eq('id', subcategoryId);
-    } catch (err) {
-      console.warn('خطأ حذف الفرع من سوبابيس:', err);
-    }
-  }
-
-  return true;
 }

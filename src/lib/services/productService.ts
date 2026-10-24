@@ -195,8 +195,6 @@ export async function createPlatformProduct(productData: {
       validCategoryId = '11111111-1111-1111-1111-111111111102';
     } else if (catLower.includes('عطور') || catLower.includes('تجميل') || catLower.includes('عناية')) {
       validCategoryId = '11111111-1111-1111-1111-111111111103';
-    } else if (catLower.includes('تمور') || catLower.includes('تمر') || catLower.includes('أغذية') || catLower.includes('اغذية')) {
-      validCategoryId = '11111111-1111-1111-1111-111111111105';
     }
   }
 

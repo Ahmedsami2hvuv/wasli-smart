@@ -375,3 +375,154 @@
   color: #991b1b !important;
   border: 1px solid #fecaca !important;
 }
+
+/* زر التأكيد العلوي البارز في هيدر المودال */
+.wasli-header-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.wasli-submit-btn-top {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 10px !important;
+  padding: 8px 16px !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3) !important;
+  transition: all 0.2s ease !important;
+}
+
+.wasli-submit-btn-top:hover {
+  transform: translateY(-1px) scale(1.02) !important;
+  box-shadow: 0 6px 16px rgba(22, 163, 74, 0.4) !important;
+  background: linear-gradient(135deg, #15803d 0%, #166534 100%) !important;
+}
+
+/* حاوية الإشعارات الخلفية العائمة */
+.wasli-toast-container {
+  position: fixed !important;
+  bottom: 24px !important;
+  right: 24px !important;
+  z-index: 2147483647 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  max-width: 440px !important;
+  pointer-events: none !important;
+}
+
+.wasli-toast {
+  pointer-events: auto !important;
+  background: #ffffff !important;
+  border-radius: 16px !important;
+  padding: 14px 16px !important;
+  box-shadow: 0 15px 35px -5px rgba(15, 23, 42, 0.25), 0 0 1px 1px rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid #e2e8f0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  animation: wasliSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  transition: all 0.25s ease !important;
+  font-family: 'Cairo', sans-serif !important;
+  direction: rtl !important;
+  text-align: right !important;
+}
+
+.wasli-toast.loading {
+  border-right: 4px solid #0284c7 !important;
+  background: #f8fafc !important;
+}
+
+.wasli-toast.success {
+  border-right: 4px solid #16a34a !important;
+  background: #f0fdf4 !important;
+}
+
+.wasli-toast.error {
+  border-right: 4px solid #dc2626 !important;
+  background: #fef2f2 !important;
+}
+
+.wasli-toast-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+}
+
+.wasli-toast-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
+}
+
+.wasli-toast-close {
+  background: none !important;
+  border: none !important;
+  cursor: pointer !important;
+  color: #94a3b8 !important;
+  padding: 4px !important;
+  border-radius: 6px !important;
+  line-height: 1 !important;
+}
+
+.wasli-toast-close:hover {
+  color: #334155 !important;
+  background: rgba(0,0,0,0.05) !important;
+}
+
+.wasli-toast-body {
+  font-size: 12px !important;
+  color: #334155 !important;
+  line-height: 1.5 !important;
+}
+
+.wasli-toast-actions {
+  display: flex !important;
+  gap: 8px !important;
+  margin-top: 4px !important;
+}
+
+.wasli-toast-btn {
+  flex: 1 !important;
+  text-align: center !important;
+  padding: 6px 10px !important;
+  border-radius: 8px !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  text-decoration: none !important;
+  transition: opacity 0.15s ease !important;
+}
+
+.wasli-toast-btn:hover {
+  opacity: 0.9 !important;
+}
+
+@keyframes wasliSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes wasliSpin {
+  to { transform: rotate(360deg); }
+}
+
+.wasli-spinner {
+  animation: wasliSpin 1s linear infinite !important;
+}

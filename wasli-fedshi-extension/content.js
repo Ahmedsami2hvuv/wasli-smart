@@ -536,14 +536,22 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.2.5</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.2.6</span>
           </div>
-          <button type="button" class="wasli-close-btn" id="wasli-modal-close" title="إغلاق">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
+          <div class="wasli-header-actions">
+            <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              <span>تأكيد وسحب للمنصة</span>
+            </button>
+            <button type="button" class="wasli-close-btn" id="wasli-modal-close" title="إغلاق">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div class="wasli-modal-body" id="wasli-modal-content">
@@ -755,12 +763,81 @@
     costInp.addEventListener('input', () => updateLiveProfits('cost'));
     wholesaleInp.addEventListener('input', () => updateLiveProfits('wholesale'));
 
-    // ربط زر التأكيد والإرسال إلى منصة وصلي
-    const confirmBtn = overlay.querySelector('#wasli-btn-confirm');
-    confirmBtn.onclick = async () => {
-      confirmBtn.disabled = true;
-      confirmBtn.innerHTML = `<span>جاري نقل وحفظ المنتج...</span>`;
+    // نظام الإشعارات العائمة الخلفية
+    function getToastContainer() {
+      let container = document.getElementById('wasli-toast-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'wasli-toast-container';
+        container.className = 'wasli-toast-container';
+        document.body.appendChild(container);
+      }
+      return container;
+    }
 
+    function showWasliToast({ title, message, type = 'loading' }) {
+      const container = getToastContainer();
+      const toast = document.createElement('div');
+      toast.className = `wasli-toast ${type}`;
+
+      const iconHtml = type === 'loading'
+        ? `<svg class="wasli-spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2.5"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle><path d="M12 2a10 10 0 0 1 10 10"></path></svg>`
+        : (type === 'success'
+            ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>`
+            : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`);
+
+      toast.innerHTML = `
+        <div class="wasli-toast-header">
+          <div class="wasli-toast-title">
+            <span class="wasli-toast-icon">${iconHtml}</span>
+            <span>${title}</span>
+          </div>
+          <button type="button" class="wasli-toast-close" title="إغلاق">&times;</button>
+        </div>
+        <div class="wasli-toast-body">${message}</div>
+        <div class="wasli-toast-actions" style="display: none;"></div>
+      `;
+
+      toast.querySelector('.wasli-toast-close').onclick = () => {
+        toast.remove();
+      };
+
+      container.appendChild(toast);
+
+      return {
+        update({ title: newTitle, message: newMsg, type: newType, previewUrl, adminUrl }) {
+          toast.className = `wasli-toast ${newType}`;
+          const newIcon = newType === 'success'
+            ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>`
+            : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+
+          toast.querySelector('.wasli-toast-icon').innerHTML = newIcon;
+          if (newTitle) toast.querySelector('.wasli-toast-title span:last-child').textContent = newTitle;
+          if (newMsg) toast.querySelector('.wasli-toast-body').innerHTML = newMsg;
+
+          if (previewUrl && adminUrl) {
+            const actionsBox = toast.querySelector('.wasli-toast-actions');
+            actionsBox.style.display = 'flex';
+            actionsBox.innerHTML = `
+              <a href="${previewUrl}" target="_blank" class="wasli-toast-btn" style="background: #0284c7; color: #fff;">معاينة المنتج</a>
+              <a href="${adminUrl}" target="_blank" class="wasli-toast-btn" style="background: #1e40af; color: #fff;">لوحة الإدارة</a>
+            `;
+          }
+
+          if (newType === 'success') {
+            setTimeout(() => {
+              if (toast.parentElement) toast.remove();
+            }, 9000);
+          }
+        },
+        close() {
+          if (toast.parentElement) toast.remove();
+        }
+      };
+    }
+
+    // تنفيذ عملية السحب في الخلفية وإغلاق المودال فوراً
+    const executeBackgroundImport = () => {
       const targetUrl = wasliServerUrl.trim().replace(/\/+$/, '');
       const productTitle = (overlay.querySelector('#wasli-inp-title').value || '').trim() || data.title;
       const costPrice = parseInt(costInp.value, 10) || data.fedshiWholesale;
@@ -797,96 +874,81 @@
         stockQuantity: stock,
       };
 
-      const statusBox = overlay.querySelector('#wasli-status-message');
+      // 1. إغلاق المودال فوراً لتمكين المستخدم من متابعة التصفح فوراً دون أي انتظار
+      overlay.classList.remove('wasli-active');
 
-      try {
-        let response = null;
-        let result = null;
-        let activeTarget = targetUrl;
+      // 2. إظهار إشعار عائم في الزاوية يفيد ببدء السحب في الخلفية
+      const toast = showWasliToast({
+        title: 'جاري السحب في الخلفية...',
+        message: `يتم الآن استيراد <strong>${productTitle}</strong> إلى منصتك ونشره. يمكنك تصفح أي منتج آخر بحرية!`,
+        type: 'loading'
+      });
 
-        // محاولة الإرسال الأولى
+      // 3. تشغيل الطلب في الخلفية
+      (async () => {
         try {
-          response = await fetch(`${activeTarget}/api/products/import-fedshi`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-          result = await response.json();
-        } catch (fetchErr) {
-          // إذا فشل الاتصال برابط محلي أو غير متوفر، نحول تلقائياً إلى سيرفر وصلي الحي على فيرسل
-          if (activeTarget !== 'https://wasli-smart.vercel.app') {
-            console.warn('جاري التحويل التلقائي للاتصال المباشر بمنصة وصلي على فيرسل...');
-            activeTarget = 'https://wasli-smart.vercel.app';
-            wasliServerUrl = activeTarget;
-            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-              chrome.storage.sync.set({ wasliCustomUrl: activeTarget });
-            }
+          let response = null;
+          let result = null;
+          let activeTarget = targetUrl;
+
+          try {
             response = await fetch(`${activeTarget}/api/products/import-fedshi`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload),
             });
             result = await response.json();
-          } else {
-            throw fetchErr;
+          } catch (fetchErr) {
+            if (activeTarget !== 'https://wasli-smart.vercel.app') {
+              activeTarget = 'https://wasli-smart.vercel.app';
+              wasliServerUrl = activeTarget;
+              if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+                chrome.storage.sync.set({ wasliCustomUrl: activeTarget });
+              }
+              response = await fetch(`${activeTarget}/api/products/import-fedshi`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+              });
+              result = await response.json();
+            } else {
+              throw fetchErr;
+            }
           }
+
+          if (response.ok && result.success) {
+            const prodId = result.product?.id || '';
+            const previewUrl = prodId ? `${activeTarget}/p/${prodId}` : activeTarget;
+            const adminUrl = `${activeTarget}/waahhlstor/products`;
+            const profitVal = result.financials?.platformProfit?.toLocaleString() || wholesale - costPrice;
+
+            toast.update({
+              type: 'success',
+              title: 'تم استيراد المنتج بنجاح!',
+              message: `تم حفظ <strong>${productTitle}</strong> بنجاح! ربحك الصافي: <strong>+${profitVal.toLocaleString()} د.ع</strong>`,
+              previewUrl,
+              adminUrl,
+            });
+          } else {
+            throw new Error(result.message || 'حدث خطأ في استجابة الخادم');
+          }
+        } catch (err) {
+          console.error('فشل الاستيراد في الخلفية:', err);
+          toast.update({
+            type: 'error',
+            title: 'تعذر استيراد المنتج',
+            message: `فشل نقل <strong>${productTitle}</strong>: ${err.message}`,
+          });
         }
-
-        if (response.ok && result.success) {
-          const prodId = result.product?.id || '';
-          const previewUrl = prodId ? `${targetUrl}/p/${prodId}` : targetUrl;
-          const adminUrl = `${targetUrl}/waahhlstor/products`;
-
-          const tgMsg = result.telegramBroadcast?.success 
-            ? `<div style="color: #059669; font-size: 11px; font-weight: 700;">تم نشر المنتج في قناة تيليجرام بنجاح</div>`
-            : (result.telegramBroadcast?.error 
-                ? `<div style="color: #d97706; font-size: 10px;">ملاحظة القناة: ${result.telegramBroadcast.error}</div>` 
-                : '');
-
-          statusBox.innerHTML = `
-            <div class="wasli-status-bar success" style="flex-direction: column; align-items: flex-start; gap: 8px;">
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-                <span>تم استيراد وحفظ المنتج في منصة وصلي بنجاح! ربحك كمدير: ${result.financials?.platformProfit?.toLocaleString() || '3,000'} د.ع</span>
-              </div>
-              ${tgMsg}
-              <div style="display: flex; gap: 8px; width: 100%; margin-top: 4px;">
-                <a href="${previewUrl}" target="_blank" style="flex: 1; text-align: center; background: #0284c7; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 800; text-decoration: none; font-size: 11px;">
-                  معاينة صفحة المنتج
-                </a>
-                <a href="${adminUrl}" target="_blank" style="flex: 1; text-align: center; background: #1e40af; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 800; text-decoration: none; font-size: 11px;">
-                  لوحة إدارة المنتجات
-                </a>
-              </div>
-            </div>
-          `;
-          confirmBtn.innerHTML = `<span>تم الحفظ بنجاح</span>`;
-          setTimeout(() => {
-            overlay.classList.remove('wasli-active');
-            confirmBtn.disabled = false;
-            confirmBtn.innerHTML = `<span>تأكيد ونقل المنتج إلى منصتي الآن</span>`;
-          }, 3500);
-        } else {
-          throw new Error(result.message || 'حدث خطأ في استجابة السيرفر');
-        }
-      } catch (err) {
-        console.error('فشل إرسال المنتج إلى وصلي:', err);
-        statusBox.innerHTML = `
-          <div class="wasli-status-bar error">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="8" x2="12" y2="12"></line>
-              <line x1="12" y1="16" x2="12.01" y2="16"></line>
-            </svg>
-            <span>تعذر إرسال المنتج إلى (${targetUrl}). الخطأ: ${err.message}</span>
-          </div>
-        `;
-        confirmBtn.disabled = false;
-        confirmBtn.innerHTML = `<span>إعادة المحاولة</span>`;
-      }
+      })();
     };
+
+    // ربط زر التأكيد العلوي البارز وزر التأكيد السفلي
+    const confirmBtnTop = overlay.querySelector('#wasli-btn-confirm-top');
+    const confirmBtn = overlay.querySelector('#wasli-btn-confirm');
+
+    if (confirmBtnTop) confirmBtnTop.onclick = executeBackgroundImport;
+    if (confirmBtn) confirmBtn.onclick = executeBackgroundImport;
   }
 
   // تفعيل الواجهة

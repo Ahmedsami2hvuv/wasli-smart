@@ -203,6 +203,9 @@ export default function AdminCategoriesPage() {
     }
 
     try {
+      // إزالة بصرية فورية
+      setCategories(prev => prev.filter(c => c.id !== catId));
+
       const res = await fetch(`/api/categories?categoryId=${catId}`, {
         method: 'DELETE',
       });
@@ -212,9 +215,11 @@ export default function AdminCategoriesPage() {
         fetchCategories();
       } else {
         showToast(data.message || 'فشل حذف القسم', 'error');
+        fetchCategories();
       }
     } catch (err) {
       showToast('حدث خطأ أثناء محاولة الحذف', 'error');
+      fetchCategories();
     }
   };
 
@@ -225,6 +230,17 @@ export default function AdminCategoriesPage() {
     }
 
     try {
+      // إزالة بصرية فورية للفرع
+      setCategories(prev => prev.map(c => {
+        if (c.id === catId && c.subcategories) {
+          return {
+            ...c,
+            subcategories: c.subcategories.filter(s => s.id !== subId)
+          };
+        }
+        return c;
+      }));
+
       const res = await fetch(`/api/categories?action=delete_subcategory&categoryId=${catId}&subcategoryId=${subId}`, {
         method: 'DELETE',
       });
@@ -234,9 +250,11 @@ export default function AdminCategoriesPage() {
         fetchCategories();
       } else {
         showToast(data.message || 'فشل حذف الفرع', 'error');
+        fetchCategories();
       }
     } catch (err) {
       showToast('حدث خطأ أثناء محاولة حذف الفرع', 'error');
+      fetchCategories();
     }
   };
 
