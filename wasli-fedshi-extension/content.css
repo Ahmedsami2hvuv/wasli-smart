@@ -67,7 +67,7 @@
   gap: 12px !important;
   width: 100% !important;
   height: 100% !important;
-  padding: 6px 12px !important;
+  padding: 8px 16px !important;
   pointer-events: none !important;
   box-sizing: border-box !important;
 }
@@ -83,27 +83,25 @@
 .wasli-btn-text-group {
   display: flex !important;
   flex-direction: column !important;
-  align-items: flex-start !important;
+  align-items: center !important;
   justify-content: center !important;
-  gap: 3px !important;
-  text-align: right !important;
+  gap: 4px !important;
+  text-align: center !important;
   overflow: hidden !important;
 }
 
 .wasli-btn-main-text {
-  font-size: 15px !important;
+  font-size: 16px !important;
   font-weight: 800 !important;
-  line-height: 1.2 !important;
-  white-space: nowrap !important;
+  line-height: 1.25 !important;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25) !important;
 }
 
 .wasli-btn-sub-text {
-  font-size: 11.5px !important;
+  font-size: 12px !important;
   font-weight: 600 !important;
   opacity: 0.95 !important;
-  line-height: 1.1 !important;
-  white-space: nowrap !important;
+  line-height: 1.2 !important;
 }
 
 /* شكل الزر العائم المميز إذا كان المنتج مرفوعاً مسبقاً */

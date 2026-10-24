@@ -669,28 +669,21 @@
     posKey,
     sizeKey,
     defaultPos = 'center',
-    defaultSize = { width: 270, height: 72 },
-    minWidth = 180,
-    minHeight = 55,
-    maxWidth = 420,
-    maxHeight = 110,
+    defaultSize = { width: 270, height: 75 },
+    minWidth = 140,
+    minHeight = 50,
+    maxWidth = 800,
+    maxHeight = 600,
     onClick,
   }) {
-    // 1. استعادة الحجم المحفوظ مع حماية ضد الارتفاعات المبالغ فيها
+    // 1. استعادة الحجم المحفوظ بحرية تامة عمودياً وأفقياً
     let currentWidth = defaultSize.width;
     let currentHeight = defaultSize.height;
     try {
       const savedSize = JSON.parse(localStorage.getItem(sizeKey) || 'null');
       if (savedSize && savedSize.width && savedSize.height) {
-        if (savedSize.height > 110) {
-          // تصحيح فوري لأي أبعاد عملاقة قديمة
-          localStorage.removeItem(sizeKey);
-          currentWidth = defaultSize.width;
-          currentHeight = defaultSize.height;
-        } else {
-          currentWidth = Math.min(Math.max(minWidth, savedSize.width), maxWidth);
-          currentHeight = Math.min(Math.max(minHeight, savedSize.height), maxHeight);
-        }
+        currentWidth = Math.min(Math.max(minWidth, savedSize.width), maxWidth);
+        currentHeight = Math.min(Math.max(minHeight, savedSize.height), maxHeight);
       }
     } catch (e) {}
 
@@ -1004,7 +997,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.3</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.4</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -1199,11 +1192,11 @@
       posKey: 'wasli_floating_btn_pos',
       sizeKey: 'wasli_floating_btn_size',
       defaultPos: 'center',
-      defaultSize: { width: 270, height: 72 },
-      minWidth: 180,
-      minHeight: 55,
-      maxWidth: 420,
-      maxHeight: 110,
+      defaultSize: { width: 270, height: 75 },
+      minWidth: 140,
+      minHeight: 50,
+      maxWidth: 800,
+      maxHeight: 600,
       onClick: handleDirectImportAction,
     });
   }
