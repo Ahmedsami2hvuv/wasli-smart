@@ -12,17 +12,25 @@ import {
   XCircle, 
   Truck, 
   Filter, 
-  Send,
-  Database,
-  ShieldCheck,
-  RefreshCw,
-  Plus,
-  Layers,
-  GitBranch,
-  Users,
-  Eye,
-  ExternalLink,
-  Phone
+  Send, 
+  Database, 
+  ShieldCheck, 
+  RefreshCw, 
+  Plus, 
+  Layers, 
+  GitBranch, 
+  Users, 
+  Eye, 
+  ExternalLink, 
+  Phone,
+  Copy,
+  Printer,
+  X,
+  MessageSquare,
+  MapPin,
+  Calendar,
+  FileText,
+  Check
 } from 'lucide-react';
 import Link from 'next/link';
 import { Order, OrderStatus, Store as StoreType } from '@/types';
@@ -37,6 +45,18 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // حالة فتح نافذة تفاصيل الطلب
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [copiedMessage, setCopiedMessage] = useState<string | null>(null);
+
+  const copyToClipboard = (text: string, msg = 'تم النسخ بنجاح') => {
+    if (navigator?.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedMessage(msg);
+      setTimeout(() => setCopiedMessage(null), 2500);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -93,6 +113,7 @@ export default function AdminDashboardPage() {
       const data = await res.json();
       if (data.success) {
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+        setSelectedOrder(prev => (prev && prev.id === orderId ? { ...prev, status: newStatus } : prev));
       }
     } catch (err) {
       console.error('خطأ في تحديث حالة الطلب:', err);
@@ -325,13 +346,21 @@ export default function AdminDashboardPage() {
                     <th className="py-3 px-3">ربح التاجر</th>
                     <th className="py-3 px-3">ربح المنصة</th>
                     <th className="py-3 px-3">تحديث الحالة</th>
+                    <th className="py-3 px-3 text-center">التفاصيل الكاملة</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredOrders.map((order) => (
                     <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-3 font-mono font-bold text-brand-700">
-                        {order.orderNumber}
+                      <td className="py-3.5 px-3">
+                        <button
+                          onClick={() => setSelectedOrder(order)}
+                          className="font-mono font-bold text-brand-700 hover:text-brand-900 hover:underline flex items-center gap-1 cursor-pointer"
+                          title="انقر لفتح تفاصيل الطلب الكاملة"
+                        >
+                          <span>{order.orderNumber}</span>
+                          <ExternalLink className="w-3 h-3 text-brand-500" />
+                        </button>
                       </td>
                       <td className="py-3.5 px-3">
                         <span className="font-bold text-slate-800 block">{order.storeName || 'المتجر المباشر'}</span>
@@ -339,7 +368,7 @@ export default function AdminDashboardPage() {
                       </td>
                       <td className="py-3.5 px-3">
                         <div className="font-bold text-slate-800">{order.customerName}</div>
-                        <div className="text-[11px] text-slate-500" dir="ltr">{order.customerPhone}</div>
+                        <div className="text-[11px] text-slate-500 font-mono" dir="ltr">{order.customerPhone}</div>
                       </td>
                       <td className="py-3.5 px-3 text-slate-600 max-w-xs truncate" title={order.address}>
                         {order.governorate} - {order.city} ({order.address})
@@ -377,6 +406,16 @@ export default function AdminDashboardPage() {
                           <option value="cancelled">ملغي</option>
                           <option value="returned">مرتجع</option>
                         </select>
+                      </td>
+                      <td className="py-3.5 px-3 text-center">
+                        <button
+                          onClick={() => setSelectedOrder(order)}
+                          className="py-1.5 px-3 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-800 font-bold text-xs border border-brand-200 transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                          title="عرض كافة تفاصيل الطلب والمنتجات وبوليصة الشحن"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-brand-700" />
+                          <span>تفاصيل الطلب</span>
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -509,6 +548,295 @@ export default function AdminDashboardPage() {
           )}
         </div>
       </div>
+
+      {/* تنبيه النسخ العائم */}
+      {copiedMessage && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-60 px-5 py-3 rounded-2xl bg-slate-900 text-white shadow-2xl flex items-center gap-2 text-xs font-bold animate-bounce border border-slate-700">
+          <Check className="w-4 h-4 text-emerald-400" />
+          <span>{copiedMessage}</span>
+        </div>
+      )}
+
+      {/* نافذة تفاصيل الطلب الكاملة (Order Details Modal) */}
+      {selectedOrder && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-8 shadow-2xl border border-slate-200 my-8 space-y-6">
+            
+            {/* الترويسة العلوية للمودال */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-mono text-base sm:text-lg font-black text-brand-700">
+                    {selectedOrder.orderNumber}
+                  </span>
+                  <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-full ${
+                    selectedOrder.status === 'delivered' ? 'bg-emerald-100 text-emerald-800' :
+                    selectedOrder.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                    selectedOrder.status === 'shipped' ? 'bg-blue-100 text-blue-800' :
+                    'bg-amber-100 text-amber-800'
+                  }`}>
+                    {selectedOrder.status === 'delivered' ? 'تم التسليم' :
+                     selectedOrder.status === 'cancelled' ? 'ملغي' :
+                     selectedOrder.status === 'shipped' ? 'خرج للتوصيل' :
+                     selectedOrder.status === 'ready_for_shipping' ? 'جاهز للشحن' :
+                     selectedOrder.status === 'processing' ? 'قيد التجهيز' :
+                     selectedOrder.status === 'reviewed' ? 'تمت المراجعة' :
+                     selectedOrder.status === 'returned' ? 'مرتجع' : 'جديد'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>تاريخ الطلب: {selectedOrder.createdAt ? new Date(selectedOrder.createdAt).toLocaleString('ar-IQ') : 'اليوم'}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrder(null)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+                  title="إغلاق النافذة"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* تفاصيل الزبون ومعلومات الشحن والتوصيل */}
+            <div className="bg-slate-50 rounded-2xl p-4 sm:p-5 border border-slate-200/80 space-y-3">
+              <div className="text-xs font-black text-slate-800 flex items-center gap-1.5 border-b border-slate-200/60 pb-2">
+                <Truck className="w-4 h-4 text-brand-700" />
+                <span>بيانات الزبون وعنوان التوصيل</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-slate-400 block text-[11px]">اسم الزبون:</span>
+                  <span className="font-bold text-slate-900 text-sm">{selectedOrder.customerName}</span>
+                </div>
+
+                <div>
+                  <span className="text-slate-400 block text-[11px]">رقم الهاتف:</span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="font-bold text-slate-900 font-mono text-sm" dir="ltr">
+                      {selectedOrder.customerPhone}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(selectedOrder.customerPhone, 'تم نسخ رقم الهاتف')}
+                      className="p-1 rounded-md bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
+                      title="نسخ رقم الهاتف"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </button>
+                    {selectedOrder.customerPhone && (
+                      <a
+                        href={`https://wa.me/964${selectedOrder.customerPhone.replace(/^0+/, '').replace(/[^0-9]/g, '')}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="py-0.5 px-2 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] flex items-center gap-1"
+                        title="مراسلة عبر واتساب"
+                      >
+                        <MessageSquare className="w-3 h-3" />
+                        <span>واتساب</span>
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <span className="text-slate-400 block text-[11px]">العنوان بالتفصيل:</span>
+                  <div className="font-bold text-slate-800 mt-0.5 flex items-start gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
+                    <span>
+                      {selectedOrder.governorate} - {selectedOrder.city} ({selectedOrder.address})
+                    </span>
+                  </div>
+                </div>
+
+                {selectedOrder.deliveryNotes && (
+                  <div className="sm:col-span-2 bg-amber-50/80 p-2.5 rounded-xl border border-amber-200 text-amber-900">
+                    <span className="text-[10px] font-bold text-amber-700 block">ملاحظات التوصيل من الزبون:</span>
+                    <span className="font-medium text-xs">{selectedOrder.deliveryNotes}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* بيانات المتجر والتاجر المسوّق */}
+            <div className="bg-sky-50/50 rounded-2xl p-4 border border-sky-100 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold">
+                  <Store className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block">المتجر الذي تمت منه الطلبية:</span>
+                  <span className="font-bold text-slate-900">{selectedOrder.storeName || 'المتجر المباشر'}</span>
+                  <span className="text-[10px] text-sky-700 font-mono font-bold mr-1.5">({selectedOrder.storeCode || 'platform'})</span>
+                </div>
+              </div>
+
+              {selectedOrder.storeCode && (
+                <Link
+                  href={`/s/${selectedOrder.storeCode}`}
+                  target="_blank"
+                  className="py-1 px-2.5 bg-white border border-sky-200 text-sky-800 hover:bg-sky-50 text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>زيارة المتجر</span>
+                </Link>
+              )}
+            </div>
+
+            {/* قائمة المنتجات المطلوبة في هذا الطلب */}
+            <div className="space-y-2.5">
+              <div className="text-xs font-black text-slate-800 flex items-center justify-between">
+                <span>المنتجات المطلوبة ({selectedOrder.items?.length || 1})</span>
+                <span className="text-[11px] text-slate-400 font-normal">تفاصيل الأصناف والكميات</span>
+              </div>
+
+              <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100">
+                {(selectedOrder.items && selectedOrder.items.length > 0) ? (
+                  selectedOrder.items.map((item, idx) => (
+                    <div key={idx} className="p-3 bg-white flex items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-3">
+                        {item.productImage ? (
+                          <img
+                            src={item.productImage}
+                            alt={item.productName}
+                            className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 shrink-0 font-bold">
+                            <Package className="w-5 h-5 text-slate-400" />
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-bold text-slate-900 line-clamp-1">{item.productName}</div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            الكمية: <strong className="text-slate-800 font-bold">{item.quantity}</strong> قطعة
+                            {item.sellingPrice && (
+                              <span className="mr-2 text-slate-400">
+                                بسعر: {item.sellingPrice.toLocaleString('ar-IQ')} د.ع للقطعة
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-left font-black text-slate-900 shrink-0">
+                        {((item.sellingPrice || 0) * (item.quantity || 1)).toLocaleString('ar-IQ')} د.ع
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-4 text-center text-xs text-slate-500">
+                    منتج الطلبية الأساسي (الكمية: 1)
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* الحسبة المالية المفصلة */}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 text-xs">
+              <div className="flex justify-between text-slate-600">
+                <span>مجموع المنتجات:</span>
+                <span className="font-bold font-mono">{(selectedOrder.subtotal || (selectedOrder.totalAmount - (selectedOrder.deliveryFee || 5000))).toLocaleString('ar-IQ')} د.ع</span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>أجور التوصيل:</span>
+                <span className="font-bold font-mono">{(selectedOrder.deliveryFee || 5000).toLocaleString('ar-IQ')} د.ع</span>
+              </div>
+              <div className="border-t border-slate-200 pt-2 flex justify-between items-center text-slate-900 font-black text-sm">
+                <span>المبلغ الكلي للتحصيل (عند الاستلام):</span>
+                <span className="text-brand-800 font-bold text-base font-mono">{selectedOrder.totalAmount.toLocaleString('ar-IQ')} د.ع</span>
+              </div>
+              <div className="border-t border-slate-200/60 pt-2 grid grid-cols-2 gap-2 text-[11px]">
+                <div className="bg-emerald-50 text-emerald-800 p-2 rounded-xl border border-emerald-200">
+                  <span className="block text-[10px] text-emerald-600">ربح التاجر المستحق:</span>
+                  <strong className="font-black">+{selectedOrder.merchantProfit.toLocaleString('ar-IQ')} د.ع</strong>
+                </div>
+                <div className="bg-blue-50 text-blue-800 p-2 rounded-xl border border-blue-200">
+                  <span className="block text-[10px] text-blue-600">صافي ربح المنصة:</span>
+                  <strong className="font-black">+{selectedOrder.platformProfit.toLocaleString('ar-IQ')} د.ع</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* تغيير حالة الطلب مباشرة من داخل النافذة */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-slate-100 rounded-2xl border border-slate-200">
+              <span className="text-xs font-bold text-slate-700">تحديث حالة الطلب الآن:</span>
+              <select
+                disabled={updatingId === selectedOrder.id}
+                value={selectedOrder.status}
+                onChange={(e) => handleStatusChange(selectedOrder.id, e.target.value as OrderStatus)}
+                className="text-xs font-bold py-2 px-3 rounded-xl border border-slate-300 bg-white outline-none cursor-pointer focus:border-brand-600"
+              >
+                <option value="new">جديد</option>
+                <option value="reviewed">تمت المراجعة</option>
+                <option value="processing">قيد التجهيز</option>
+                <option value="ready_for_shipping">جاهز للشحن</option>
+                <option value="shipped">خرج للتوصيل</option>
+                <option value="delivered">تم التسليم</option>
+                <option value="cancelled">ملغي</option>
+                <option value="returned">مرتجع</option>
+              </select>
+            </div>
+
+            {/* أزرار الإجراءات السفلية */}
+            <div className="flex flex-wrap items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              {/* زر نسخ بوليصة الشحن السريعة لشركة التوصيل */}
+              <button
+                type="button"
+                onClick={() => {
+                  const itemsText = (selectedOrder.items || []).map((it, idx) => 
+                    `- ${it.productName} (العدد: ${it.quantity})`
+                  ).join('\n') || '- منتج الطلب';
+
+                  const slip = `📦 بوليصة توصيل طلبية [${selectedOrder.orderNumber}]
+------------------------------
+👤 اسم الزبون: ${selectedOrder.customerName}
+📞 هاتف الزبون: ${selectedOrder.customerPhone}
+📍 المحافظة: ${selectedOrder.governorate}
+🏙️ المدينة / القضاء: ${selectedOrder.city}
+🏠 العنوان التفصيلي: ${selectedOrder.address}
+${selectedOrder.deliveryNotes ? `📝 ملاحظات: ${selectedOrder.deliveryNotes}\n` : ''}
+🛒 المنتجات:
+${itemsText}
+
+💰 المبلغ المطلوب تحصيله عند الاستلام: ${selectedOrder.totalAmount.toLocaleString('ar-IQ')} د.ع (شامل التوصيل)
+🏬 المتجر المسوّق: ${selectedOrder.storeName || 'متجر وصلي'} (${selectedOrder.storeCode || ''})
+------------------------------`;
+                  copyToClipboard(slip, 'تم نسخ بوليصة الشحن بنجاح جاهزة للإرسال');
+                }}
+                className="py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                title="نسخ نص كامل جاهز للإرسال لشركة التوصيل أو الواتساب"
+              >
+                <Copy className="w-3.5 h-3.5 text-slate-300" />
+                <span>نسخ بوليصة الشحن للتوصيل</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="py-2.5 px-4 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5 text-slate-500" />
+                <span>طباعة</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedOrder(null)}
+                className="py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+              >
+                إغلاق
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
