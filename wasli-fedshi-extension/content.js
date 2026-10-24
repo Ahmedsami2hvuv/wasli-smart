@@ -635,13 +635,230 @@
   function updateFloatingButtonToImported(btn, productInfo) {
     if (!btn) return;
     btn.classList.add('wasli-already-imported');
-    btn.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="20 6 9 17 4 12"></polyline>
-      </svg>
-      <span>المنتج مرفوع مسبقاً ✓</span>
-    `;
+    const contentBox = btn.querySelector('.wasli-btn-content-box');
+    if (contentBox) {
+      contentBox.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <div class="wasli-btn-text-group">
+          <span class="wasli-btn-main-text">المنتج مرفوع مسبقاً ✓</span>
+          <span class="wasli-btn-sub-text">مسجل في منصتك - انقر للتعديل</span>
+        </div>
+      `;
+    } else {
+      btn.innerHTML = `
+        <div class="wasli-btn-content-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <div class="wasli-btn-text-group">
+            <span class="wasli-btn-main-text">المنتج مرفوع مسبقاً ✓</span>
+            <span class="wasli-btn-sub-text">مسجل في منصتك - انقر للتعديل</span>
+          </div>
+        </div>
+      `;
+    }
     btn.title = 'هذا المنتج تم استيراده ورفعه مسبقاً إلى منصة وصلي - انقر للمعاينة أو التحديث';
+  }
+
+  // ========================================================
+  // محرك السحب الحر والتكبير والتصغير وحفظ المكان والحجم
+  // ========================================================
+  function makeElementDraggableAndResizable(el, {
+    posKey,
+    sizeKey,
+    defaultPos = 'center',
+    defaultSize = { width: 260, height: 75 },
+    minWidth = 160,
+    minHeight = 55,
+    maxWidth = 650,
+    maxHeight = 400,
+    onClick,
+  }) {
+    // 1. استعادة الحجم المحفوظ
+    let currentWidth = defaultSize.width;
+    let currentHeight = defaultSize.height;
+    try {
+      const savedSize = JSON.parse(localStorage.getItem(sizeKey) || 'null');
+      if (savedSize && savedSize.width && savedSize.height) {
+        currentWidth = Math.min(Math.max(minWidth, savedSize.width), maxWidth);
+        currentHeight = Math.min(Math.max(minHeight, savedSize.height), maxHeight);
+      }
+    } catch (e) {}
+
+    el.style.width = `${currentWidth}px`;
+    el.style.height = `${currentHeight}px`;
+
+    // 2. استعادة الموضع المحفوظ
+    let currentLeft = 0;
+    let currentTop = 0;
+    let hasSavedPos = false;
+    try {
+      const savedPos = JSON.parse(localStorage.getItem(posKey) || 'null');
+      if (savedPos && savedPos.left !== undefined && savedPos.top !== undefined) {
+        const maxL = Math.max(10, window.innerWidth - currentWidth - 10);
+        const maxT = Math.max(10, window.innerHeight - currentHeight - 10);
+        currentLeft = Math.min(Math.max(10, savedPos.left), maxL);
+        currentTop = Math.min(Math.max(10, savedPos.top), maxT);
+        hasSavedPos = true;
+      }
+    } catch (e) {}
+
+    if (!hasSavedPos) {
+      if (defaultPos === 'center') {
+        currentLeft = Math.max(10, Math.round((window.innerWidth - currentWidth) / 2));
+        currentTop = Math.max(10, Math.round((window.innerHeight - currentHeight) / 2));
+      } else if (defaultPos && defaultPos.left !== undefined) {
+        currentLeft = defaultPos.left;
+        currentTop = defaultPos.top;
+      }
+    }
+
+    el.style.left = `${currentLeft}px`;
+    el.style.top = `${currentTop}px`;
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
+
+    // 3. إضافة مقبض التكبير والتصغير (Resize Handle)
+    let resizeHandle = el.querySelector('.wasli-resize-handle');
+    if (!resizeHandle) {
+      resizeHandle = document.createElement('div');
+      resizeHandle.className = 'wasli-resize-handle';
+      resizeHandle.title = 'اسحب لتكبير أو تصغير الزر';
+      resizeHandle.innerHTML = `
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="21 15 21 21 15 21"></polyline>
+          <line x1="21" y1="21" x2="14" y2="14"></line>
+          <polyline points="3 9 3 3 9 3"></polyline>
+          <line x1="3" y1="3" x2="10" y2="10"></line>
+        </svg>
+      `;
+      el.appendChild(resizeHandle);
+    }
+
+    // 4. السحب والتحريك
+    let isDragging = false;
+    let dragMoved = false;
+    let startX = 0, startY = 0;
+    let initLeft = 0, initTop = 0;
+
+    el.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.wasli-resize-handle')) return;
+
+      isDragging = true;
+      dragMoved = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      initLeft = el.getBoundingClientRect().left;
+      initTop = el.getBoundingClientRect().top;
+
+      el.classList.add('wasli-dragging');
+
+      const onPointerMove = (moveEvt) => {
+        if (!isDragging) return;
+        const dx = moveEvt.clientX - startX;
+        const dy = moveEvt.clientY - startY;
+
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+          dragMoved = true;
+        }
+
+        let newL = initLeft + dx;
+        let newT = initTop + dy;
+
+        const maxL = Math.max(10, window.innerWidth - el.offsetWidth - 10);
+        const maxT = Math.max(10, window.innerHeight - el.offsetHeight - 10);
+
+        newL = Math.max(10, Math.min(newL, maxL));
+        newT = Math.max(10, Math.min(newT, maxT));
+
+        el.style.left = `${newL}px`;
+        el.style.top = `${newT}px`;
+        el.style.right = 'auto';
+        el.style.bottom = 'auto';
+      };
+
+      const onPointerUp = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        el.classList.remove('wasli-dragging');
+        document.removeEventListener('pointermove', onPointerMove);
+        document.removeEventListener('pointerup', onPointerUp);
+
+        if (dragMoved) {
+          el.setAttribute('data-drag-moved', 'true');
+          setTimeout(() => el.removeAttribute('data-drag-moved'), 200);
+
+          const rect = el.getBoundingClientRect();
+          const pos = { left: Math.round(rect.left), top: Math.round(rect.top) };
+          try {
+            localStorage.setItem(posKey, JSON.stringify(pos));
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+              chrome.storage.local.set({ [posKey]: pos });
+            }
+          } catch (err) {}
+        } else {
+          if (typeof onClick === 'function') {
+            onClick();
+          }
+        }
+      };
+
+      document.addEventListener('pointermove', onPointerMove);
+      document.addEventListener('pointerup', onPointerUp);
+    });
+
+    // 5. التكبير والتصغير
+    let isResizing = false;
+    let resizeStartX = 0, resizeStartY = 0;
+    let initW = 0, initH = 0;
+
+    resizeHandle.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      isResizing = true;
+      resizeStartX = e.clientX;
+      resizeStartY = e.clientY;
+      initW = el.offsetWidth;
+      initH = el.offsetHeight;
+
+      el.classList.add('wasli-resizing');
+
+      const onResizeMove = (moveEvt) => {
+        if (!isResizing) return;
+        const dw = moveEvt.clientX - resizeStartX;
+        const dh = moveEvt.clientY - resizeStartY;
+
+        let newW = initW + dw;
+        let newH = initH + dh;
+
+        newW = Math.max(minWidth, Math.min(newW, maxWidth, window.innerWidth - el.offsetLeft - 10));
+        newH = Math.max(minHeight, Math.min(newH, maxHeight, window.innerHeight - el.offsetTop - 10));
+
+        el.style.width = `${newW}px`;
+        el.style.height = `${newH}px`;
+      };
+
+      const onResizeUp = () => {
+        if (!isResizing) return;
+        isResizing = false;
+        el.classList.remove('wasli-resizing');
+        document.removeEventListener('pointermove', onResizeMove);
+        document.removeEventListener('pointerup', onResizeUp);
+
+        const size = { width: Math.round(el.offsetWidth), height: Math.round(el.offsetHeight) };
+        try {
+          localStorage.setItem(sizeKey, JSON.stringify(size));
+          if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            chrome.storage.local.set({ [sizeKey]: size });
+          }
+        } catch (err) {}
+      };
+
+      document.addEventListener('pointermove', onResizeMove);
+      document.addEventListener('pointerup', onResizeUp);
+    });
   }
 
   function markProductAsImported(code) {
@@ -729,16 +946,21 @@
     container.id = 'wasli-importer-container';
     container.className = 'wasli-root';
 
-    // 1. الزر العائم
+    // 1. الزر العائم الكبير بنص الشاشة والقابل للتحريك والتكبير
     const floatingBtn = document.createElement('button');
     floatingBtn.className = 'wasli-floating-btn';
     floatingBtn.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-        <polyline points="7 10 12 15 17 10"></polyline>
-        <line x1="12" y1="15" x2="12" y2="3"></line>
-      </svg>
-      <span>استيراد المنتج إلى وصلي</span>
+      <div class="wasli-btn-content-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <div class="wasli-btn-text-group">
+          <span class="wasli-btn-main-text">استيراد المنتج إلى وصلي</span>
+          <span class="wasli-btn-sub-text">انقر للسحب والتسعير الذكي</span>
+        </div>
+      </div>
     `;
 
     // 2. المودال المنبثق
@@ -755,7 +977,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.6</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.7</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -804,12 +1026,12 @@
       });
     }
 
-    // إنشاء زر السحب العائم المربع والقابل للتحريك والمحفوظ مكانه
+    // إنشاء زر السحب العائم المربع والقابل للتحريك والتكبير داخل المودال
     const draggableConfirmBtn = document.createElement('button');
     draggableConfirmBtn.type = 'button';
     draggableConfirmBtn.className = 'wasli-draggable-btn';
     draggableConfirmBtn.id = 'wasli-btn-confirm-draggable';
-    draggableConfirmBtn.title = 'اسحب هذا الزر لأي مكان تريده - سيتم حفظ مكانه تلقائياً!';
+    draggableConfirmBtn.title = 'اسحب هذا الزر لأي مكان، أو كبره من الزاوية - سيتم حفظ مكانه وحجمه تلقائياً!';
     draggableConfirmBtn.innerHTML = `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -822,93 +1044,17 @@
     draggableConfirmBtn.style.display = 'none';
     modalOverlay.appendChild(draggableConfirmBtn);
 
-    // تفعيل خاصية السحب والإفلات وحفظ الإحداثيات
-    let isDraggingDraggable = false;
-    let dragStartX = 0;
-    let dragStartY = 0;
-    let dragInitLeft = 0;
-    let dragInitTop = 0;
-    let dragHasMoved = false;
-
-    // استعادة الموضع المحفوظ مسبقاً
-    function restoreDraggablePosition() {
-      const saved = localStorage.getItem('wasli_confirm_btn_pos');
-      if (saved) {
-        try {
-          const { left, top } = JSON.parse(saved);
-          const maxL = Math.max(10, window.innerWidth - 110);
-          const maxT = Math.max(10, window.innerHeight - 110);
-          draggableConfirmBtn.style.left = `${Math.min(Math.max(10, left), maxL)}px`;
-          draggableConfirmBtn.style.top = `${Math.min(Math.max(10, top), maxT)}px`;
-          draggableConfirmBtn.style.bottom = 'auto';
-          draggableConfirmBtn.style.right = 'auto';
-        } catch (e) {}
-      } else {
-        // الموضع الافتراضي الأولي: في الزاوية اليسرى المريحة بجانب المودال
-        draggableConfirmBtn.style.top = '120px';
-        draggableConfirmBtn.style.left = '32px';
-      }
-    }
-    restoreDraggablePosition();
-
-    draggableConfirmBtn.addEventListener('pointerdown', (e) => {
-      isDraggingDraggable = true;
-      dragHasMoved = false;
-      dragStartX = e.clientX;
-      dragStartY = e.clientY;
-
-      const rect = draggableConfirmBtn.getBoundingClientRect();
-      dragInitLeft = rect.left;
-      dragInitTop = rect.top;
-
-      draggableConfirmBtn.classList.add('wasli-dragging');
-
-      const onPointerMove = (moveEvt) => {
-        if (!isDraggingDraggable) return;
-        const dx = moveEvt.clientX - dragStartX;
-        const dy = moveEvt.clientY - dragStartY;
-
-        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
-          dragHasMoved = true;
-        }
-
-        let newLeft = dragInitLeft + dx;
-        let newTop = dragInitTop + dy;
-
-        const maxLeft = window.innerWidth - draggableConfirmBtn.offsetWidth - 10;
-        const maxTop = window.innerHeight - draggableConfirmBtn.offsetHeight - 10;
-
-        newLeft = Math.max(10, Math.min(newLeft, maxLeft));
-        newTop = Math.max(10, Math.min(newTop, maxTop));
-
-        draggableConfirmBtn.style.left = `${newLeft}px`;
-        draggableConfirmBtn.style.top = `${newTop}px`;
-        draggableConfirmBtn.style.bottom = 'auto';
-        draggableConfirmBtn.style.right = 'auto';
-      };
-
-      const onPointerUp = () => {
-        if (!isDraggingDraggable) return;
-        isDraggingDraggable = false;
-        draggableConfirmBtn.classList.remove('wasli-dragging');
-        document.removeEventListener('pointermove', onPointerMove);
-        document.removeEventListener('pointerup', onPointerUp);
-
-        // حفظ الموضع الجديد فوراً في ذاكرة المتصفح
-        if (dragHasMoved) {
-          draggableConfirmBtn.setAttribute('data-has-moved', 'true');
-          setTimeout(() => draggableConfirmBtn.removeAttribute('data-has-moved'), 150);
-          const rect = draggableConfirmBtn.getBoundingClientRect();
-          const pos = { left: rect.left, top: rect.top };
-          localStorage.setItem('wasli_confirm_btn_pos', JSON.stringify(pos));
-          if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-            chrome.storage.local.set({ wasli_confirm_btn_pos: pos });
-          }
-        }
-      };
-
-      document.addEventListener('pointermove', onPointerMove);
-      document.addEventListener('pointerup', onPointerUp);
+    // تفعيل السحب والتكبير وحفظ الموقع والحجم لزر التأكيد داخل المودال
+    makeElementDraggableAndResizable(draggableConfirmBtn, {
+      posKey: 'wasli_confirm_btn_pos',
+      sizeKey: 'wasli_confirm_btn_size',
+      defaultPos: { left: 32, top: 120 },
+      defaultSize: { width: 130, height: 130 },
+      minWidth: 90,
+      minHeight: 90,
+      maxWidth: 400,
+      maxHeight: 400,
+      onClick: () => executeBackgroundImport(draggableConfirmBtn),
     });
 
     // ربط أحداث الإغلاق
@@ -922,10 +1068,13 @@
       if (e.target === modalOverlay) closeModal();
     });
 
-    // استخراج وعرض البيانات الحية عند النقر
-    floatingBtn.addEventListener('click', async () => {
+    // فتح المودال عند النقر على الزر العائم (فقط في حال لم يكن سحباً)
+    const handleOpenModal = async () => {
       const isAlready = floatingBtn.classList.contains('wasli-already-imported');
-      floatingBtn.innerHTML = '<span>جاري فحص واستخراج بيانات الصفحة...</span>';
+      const mainTextEl = floatingBtn.querySelector('.wasli-btn-main-text');
+      const originalText = mainTextEl ? mainTextEl.textContent : '';
+      if (mainTextEl) mainTextEl.textContent = 'جاري فحص الصفحة...';
+
       try {
         const data = await extractFedshiProductDetails();
         if (!data || (!data.title && !data.fedshiWholesale)) {
@@ -933,7 +1082,6 @@
           return;
         }
         renderModalData(data, modalOverlay);
-        restoreDraggablePosition();
         draggableConfirmBtn.style.display = 'flex';
         modalOverlay.classList.add('wasli-active');
       } finally {
@@ -941,17 +1089,22 @@
         if (isAlready || (pathCode && importedCodesSet.has(pathCode))) {
           updateFloatingButtonToImported(floatingBtn);
         } else {
-          floatingBtn.classList.remove('wasli-already-imported');
-          floatingBtn.innerHTML = `
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            <span>استيراد المنتج إلى وصلي</span>
-          `;
+          if (mainTextEl) mainTextEl.textContent = originalText || 'استيراد المنتج إلى وصلي';
         }
       }
+    };
+
+    // تفعيل السحب والتكبير وحفظ الموقع والحجم لزر استيراد المنتج الرئيسي (كبير وبنص الشاشة)
+    makeElementDraggableAndResizable(floatingBtn, {
+      posKey: 'wasli_floating_btn_pos',
+      sizeKey: 'wasli_floating_btn_size',
+      defaultPos: 'center',
+      defaultSize: { width: 260, height: 75 },
+      minWidth: 160,
+      minHeight: 55,
+      maxWidth: 650,
+      maxHeight: 400,
+      onClick: handleOpenModal,
     });
   }
 
