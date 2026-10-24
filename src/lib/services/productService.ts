@@ -70,7 +70,7 @@ export async function getAllProducts(): Promise<Product[]> {
           isStockTracked: item.is_stock_tracked,
           isAvailable: item.is_available,
           status: item.status,
-          image: item.images?.[0]?.local_url || 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=600&q=80',
+          image: item.images?.[0]?.local_url || '/placeholder-product.svg',
           category: item.category?.name || 'عام',
           categoryId: item.category_id,
           promoDescription: item.description,

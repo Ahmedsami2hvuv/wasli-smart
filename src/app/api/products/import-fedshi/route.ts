@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
     // الصورة الرئيسية للمنتج
     const primaryImage = (images && images.length > 0) 
       ? images[0] 
-      : (colors && colors.length > 0 && colors[0].image ? colors[0].image : 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=600&q=80');
+      : (colors && colors.length > 0 && colors[0].image ? colors[0].image : '/placeholder-product.svg');
 
     // حفظ المنتج في النظام
     const product = await createPlatformProduct({

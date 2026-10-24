@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       minPriceIqd: Number(minPriceIqd),
       maxPriceIqd: Number(maxPriceIqd),
       stockQuantity: Number(stockQuantity || 100),
-      image: image || 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=600&q=80',
+      image: image || '/placeholder-product.svg',
       brand,
     });
 

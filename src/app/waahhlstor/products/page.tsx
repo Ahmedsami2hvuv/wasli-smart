@@ -279,7 +279,7 @@ export default function AdminProductsPage() {
     try {
       const primaryImage = uploadedImageUrls.length > 0 
         ? uploadedImageUrls[0] 
-        : 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=600&q=80';
+        : '/placeholder-product.svg';
 
       const res = await fetch('/api/products', {
         method: 'POST',

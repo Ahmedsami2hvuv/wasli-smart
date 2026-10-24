@@ -1284,7 +1284,7 @@ interface MerchantEditFormState {
                           <div className="flex items-start gap-4">
                             <div className="w-20 h-20 rounded-xl bg-slate-100 overflow-hidden border border-slate-200 shrink-0 relative">
                               <img
-                                src={product.image || 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=300&q=80'}
+                                src={product.image || '/placeholder-product.svg'}
                                 alt={product.name}
                                 className="w-full h-full object-cover"
                               />
