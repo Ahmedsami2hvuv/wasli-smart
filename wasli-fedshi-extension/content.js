@@ -536,7 +536,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.2.6</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.2.7</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -574,8 +574,118 @@
     container.appendChild(modalOverlay);
     document.body.appendChild(container);
 
+    // إنشاء زر السحب العائم المربع والقابل للتحريك والمحفوظ مكانه
+    const draggableConfirmBtn = document.createElement('button');
+    draggableConfirmBtn.type = 'button';
+    draggableConfirmBtn.className = 'wasli-draggable-btn';
+    draggableConfirmBtn.id = 'wasli-btn-confirm-draggable';
+    draggableConfirmBtn.title = 'اسحب هذا الزر لأي مكان تريده - سيتم حفظ مكانه تلقائياً!';
+    draggableConfirmBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      <span class="wasli-draggable-title">تأكيد وسحب</span>
+      <span class="wasli-draggable-badge">للمنصة فوراً</span>
+    `;
+    draggableConfirmBtn.style.display = 'none';
+    modalOverlay.appendChild(draggableConfirmBtn);
+
+    // تفعيل خاصية السحب والإفلات وحفظ الإحداثيات
+    let isDraggingDraggable = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let dragInitLeft = 0;
+    let dragInitTop = 0;
+    let dragHasMoved = false;
+
+    // استعادة الموضع المحفوظ مسبقاً
+    function restoreDraggablePosition() {
+      const saved = localStorage.getItem('wasli_confirm_btn_pos');
+      if (saved) {
+        try {
+          const { left, top } = JSON.parse(saved);
+          const maxL = Math.max(10, window.innerWidth - 110);
+          const maxT = Math.max(10, window.innerHeight - 110);
+          draggableConfirmBtn.style.left = `${Math.min(Math.max(10, left), maxL)}px`;
+          draggableConfirmBtn.style.top = `${Math.min(Math.max(10, top), maxT)}px`;
+          draggableConfirmBtn.style.bottom = 'auto';
+          draggableConfirmBtn.style.right = 'auto';
+        } catch (e) {}
+      } else {
+        // الموضع الافتراضي الأولي: في الزاوية اليسرى المريحة بجانب المودال
+        draggableConfirmBtn.style.top = '120px';
+        draggableConfirmBtn.style.left = '32px';
+      }
+    }
+    restoreDraggablePosition();
+
+    draggableConfirmBtn.addEventListener('pointerdown', (e) => {
+      isDraggingDraggable = true;
+      dragHasMoved = false;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+
+      const rect = draggableConfirmBtn.getBoundingClientRect();
+      dragInitLeft = rect.left;
+      dragInitTop = rect.top;
+
+      draggableConfirmBtn.classList.add('wasli-dragging');
+
+      const onPointerMove = (moveEvt) => {
+        if (!isDraggingDraggable) return;
+        const dx = moveEvt.clientX - dragStartX;
+        const dy = moveEvt.clientY - dragStartY;
+
+        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+          dragHasMoved = true;
+        }
+
+        let newLeft = dragInitLeft + dx;
+        let newTop = dragInitTop + dy;
+
+        const maxLeft = window.innerWidth - draggableConfirmBtn.offsetWidth - 10;
+        const maxTop = window.innerHeight - draggableConfirmBtn.offsetHeight - 10;
+
+        newLeft = Math.max(10, Math.min(newLeft, maxLeft));
+        newTop = Math.max(10, Math.min(newTop, maxTop));
+
+        draggableConfirmBtn.style.left = `${newLeft}px`;
+        draggableConfirmBtn.style.top = `${newTop}px`;
+        draggableConfirmBtn.style.bottom = 'auto';
+        draggableConfirmBtn.style.right = 'auto';
+      };
+
+      const onPointerUp = () => {
+        if (!isDraggingDraggable) return;
+        isDraggingDraggable = false;
+        draggableConfirmBtn.classList.remove('wasli-dragging');
+        document.removeEventListener('pointermove', onPointerMove);
+        document.removeEventListener('pointerup', onPointerUp);
+
+        // حفظ الموضع الجديد فوراً في ذاكرة المتصفح
+        if (dragHasMoved) {
+          draggableConfirmBtn.setAttribute('data-has-moved', 'true');
+          setTimeout(() => draggableConfirmBtn.removeAttribute('data-has-moved'), 150);
+          const rect = draggableConfirmBtn.getBoundingClientRect();
+          const pos = { left: rect.left, top: rect.top };
+          localStorage.setItem('wasli_confirm_btn_pos', JSON.stringify(pos));
+          if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            chrome.storage.local.set({ wasli_confirm_btn_pos: pos });
+          }
+        }
+      };
+
+      document.addEventListener('pointermove', onPointerMove);
+      document.addEventListener('pointerup', onPointerUp);
+    });
+
     // ربط أحداث الإغلاق
-    const closeModal = () => modalOverlay.classList.remove('wasli-active');
+    const closeModal = () => {
+      modalOverlay.classList.remove('wasli-active');
+      draggableConfirmBtn.style.display = 'none';
+    };
     modalOverlay.querySelector('#wasli-modal-close').addEventListener('click', closeModal);
     modalOverlay.querySelector('#wasli-btn-cancel').addEventListener('click', closeModal);
     modalOverlay.addEventListener('click', (e) => {
@@ -593,6 +703,8 @@
           return;
         }
         renderModalData(data, modalOverlay);
+        restoreDraggablePosition();
+        draggableConfirmBtn.style.display = 'flex';
         modalOverlay.classList.add('wasli-active');
       } finally {
         floatingBtn.innerHTML = originalHtml;
@@ -876,6 +988,8 @@
 
       // 1. إغلاق المودال فوراً لتمكين المستخدم من متابعة التصفح فوراً دون أي انتظار
       overlay.classList.remove('wasli-active');
+      const draggableBtn = overlay.querySelector('#wasli-btn-confirm-draggable');
+      if (draggableBtn) draggableBtn.style.display = 'none';
 
       // 2. إظهار إشعار عائم في الزاوية يفيد ببدء السحب في الخلفية
       const toast = showWasliToast({
@@ -943,12 +1057,23 @@
       })();
     };
 
-    // ربط زر التأكيد العلوي البارز وزر التأكيد السفلي
+    // ربط زر التأكيد العلوي وزر التأكيد السفلي والزر العائم المربع القابل للتحريك
     const confirmBtnTop = overlay.querySelector('#wasli-btn-confirm-top');
     const confirmBtn = overlay.querySelector('#wasli-btn-confirm');
+    const confirmBtnDraggable = overlay.querySelector('#wasli-btn-confirm-draggable');
 
     if (confirmBtnTop) confirmBtnTop.onclick = executeBackgroundImport;
     if (confirmBtn) confirmBtn.onclick = executeBackgroundImport;
+    if (confirmBtnDraggable) {
+      confirmBtnDraggable.onclick = () => {
+        // إذا كان الزر تم تحريكه أثناء السحب، لا ننفذ النقرة
+        if (confirmBtnDraggable.getAttribute('data-has-moved') === 'true') {
+          confirmBtnDraggable.removeAttribute('data-has-moved');
+          return;
+        }
+        executeBackgroundImport();
+      };
+    }
   }
 
   // تفعيل الواجهة

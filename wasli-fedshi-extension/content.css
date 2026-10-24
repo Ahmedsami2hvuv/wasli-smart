@@ -526,3 +526,62 @@
 .wasli-spinner {
   animation: wasliSpin 1s linear infinite !important;
 }
+
+/* زر التأكيد والسحب العائم المربع والقابل للتحريك */
+.wasli-draggable-btn {
+  position: fixed !important;
+  z-index: 10000005 !important;
+  width: 92px !important;
+  height: 92px !important;
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+  color: #ffffff !important;
+  border: 2px solid rgba(255, 255, 255, 0.35) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 12px 28px -4px rgba(22, 163, 74, 0.45), 0 4px 10px rgba(0, 0, 0, 0.15) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 3px !important;
+  cursor: grab !important;
+  user-select: none !important;
+  touch-action: none !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+  text-align: center !important;
+  padding: 6px !important;
+}
+
+.wasli-draggable-btn:hover {
+  transform: scale(1.05) !important;
+  box-shadow: 0 16px 32px -4px rgba(22, 163, 74, 0.55), 0 6px 12px rgba(0, 0, 0, 0.2) !important;
+}
+
+.wasli-draggable-btn.wasli-dragging {
+  cursor: grabbing !important;
+  transform: scale(1.08) !important;
+  opacity: 0.95 !important;
+  box-shadow: 0 20px 40px -4px rgba(22, 163, 74, 0.65) !important;
+}
+
+.wasli-draggable-btn svg {
+  width: 26px !important;
+  height: 26px !important;
+  flex-shrink: 0 !important;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)) !important;
+}
+
+.wasli-draggable-title {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.2px !important;
+}
+
+.wasli-draggable-badge {
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  background: rgba(255, 255, 255, 0.25) !important;
+  padding: 1px 6px !important;
+  border-radius: 999px !important;
+  line-height: 1.2 !important;
+}
