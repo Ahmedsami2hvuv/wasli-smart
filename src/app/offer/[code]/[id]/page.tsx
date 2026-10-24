@@ -133,18 +133,7 @@ function OfferPageContent() {
           } catch (e) {}
         }
 
-        // استخدام البيانات الاحتياطية من الرابط إن وجدت
-        if (!foundStore) {
-          foundStore = {
-            id: storeCode || 'custom-store',
-            code: storeCode || 'store',
-            name: queryStoreName || 'متجر إلكتروني معتمد',
-            phone: queryPhone || '',
-            city: queryCity || 'بغداد',
-            slug: storeCode,
-            status: 'active',
-          } as Store;
-        } else if (queryPhone && !foundStore.phone) {
+        if (foundStore && queryPhone && !foundStore.phone) {
           foundStore.phone = queryPhone;
         }
 
@@ -332,14 +321,14 @@ function OfferPageContent() {
     );
   }
 
-  if (!product) {
+  if (!product || !store) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 text-center" dir="rtl">
         <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 max-w-md w-full">
           <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-3" />
-          <h2 className="text-lg font-black text-slate-900 mb-2">عذراً، هذا العرض غير متوفر حالياً</h2>
+          <h2 className="text-lg font-black text-slate-900 mb-2">عذراً، هذا المتجر أو العرض غير متوفر</h2>
           <p className="text-slate-600 text-xs leading-relaxed">
-            قد يكون انتهى وقت هذا العرض أو أن المنتج غير متاح حالياً.
+            قد يكون تم إيقاف هذا المتجر أو أن الرابط غير صالح.
           </p>
         </div>
       </div>

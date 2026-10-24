@@ -121,41 +121,9 @@ export async function getStoreBySlugOrCode(identifier: string): Promise<Store | 
   const stores = await getAllStores();
   const decoded = decodeURIComponent(identifier).toLowerCase().trim();
   
-  let found = stores.find(
+  const found = stores.find(
     s => s.code?.toLowerCase() === decoded || s.slug?.toLowerCase() === decoded || s.id === decoded
   );
-
-  // إذا كان الرمز يبدأ بـ w- (كود متجر وصلي) ولم يوجد بعد إعادة تشغيل السيرفر
-  // يتم استعادته وتثبيته فوراً لضمان عدم ضياع المتجر
-  if (!found && (decoded.startsWith('w-') || decoded.length === 9)) {
-    const recoveredStore: Store = {
-      id: `store-${decoded}`,
-      name: `متجر ${decoded}`,
-      ownerName: '',
-      slug: `store-${decoded}`,
-      code: decoded,
-      description: 'متجر إلكتروني معتمد للتجارة المباشرة والتوصيل السريع لكافة محافظات العراق مع دفع عند الاستلام',
-      city: 'العراق',
-      phone: '',
-      status: 'active',
-      totalSales: 0,
-      totalOrders: 0,
-      balanceEarned: 0,
-      balanceWithdrawn: 0,
-      rating: 5.0,
-      reviewsCount: 1,
-      deliveryFeeIqd: 5000,
-      deliveryTimeMinutes: 'خلال يوم أو يومين',
-      isOpen: true,
-      image: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80',
-      logoUrl: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80',
-      location: 'العراق',
-      district: 'العراق',
-      createdAt: new Date().toISOString(),
-    };
-    localStores.unshift(recoveredStore);
-    found = recoveredStore;
-  }
 
   return found || null;
 }

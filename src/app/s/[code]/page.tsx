@@ -157,52 +157,35 @@ function StorePageContent() {
           }
         }
 
-        if (!foundStore) {
-          const actualName = queryName || `متجر (${code})`;
-          foundStore = {
-            id: `store-${code}`,
-            name: actualName,
-            ownerName: queryOwner || '',
-            code: code,
-            slug: code,
-            description: '',
-            city: queryCity || 'العراق',
-            phone: queryPhone || '',
-            status: 'active',
-            deliveryFeeIqd: 5000,
-            deliveryTimeMinutes: 'خلال يوم أو يومين',
-            isOpen: true,
-            image: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=300&q=80',
-            logoUrl: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=300&q=80',
-          } as Store;
-        }
-
         if (foundStore) {
           setStore(foundStore);
-        }
-
-        // جلب المنتجات المتاحة بأسعار متجر هذا التاجر
-        try {
-          const prodRes = await fetch(`/api/stores/products?storeCode=${code}&forCustomer=true`);
-          const prodData = await prodRes.json();
-          if (prodData.success && prodData.products && prodData.products.length > 0) {
-            setProducts(prodData.products);
-          } else {
+          
+          // جلب المنتجات المتاحة بأسعار متجر هذا التاجر
+          try {
+            const prodRes = await fetch(`/api/stores/products?storeCode=${code}&forCustomer=true`);
+            const prodData = await prodRes.json();
+            if (prodData.success && prodData.products && prodData.products.length > 0) {
+              setProducts(prodData.products);
+            } else {
+              const fallbackRes = await fetch('/api/products');
+              const fallbackData = await fallbackRes.json();
+              if (fallbackData.success && fallbackData.products) {
+                setProducts(fallbackData.products);
+              }
+            }
+          } catch (pErr) {
             const fallbackRes = await fetch('/api/products');
             const fallbackData = await fallbackRes.json();
             if (fallbackData.success && fallbackData.products) {
               setProducts(fallbackData.products);
             }
           }
-        } catch (pErr) {
-          const fallbackRes = await fetch('/api/products');
-          const fallbackData = await fallbackRes.json();
-          if (fallbackData.success && fallbackData.products) {
-            setProducts(fallbackData.products);
-          }
+        } else {
+          setStore(null);
         }
       } catch (err) {
         console.error('خطأ في تحميل المتجر:', err);
+        setStore(null);
       } finally {
         setLoading(false);
       }
@@ -370,6 +353,30 @@ function StorePageContent() {
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-brand-200 border-t-brand-700 rounded-full animate-spin mx-auto mb-4" />
           <p className="text-slate-600 font-medium">جاري فتح المتجر وتجهيز المنتجات...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!store) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4" dir="rtl">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-slate-200 text-center shadow-lg space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200">
+            <StoreIcon className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-black text-slate-900">المتجر غير متاح حالياً</h2>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            عذراً، هذا الرابط غير صالح أو تم إيقاف المتجر وحذفه نهائياً من قبل الإدارة.
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center py-2.5 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors"
+            >
+              الذهاب للرئيسية
+            </Link>
+          </div>
         </div>
       </div>
     );
