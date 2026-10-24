@@ -755,7 +755,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.5</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.6</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -1652,204 +1652,24 @@
   }
 
   // ========================================================
-  // 2. الشريط العلوي العائم وزر "سحب جميع منتجات الصفحة"
-  // ========================================================
-  let isBatchRunning = false;
-  let shouldStopBatch = false;
-
-  function injectBatchToolbar() {
-    if (window.location.pathname.startsWith('/products/')) {
-      const oldToolbar = document.getElementById('wasli-batch-toolbar');
-      if (oldToolbar) oldToolbar.remove();
-      return;
-    }
-
-    const cards = findVisibleProductCards();
-    if (cards.length === 0) {
-      const oldToolbar = document.getElementById('wasli-batch-toolbar');
-      if (oldToolbar) oldToolbar.remove();
-      return;
-    }
-
-    let toolbar = document.getElementById('wasli-batch-toolbar');
-    if (!toolbar) {
-      toolbar = document.createElement('div');
-      toolbar.id = 'wasli-batch-toolbar';
-      toolbar.className = 'wasli-batch-toolbar';
-      toolbar.innerHTML = `
-        <div class="wasli-batch-brand">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D4ED8" stroke-width="2.5">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-          </svg>
-          <span>منصة وصلي</span>
-        </div>
-        <div class="wasli-batch-count" id="wasli-batch-count">
-          منتجات الصفحة: <strong id="wasli-batch-count-val">${cards.length}</strong>
-        </div>
-        <button type="button" class="wasli-batch-btn" id="wasli-batch-btn">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          <span id="wasli-batch-btn-text">سحب جميع منتجات الصفحة (${cards.length})</span>
-        </button>
-        <button type="button" class="wasli-batch-stop-btn" id="wasli-batch-stop-btn">
-          إيقاف ⏸
-        </button>
-      `;
-
-      document.body.appendChild(toolbar);
-
-      const stopBtn = toolbar.querySelector('#wasli-batch-stop-btn');
-      stopBtn.onclick = () => {
-        shouldStopBatch = true;
-        stopBtn.textContent = 'جاري الإيقاف...';
-      };
-
-      const batchBtn = toolbar.querySelector('#wasli-batch-btn');
-      batchBtn.onclick = async () => {
-        if (isBatchRunning) return;
-
-        const currentCards = findVisibleProductCards();
-        const pendingCards = currentCards.filter(c => !importedCodesSet.has(c.code));
-
-        if (pendingCards.length === 0) {
-          showWasliToast({
-            title: 'تم استيرادها بالكامل',
-            message: 'جميع المنتجات المعروضة في هذه الصفحة تم استيرادها بالفعل إلى منصتك!',
-            type: 'success'
-          });
-          return;
-        }
-
-        isBatchRunning = true;
-        shouldStopBatch = false;
-        stopBtn.style.display = 'inline-block';
-        stopBtn.textContent = 'إيقاف ⏸';
-        batchBtn.className = 'wasli-batch-btn wasli-working';
-
-        const btnText = toolbar.querySelector('#wasli-batch-btn-text');
-        const total = pendingCards.length;
-        let successCount = 0;
-        let failCount = 0;
-
-        const batchToast = showWasliToast({
-          title: 'جاري السحب الفوري للمنتجات...',
-          message: `بدء عملية السحب التتابعي لـ <strong>${total}</strong> منتجاً إلى منصة وصلي ونشرها في تليغرام.`,
-          type: 'loading'
-        });
-
-        for (let i = 0; i < total; i++) {
-          if (shouldStopBatch) {
-            batchToast.update({
-              type: 'info',
-              title: 'تم إيقاف السحب مؤقتاً',
-              message: `تم إيقاف العملية. نجح سحب <strong>${successCount}</strong> منتج بنجاح.`,
-            });
-            break;
-          }
-
-          const card = pendingCards[i];
-          const currentNum = i + 1;
-          btnText.textContent = `⚡ (${currentNum}/${total}) جاري سحب ${card.cardData.title.slice(0, 15)}...`;
-
-          batchToast.update({
-            type: 'loading',
-            title: `جاري سحب (${currentNum} من ${total})...`,
-            message: `يتم الآن سحب <strong>${card.cardData.title}</strong> وحفظه في وصلي ونشره.`,
-          });
-
-          const cardBtn = document.querySelector(`[data-wasli-code="${card.code}"]`);
-          if (cardBtn) {
-            cardBtn.className = 'wasli-card-quick-btn wasli-loading';
-            cardBtn.innerHTML = `
-              <svg class="wasli-spinner" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="12" y1="2" x2="12" y2="6"></line>
-                <line x1="12" y1="18" x2="12" y2="22"></line>
-                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
-                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
-              </svg>
-              <span>جاري السحب...</span>
-            `;
-          }
-
-          try {
-            await importProductInstant(card.cardData);
-            successCount++;
-
-            if (cardBtn) {
-              cardBtn.className = 'wasli-card-quick-btn wasli-done';
-              cardBtn.innerHTML = `
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-                <span>تم السحب</span>
-              `;
-            }
-          } catch (err) {
-            console.warn(`فشل سحب المنتج ${card.code}:`, err);
-            failCount++;
-            if (cardBtn) {
-              cardBtn.className = 'wasli-card-quick-btn wasli-error';
-              cardBtn.innerHTML = `<span>إعادة ↺</span>`;
-            }
-          }
-
-          // فاصل زمني خفيف 500 ميلي ثانية
-          if (i < total - 1 && !shouldStopBatch) {
-            await new Promise(r => setTimeout(r, 500));
-          }
-        }
-
-        isBatchRunning = false;
-        stopBtn.style.display = 'none';
-
-        if (successCount > 0) {
-          batchBtn.className = 'wasli-batch-btn wasli-completed';
-          btnText.textContent = `✔ تم سحب ${successCount} منتج بنجاح!`;
-
-          const activeTarget = wasliServerUrl.trim().replace(/\/+$/, '');
-          batchToast.update({
-            type: 'success',
-            title: 'اكتمل استيراد منتجات الصفحة بنجاح!',
-            message: `تم سحب ونشر <strong>${successCount}</strong> منتجاً إلى منصتك بنجاح! ${failCount > 0 ? `(تعذر: ${failCount})` : ''}`,
-            adminUrl: `${activeTarget}/waahhlstor/products`,
-          });
-
-          setTimeout(() => {
-            batchBtn.className = 'wasli-batch-btn';
-            const updatedCards = findVisibleProductCards();
-            btnText.textContent = `سحب جميع منتجات الصفحة (${updatedCards.length})`;
-          }, 6000);
-        } else {
-          batchBtn.className = 'wasli-batch-btn';
-          btnText.textContent = `سحب جميع منتجات الصفحة (${cards.length})`;
-        }
-      };
-    } else {
-      const countEl = toolbar.querySelector('#wasli-batch-count-val');
-      const btnText = toolbar.querySelector('#wasli-batch-btn-text');
-      if (countEl) countEl.textContent = cards.length;
-      if (btnText && !isBatchRunning) {
-        btnText.textContent = `سحب جميع منتجات الصفحة (${cards.length})`;
-      }
-    }
-  }
-
-  // ========================================================
   // إدارة التحديثات الآمنة مع Debounce فائق الخفة (Zero CPU Impact)
   // ========================================================
   let debounceTimeout = null;
   function scheduleSafeCatalogUpdate() {
+    // التأكد من إزالة أي شريط تجميعي قديم إن وجد
+    const oldToolbar = document.getElementById('wasli-batch-toolbar');
+    if (oldToolbar) oldToolbar.remove();
+
     if (debounceTimeout) clearTimeout(debounceTimeout);
     debounceTimeout = setTimeout(() => {
       injectProductCardButtons();
-      injectBatchToolbar();
     }, 450);
   }
 
   // 1. التشغيل الأولي النظيف
+  const existingToolbar = document.getElementById('wasli-batch-toolbar');
+  if (existingToolbar) existingToolbar.remove();
+
   if (window.location.pathname.startsWith('/products/')) {
     initWasliUI();
   } else {
@@ -1865,9 +1685,10 @@
       const oldModal = document.getElementById('wasli-importer-container');
       if (oldModal) oldModal.remove();
 
+      const oldToolbar = document.getElementById('wasli-batch-toolbar');
+      if (oldToolbar) oldToolbar.remove();
+
       if (window.location.pathname.startsWith('/products/')) {
-        const oldToolbar = document.getElementById('wasli-batch-toolbar');
-        if (oldToolbar) oldToolbar.remove();
         initWasliUI();
       } else {
         scheduleSafeCatalogUpdate();
