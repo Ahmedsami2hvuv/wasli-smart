@@ -1010,9 +1010,20 @@ export default function AdminProductsPage() {
                               <div className="font-bold text-slate-900 line-clamp-1">{p.name}</div>
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 {p.supplierCode ? (
-                                  <span className="bg-sky-50 text-sky-700 text-[10px] font-bold px-1.5 py-0.5 rounded border border-sky-200">
-                                    فدشي: {p.supplierCode}
-                                  </span>
+                                  (() => {
+                                    const isMojod = p.supplierSource === 'mojod' || /^\d+$/.test(String(p.supplierCode).trim());
+                                    return isMojod ? (
+                                      <span className="bg-purple-50 text-purple-700 text-[10px] font-black px-1.5 py-0.5 rounded border border-purple-200 flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-purple-600"></span>
+                                        <span>موجود: {p.supplierCode}</span>
+                                      </span>
+                                    ) : (
+                                      <span className="bg-sky-50 text-sky-700 text-[10px] font-bold px-1.5 py-0.5 rounded border border-sky-200 flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-sky-600"></span>
+                                        <span>فدشي: {p.supplierCode}</span>
+                                      </span>
+                                    );
+                                  })()
                                 ) : (
                                   <span className="text-[10px] text-slate-400 font-mono">{p.id}</span>
                                 )}

@@ -626,8 +626,14 @@
       }
 
       // 4. تطبيق معادلة التسعير المطلوبة لمنصة وصلي:
-      // سعر جملة وصلي للتاجر = أقل سعر حدده المورد
-      const wasliWholesale = lowPrice || (wholesaleCost > 0 ? (wholesaleCost + 5000) : 0);
+      // سعر جملة وصلي للتاجر = إذا كان أقل سعر حدده المورد أعلى من تكلفة الجملة نأخذه، وإلا نضيف هامش ربح منصة أدنى 3000 د.ع
+      let wasliWholesale = 0;
+      if (lowPrice && lowPrice > wholesaleCost) {
+        wasliWholesale = lowPrice;
+      } else if (wholesaleCost > 0) {
+        wasliWholesale = wholesaleCost + 3000;
+      }
+
       const wasliProfit = wholesaleCost > 0 ? Math.max(0, wasliWholesale - wholesaleCost) : 0;
       const wasliMinPrice = wasliWholesale + 5000;
       const wasliMaxPrice = highPrice && highPrice > wasliMinPrice ? highPrice : (wasliMinPrice + 15000);
@@ -1274,12 +1280,22 @@
     }
 
     // دالة ذكية تنتظر اكتمال تحميل بيانات وسعر المنتج في الصفحة وتلتقطها فوراً
-    async function getReadyProductDetails(maxAttempts = 14, interval = 160) {
+    async function getReadyProductDetails(maxAttempts = 16, interval = 200) {
       const isMojod = window.location.hostname.includes('mojod.app');
       for (let i = 0; i < maxAttempts; i++) {
         const data = isMojod ? await extractMojodProductDetails() : await extractFedshiProductDetails();
-        if (data && (data.title || data.fedshiWholesale > 0)) {
-          return data;
+        if (isMojod) {
+          const isTitleReady = Boolean(data && data.title && data.title !== '—' && data.title !== '...');
+          const isWholesaleReady = Boolean(data && data.fedshiWholesale > 0);
+          const isMinSuggestedReady = Boolean(data && data.minSuggested > 0);
+
+          if (isTitleReady && isWholesaleReady && (isMinSuggestedReady || i >= 10)) {
+            return data;
+          }
+        } else {
+          if (data && (data.title || data.fedshiWholesale > 0)) {
+            return data;
+          }
         }
         await new Promise(res => setTimeout(res, interval));
       }
