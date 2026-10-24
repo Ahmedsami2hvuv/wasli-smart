@@ -669,21 +669,28 @@
     posKey,
     sizeKey,
     defaultPos = 'center',
-    defaultSize = { width: 260, height: 75 },
-    minWidth = 160,
+    defaultSize = { width: 270, height: 72 },
+    minWidth = 180,
     minHeight = 55,
-    maxWidth = 650,
-    maxHeight = 400,
+    maxWidth = 420,
+    maxHeight = 110,
     onClick,
   }) {
-    // 1. استعادة الحجم المحفوظ
+    // 1. استعادة الحجم المحفوظ مع حماية ضد الارتفاعات المبالغ فيها
     let currentWidth = defaultSize.width;
     let currentHeight = defaultSize.height;
     try {
       const savedSize = JSON.parse(localStorage.getItem(sizeKey) || 'null');
       if (savedSize && savedSize.width && savedSize.height) {
-        currentWidth = Math.min(Math.max(minWidth, savedSize.width), maxWidth);
-        currentHeight = Math.min(Math.max(minHeight, savedSize.height), maxHeight);
+        if (savedSize.height > 110) {
+          // تصحيح فوري لأي أبعاد عملاقة قديمة
+          localStorage.removeItem(sizeKey);
+          currentWidth = defaultSize.width;
+          currentHeight = defaultSize.height;
+        } else {
+          currentWidth = Math.min(Math.max(minWidth, savedSize.width), maxWidth);
+          currentHeight = Math.min(Math.max(minHeight, savedSize.height), maxHeight);
+        }
       }
     } catch (e) {}
 
@@ -997,7 +1004,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.2</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.3</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -1053,7 +1060,29 @@
     // متغير لمنع الضغط المتكرر أثناء عملية السحب الفوري
     let isImportingInProgress = false;
 
-    // معالج النقر المباشر: استيراد ونقل فوري للمنتج بضغطة زر واحدة وبدون أي تأكيد!
+    // دالة الرجوع الذكية والسلسة بدون ريفريش للحفاظ على مكان التمرير في قائمة المنتجات
+    const navigateBackSmoothly = () => {
+      // 1. محاولة النقر على زر الرجوع الأصلي لموقع فدشي إن وجد
+      const candidates = Array.from(document.querySelectorAll('button, a'));
+      const fedshiBackBtn = candidates.find((el) => {
+        const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+        const txt = (el.textContent || '').trim();
+        const hasBackArrow = el.querySelector('svg path, svg polyline') !== null;
+        return (aria.includes('back') || aria.includes('رجوع') || txt === 'رجوع' || txt === 'العودة') && el.offsetParent !== null;
+      });
+
+      if (fedshiBackBtn && typeof fedshiBackBtn.click === 'function') {
+        fedshiBackBtn.click();
+        return;
+      }
+
+      // 2. الرجوع الطبيعي عبر سجل المتصفح (SPA Pop State) دون أي ريفريش للحفاظ على موضع التمرير
+      if (window.history.length > 1) {
+        window.history.back();
+      }
+    };
+
+    // معالج النقر المباشر: استيراد فوري في الخلفية وخروج سريع بدون أي انتظار وبدون ريفريش!
     const handleDirectImportAction = async () => {
       if (isImportingInProgress) return;
 
@@ -1063,22 +1092,13 @@
       const originalSubText = subTextEl ? subTextEl.textContent : '';
 
       isImportingInProgress = true;
-      if (mainTextEl) mainTextEl.textContent = 'جاري السحب الفوري...';
-      if (subTextEl) subTextEl.textContent = 'يرجى الانتظار ثوانٍ معدودة';
-      floatingBtn.style.opacity = '0.85';
-
-      // إظهار إشعار فوري صغير في الركن الأيمن
-      const toast = showWasliToast({
-        title: 'جاري السحب...',
-        message: 'يتم الآن استيراد ونقل المنتج إلى منصة وصلي فوراً...',
-        type: 'loading'
-      });
+      floatingBtn.style.opacity = '0.9';
 
       try {
-        // 1. استخراج بيانات المنتج من صفحة فدشي الحالية
+        // 1. استخراج بيانات المنتج من صفحة فدشي الحالية (أجزاء من الثانية فقط)
         const data = await extractFedshiProductDetails();
         if (!data || (!data.title && !data.fedshiWholesale)) {
-          throw new Error('تعذر قراءة بيانات وسعر المنتج من الصفحة الحالية. يرجى التأكد من اكتمال تحميل الصفحة.');
+          throw new Error('تعذر قراءة بيانات وسعر المنتج. يرجى الانتظار لحين اكتمال تحميل الصفحة.');
         }
 
         const productTitle = data.title || 'منتج جديد';
@@ -1089,14 +1109,14 @@
         const storePrice = parseInt(data.defaultStorePrice, 10) || (wholesale + 10000);
         const stock = parseInt(data.stock, 10) || 50;
 
-        // تحديث رسالة الإشعار
-        toast.update({
-          type: 'loading',
-          title: 'جاري السحب...',
-          message: `يتم الآن استيراد <strong>${productTitle}</strong> ونشره في منصتك...`,
+        // 2. إشعار فوري صغير بالركن الأيمن يؤكد بدء السحب
+        const toast = showWasliToast({
+          title: 'جاري السحب بالخلفية...',
+          message: `يتم الآن سحب ونشر <strong>${productTitle}</strong> إلى منصتك في الخلفية.`,
+          type: 'loading'
         });
 
-        // 2. تجهيز الحمولة مباشرة وإرسالها فوراً
+        // 3. تجهيز الحمولة مباشرة
         const payload = {
           name: productTitle,
           fedshiCode: data.productCode || '',
@@ -1121,63 +1141,56 @@
           stockQuantity: stock,
         };
 
-        const result = await sendProductPayloadToWasli(payload);
-        const prodId = result.product?.id || '';
-        const activeTarget = wasliServerUrl.trim().replace(/\/+$/, '');
-        const previewUrl = prodId ? `${activeTarget}/p/${prodId}` : activeTarget;
-        const adminUrl = `${activeTarget}/waahhlstor/products`;
-        const profitVal = result.financials?.platformProfit?.toLocaleString() || (wholesale - costPrice).toLocaleString();
-
-        // 3. تحديث الإشعار الصغير ليعلن نجاح العملية فوراً
-        toast.update({
-          type: 'success',
-          title: 'تم السحب بنجاح!',
-          message: `تم حفظ ونشر <strong>${productTitle}</strong>! ربحك الصافي: <strong>+${profitVal} د.ع</strong>`,
-          previewUrl,
-          adminUrl,
-        });
-
-        // 4. حفظ كود المنتج وتحديث مظهر الزر ليصبح أخضر مع إشارة صح
+        // 4. حفظ كود المنتج محلياً فوراً لمنع التكرار
         if (data.productCode) {
           markProductAsImported(data.productCode);
         }
-        updateFloatingButtonToImported(floatingBtn, result.product);
 
-        // لمسة تأثير حركة خفيفة للزر لإشعار المستخدم بالنجاح
-        floatingBtn.style.transition = 'transform 0.25s ease';
-        floatingBtn.style.transform = 'scale(1.06)';
-        setTimeout(() => { if (floatingBtn) floatingBtn.style.transform = ''; }, 350);
+        // 5. إطلاق عملية السحب في الخلفية دون تعطيل المستخدم ودون جعله ينتظر أي ثانية!
+        sendProductPayloadToWasli(payload).then((result) => {
+          const prodId = result.product?.id || '';
+          const activeTarget = wasliServerUrl.trim().replace(/\/+$/, '');
+          const previewUrl = prodId ? `${activeTarget}/p/${prodId}` : activeTarget;
+          const adminUrl = `${activeTarget}/waahhlstor/products`;
+          const profitVal = result.financials?.platformProfit?.toLocaleString() || (wholesale - costPrice).toLocaleString();
 
-        // 5. الرجوع التلقائي فوراً (Auto-Back) لصفحة المنتجات السابقة للدخول على المنتج التالي بسهولة
-        if (mainTextEl) mainTextEl.textContent = 'تم السحب! جاري الرجوع...';
-        if (subTextEl) subTextEl.textContent = 'العودة لقائمة المنتجات ✓';
-
-        setTimeout(() => {
-          if (window.history.length > 1) {
-            window.history.back();
-          } else {
-            window.location.href = 'https://web.fedshi.com/products';
-          }
-        }, 700);
-
-      } catch (err) {
-        console.error('فشل الاستيراد الفوري المباشر:', err);
-        toast.update({
-          type: 'error',
-          title: 'تعذر السحب',
-          message: `حدث خطأ أثناء سحب المنتج: ${err.message || err}`,
+          toast.update({
+            type: 'success',
+            title: 'تم السحب بنجاح!',
+            message: `تم حفظ <strong>${productTitle}</strong> بنجاح! ربحك: <strong>+${profitVal} د.ع</strong>`,
+            previewUrl,
+            adminUrl,
+          });
+        }).catch((err) => {
+          console.error('فشل الاستيراد في الخلفية:', err);
+          toast.update({
+            type: 'error',
+            title: 'تعذر السحب',
+            message: `حدث خطأ أثناء سحب المنتج: ${err.message || err}`,
+          });
         });
 
-        const pathCode = (window.location.pathname.split('/').pop() || '').trim();
-        if (pathCode && importedCodesSet.has(pathCode)) {
-          updateFloatingButtonToImported(floatingBtn);
-        } else {
-          if (mainTextEl) mainTextEl.textContent = originalMainText;
-          if (subTextEl) subTextEl.textContent = originalSubText;
-        }
-      } finally {
-        floatingBtn.style.opacity = '1';
+        // 6. تحديث نص ومظهر الزر فورياً وإشعار المستخدم بالخروج المباشر
+        if (mainTextEl) mainTextEl.textContent = 'تم بدء السحب بنجاح!';
+        if (subTextEl) subTextEl.textContent = 'جاري العودة لقائمة المنتجات...';
+
+        // 7. الخروج والرجوع الفوري بعد لحظة سريعة جداً (120ms) بدون أي ريفريش وبدون انتظار ثوانٍ معدودة!
+        setTimeout(() => {
+          navigateBackSmoothly();
+        }, 120);
+
+      } catch (err) {
+        console.error('فشل بدء الاستيراد:', err);
+        showWasliToast({
+          type: 'error',
+          title: 'تعذر السحب',
+          message: err.message || 'حدث خطأ غير متوقع',
+        });
+
+        if (mainTextEl) mainTextEl.textContent = originalMainText;
+        if (subTextEl) subTextEl.textContent = originalSubText;
         isImportingInProgress = false;
+        floatingBtn.style.opacity = '1';
       }
     };
 
@@ -1186,11 +1199,11 @@
       posKey: 'wasli_floating_btn_pos',
       sizeKey: 'wasli_floating_btn_size',
       defaultPos: 'center',
-      defaultSize: { width: 260, height: 75 },
-      minWidth: 160,
+      defaultSize: { width: 270, height: 72 },
+      minWidth: 180,
       minHeight: 55,
-      maxWidth: 650,
-      maxHeight: 400,
+      maxWidth: 420,
+      maxHeight: 110,
       onClick: handleDirectImportAction,
     });
   }
