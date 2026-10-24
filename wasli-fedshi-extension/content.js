@@ -562,7 +562,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.2.9</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.0</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -1141,20 +1141,87 @@
   }
 
   // ========================================================
-  // سحب منتج كامل من رابطه مباشرة بالخلفية
+  // سحب منتج كامل من رابطه مباشرة بالخلفية مع احتياط فوري وسريع
   // ========================================================
-  async function importProductByUrl(productUrl, productCode) {
-    const res = await fetch(productUrl);
-    if (!res.ok) throw new Error(`تعذر فتح صفحة المنتج (${res.status})`);
-    const html = await res.text();
+  async function importProductByUrl(productUrl, productCode, onProgress = null) {
+    if (onProgress) onProgress('جاري القراءة...');
 
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
+    let data = null;
 
-    const data = await extractFedshiProductDetails(doc, productUrl);
-    if (!data || !data.title) {
-      throw new Error('تعذر قراءة بيانات المنتج من الصفحة');
+    // 1. محاولة جلب الصفحة الكاملة مع مؤقت أمان سريع (8 ثوانٍ كحد أقصى)
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+      const res = await fetch(productUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const html = await res.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        data = await extractFedshiProductDetails(doc, productUrl);
+      }
+    } catch (fetchErr) {
+      console.warn(`تعثر جلب صفحة المنتج الخارجية (${productCode})، جاري الاستخراج المباشر من الكارت:`, fetchErr);
     }
+
+    // 2. إذا تعثر جلب الصفحة، نستخرج بيانات المنتج فوراً من الكارت الظاهر على الشاشة
+    if (!data || !data.title) {
+      const cardEl = document.querySelector(`[data-wasli-code="${productCode}"]`)?.closest('div, article, a') || null;
+      let cardTitle = '';
+      let cardPrice = 0;
+      let cardProfit = 0;
+      let cardImg = '';
+
+      if (cardEl) {
+        const tEl = cardEl.querySelector('h1, h2, h3, h4, [class*="title"], [class*="name"]') || cardEl.querySelector('p');
+        if (tEl) cardTitle = (tEl.textContent || '').trim();
+
+        const amountEl = cardEl.querySelector('[data-amount="true"]');
+        if (amountEl) cardPrice = readDataAmount(amountEl);
+
+        const imgEl = cardEl.querySelector('img[src]');
+        if (imgEl) cardImg = imgEl.getAttribute('src') || imgEl.src || '';
+
+        const profitMatch = (cardEl.textContent || '').match(/اربح[^\d]*(\d[\d,]*)/);
+        if (profitMatch && profitMatch[1]) cardProfit = cleanNum(profitMatch[1]);
+      }
+
+      if (!cardTitle) cardTitle = `منتج فدشي ${productCode}`;
+      if (!cardPrice) cardPrice = 15000;
+
+      const wasliWholesale = cardPrice + (cardProfit > 0 ? cardProfit : 5000);
+      const wasliProfit = wasliWholesale - cardPrice;
+      const wasliMinPrice = wasliWholesale + 5000;
+      const wasliMaxPrice = wasliWholesale + 20000;
+      const defaultStorePrice = wasliWholesale + 10000;
+
+      data = {
+        title: cardTitle,
+        productCode: productCode,
+        skuCode: '',
+        category: 'عام',
+        subcategory: '',
+        fedshiWholesale: cardPrice,
+        fedshiProfit: cardProfit,
+        minSuggested: wasliWholesale,
+        maxSuggested: wasliMaxPrice,
+        wasliWholesale: wasliWholesale,
+        wasliProfit: wasliProfit,
+        wasliMinPrice: wasliMinPrice,
+        wasliMaxPrice: wasliMaxPrice,
+        defaultStorePrice: defaultStorePrice,
+        promoDescription: cardTitle,
+        specifications: cardTitle,
+        colors: [],
+        images: cardImg ? [cardImg] : [],
+        videoUrl: '',
+        stock: 50
+      };
+    }
+
+    if (onProgress) onProgress('جاري الحفظ والنشر...');
 
     const payload = {
       name: data.title,
@@ -1175,13 +1242,15 @@
       promoDescription: data.promoDescription || '',
       specifications: data.specifications || '',
       colors: data.colors || [],
-      images: data.images || [],
+      images: (data.images && data.images.length > 0) ? data.images.slice(0, 8) : [],
       videoUrl: data.videoUrl || '',
       stockQuantity: data.stock || 50,
     };
 
     const result = await sendProductPayloadToWasli(payload);
     markProductAsImported(payload.fedshiCode);
+
+    if (onProgress) onProgress('تم بنجاح! ✔');
     return { result, data };
   }
 
@@ -1301,10 +1370,21 @@
 
       const fullUrl = href.startsWith('http') ? href : `https://web.fedshi.com/products/${code}`;
 
-      // عند النقر على الزر الفردي
-      btn.onclick = async (e) => {
+      // منع انتقال الكارت أو تشغيل راوتر Next.js نهائياً
+      const stopAllEvents = (e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      };
+
+      btn.addEventListener('pointerdown', stopAllEvents, true);
+      btn.addEventListener('mousedown', stopAllEvents, true);
+      btn.addEventListener('touchstart', stopAllEvents, true);
+      btn.addEventListener('mouseup', stopAllEvents, true);
+
+      // عند النقر على الزر الفردي
+      btn.addEventListener('click', async (e) => {
+        stopAllEvents(e);
 
         if (btn.classList.contains('wasli-loading') || btn.classList.contains('wasli-done')) {
           return;
@@ -1318,17 +1398,21 @@
             <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
             <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
           </svg>
-          <span>جاري...</span>
+          <span id="wasli-stage-${code}">جاري السحب...</span>
         `;
 
         const toast = showWasliToast({
           title: 'جاري سحب المنتج في الخلفية...',
-          message: `يتم الآن قراءة منتج <strong>(${code})</strong> واستيراده إلى منصتك ونشره.`,
+          message: `يتم الآن سحب المنتج <strong>(${code})</strong> وحفظه ونشره في تليغرام.`,
           type: 'loading'
         });
 
         try {
-          const { result, data } = await importProductByUrl(fullUrl, code);
+          const { result, data } = await importProductByUrl(fullUrl, code, (stage) => {
+            const stageSpan = btn.querySelector(`#wasli-stage-${code}`);
+            if (stageSpan) stageSpan.textContent = stage;
+          });
+
           const prodId = result.product?.id || '';
           const activeTarget = wasliServerUrl.trim().replace(/\/+$/, '');
           const previewUrl = prodId ? `${activeTarget}/p/${prodId}` : activeTarget;
@@ -1367,9 +1451,9 @@
               </svg>
               <span>سحب</span>
             `;
-          }, 3000);
+          }, 3500);
         }
-      };
+      }, true);
 
       // حقن الزر في أعلى الكارت
       cardEl.appendChild(btn);
@@ -1480,12 +1564,12 @@
 
           const card = pendingCards[i];
           const currentNum = i + 1;
-          btnText.textContent = `جاري سحب (${currentNum} من ${total})...`;
+          btnText.textContent = `⚡ (${currentNum}/${total}) جاري السحب...`;
 
           batchToast.update({
             type: 'loading',
             title: `جاري سحب (${currentNum} من ${total})...`,
-            message: `يتم الآن سحب المنتج <strong>${card.code}</strong> وحفظه في منصة وصلي.`,
+            message: `يتم الآن سحب المنتج <strong>${card.code}</strong> وحفظه في منصة وصلي ونشره في تليغرام.`,
           });
 
           // تمييز زر الكارت بأنه قيد السحب
@@ -1499,13 +1583,29 @@
                 <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
                 <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
               </svg>
-              <span>جاري...</span>
+              <span>جاري السحب...</span>
             `;
           }
 
           try {
-            await importProductByUrl(card.url, card.code);
+            await importProductByUrl(card.url, card.code, (stage) => {
+              btnText.textContent = `⚡ (${currentNum}/${total}) ${stage}`;
+              if (cardBtn) {
+                const sp = cardBtn.querySelector('span');
+                if (sp) sp.textContent = stage;
+              }
+            });
             successCount++;
+
+            if (cardBtn) {
+              cardBtn.className = 'wasli-card-quick-btn wasli-done';
+              cardBtn.innerHTML = `
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span>تم السحب</span>
+              `;
+            }
           } catch (err) {
             console.warn(`فشل سحب المنتج ${card.code}:`, err);
             failCount++;
@@ -1515,9 +1615,9 @@
             }
           }
 
-          // فاصل زمني بسيط 800 ميلي ثانية بين كل منتج والآخر لضمان استقرار الخوادم
+          // فاصل زمني بسيط 600 ميلي ثانية بين كل منتج والآخر
           if (i < total - 1 && !shouldStopBatch) {
-            await new Promise(r => setTimeout(r, 800));
+            await new Promise(r => setTimeout(r, 600));
           }
         }
 

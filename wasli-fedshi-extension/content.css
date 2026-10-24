@@ -408,8 +408,8 @@
 /* حاوية الإشعارات الخلفية العائمة */
 .wasli-toast-container {
   position: fixed !important;
-  bottom: 24px !important;
-  right: 24px !important;
+  bottom: 28px !important;
+  left: 28px !important;
   z-index: 2147483647 !important;
   display: flex !important;
   flex-direction: column !important;
