@@ -562,7 +562,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.1</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.2</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -942,8 +942,14 @@
 
       container.appendChild(toast);
 
+      // مؤقت إخفاء تلقائي بعد 3 ثوانٍ بناءً على طلب المستخدم
+      let dismissTimer = setTimeout(() => {
+        if (toast.parentElement) toast.remove();
+      }, 3000);
+
       return {
         update({ title: newTitle, message: newMsg, type: newType, previewUrl, adminUrl }) {
+          clearTimeout(dismissTimer);
           toast.className = `wasli-toast ${newType}`;
           const newIcon = newType === 'success'
             ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>`
@@ -962,13 +968,13 @@
             `;
           }
 
-          if (newType === 'success') {
-            setTimeout(() => {
-              if (toast.parentElement) toast.remove();
-            }, 9000);
-          }
+          // يختفي بعد 3 ثوانٍ
+          dismissTimer = setTimeout(() => {
+            if (toast.parentElement) toast.remove();
+          }, 3000);
         },
         close() {
+          clearTimeout(dismissTimer);
           if (toast.parentElement) toast.remove();
         }
       };
@@ -1077,11 +1083,42 @@
   // ========================================================
   async function sendProductPayloadToWasli(payload) {
     let targetUrl = wasliServerUrl.trim().replace(/\/+$/, '');
+    const endpoint = `${targetUrl}/api/products/import-fedshi`;
+
+    // 1. المحاولة أولاً عبر خلفية الإضافة (Service Worker) لتجاوز قيود وحظر الـ CSP في المتصفح
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+      try {
+        const bgRes = await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage(
+            { action: 'importProduct', url: endpoint, payload },
+            (response) => {
+              if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+              } else {
+                resolve(response);
+              }
+            }
+          );
+        });
+
+        if (bgRes && bgRes.ok && bgRes.result && bgRes.result.success) {
+          return bgRes.result;
+        } else if (bgRes && bgRes.result && bgRes.result.message) {
+          throw new Error(bgRes.result.message);
+        } else if (bgRes && bgRes.error) {
+          throw new Error(bgRes.error);
+        }
+      } catch (workerErr) {
+        console.warn('تعذر الإرسال عبر الخلفية، المحاولة عبر الاتصال المباشر:', workerErr);
+      }
+    }
+
+    // 2. المحاولة البديلة عبر fetch المباشر
     let response = null;
     let result = null;
 
     try {
-      response = await fetch(`${targetUrl}/api/products/import-fedshi`, {
+      response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -1105,7 +1142,7 @@
       }
     }
 
-    if (response.ok && result.success) {
+    if (response && response.ok && result && result.success) {
       return result;
     } else {
       throw new Error(result?.message || 'حدث خطأ في استجابة الخادم أثناء حفظ المنتج');
