@@ -27,77 +27,91 @@ function ProductDetailContent() {
   const productId = params?.id as string;
   const storeRef = searchParams.get('ref');
 
-  const [product, setProduct] = useState<Product | null>(null);
-  const [store, setStore] = useState<Store | null>(null);
-  const [loading, setLoading] = useState(true);
+  // استرجاع المنتج المحفوظ فوراً من الذاكرة اللحظية إن وجد لفتحه في 0 ثانية
+  const [product, setProduct] = useState<Product | null>(() => {
+    if (typeof window !== 'undefined' && productId) {
+      try {
+        const cached = sessionStorage.getItem(`wasli_prod_${productId}`);
+        if (cached) return JSON.parse(cached);
+      } catch (e) {}
+    }
+    return null;
+  });
+
+  const [store, setStore] = useState<Store | null>(() => {
+    if (typeof window !== 'undefined' && storeRef) {
+      try {
+        const cachedStore = sessionStorage.getItem(`wasli_store_${storeRef}`);
+        if (cachedStore) return JSON.parse(cachedStore);
+        const currentStore = localStorage.getItem('wasli_current_store');
+        if (currentStore) {
+          const parsed = JSON.parse(currentStore);
+          if (parsed.code?.toLowerCase() === storeRef.toLowerCase()) return parsed;
+        }
+      } catch (e) {}
+    }
+    return null;
+  });
+
+  // إذا كان المنتج موجوداً مسبقاً في الذاكرة فلا داعي لشاشة التحميل
+  const [loading, setLoading] = useState(() => !Boolean(product));
   const [quantity, setQuantity] = useState(1);
   const [copied, setCopied] = useState(false);
-  const [activeImage, setActiveImage] = useState<string>('');
-  const [selectedColor, setSelectedColor] = useState<any>(null);
+  const [activeImage, setActiveImage] = useState<string>(() => product?.image || '');
+  const [selectedColor, setSelectedColor] = useState<any>(() => product?.colors?.[0] || null);
   const [mainImageLoaded, setMainImageLoaded] = useState(false);
 
   useEffect(() => {
     async function loadData() {
       if (!productId) return;
       try {
-        setLoading(true);
-        // 1. محاولة جلب المنتج الفردي مباشرة بسرعة فائقة
-        let foundProduct: Product | null = null;
-        try {
-          const directRes = await fetch(`/api/products/${productId}`);
-          if (directRes.ok) {
-            const directData = await directRes.json();
-            if (directData.success && directData.product) {
-              foundProduct = directData.product;
-            }
-          }
-        } catch (e) {}
+        // إذا كان المنتج غير موجود بالذاكرة نظهر حالة التحميل
+        if (!product) {
+          setLoading(true);
+        }
 
-        // إذا لم يعثر عليه مباشرة يتم البحث في القائمة كاحتياط
-        if (!foundProduct) {
-          const res = await fetch('/api/products');
-          const data = await res.json();
-          if (data.success && data.products) {
-            const found = data.products.find((p: any) => p.id === productId || p.slug === productId);
-            if (found) {
-              foundProduct = found;
+        // جلب المنتج والمتجر بالتوازي (Parallel Requests) لسرعة خيالية
+        const productFetch = fetch(`/api/products/${productId}`)
+          .then(async res => res.ok ? res.json() : null)
+          .catch(() => null);
+
+        const storeFetch = (storeRef && !store) 
+          ? fetch(`/api/stores`).then(async res => res.ok ? res.json() : null).catch(() => null)
+          : Promise.resolve(null);
+
+        const [prodResult, storeResult] = await Promise.all([productFetch, storeFetch]);
+
+        let foundProduct = prodResult?.success && prodResult?.product ? prodResult.product : null;
+
+        // في حال كان رابط slug أو احتياط
+        if (!foundProduct && !product) {
+          try {
+            const fallbackRes = await fetch('/api/products');
+            const fallbackData = await fallbackRes.json();
+            if (fallbackData.success && fallbackData.products) {
+              foundProduct = fallbackData.products.find((p: any) => p.id === productId || p.slug === productId) || null;
             }
-          }
+          } catch (e) {}
         }
 
         if (foundProduct) {
           setProduct(foundProduct);
-          setActiveImage(foundProduct.image || '');
-          if (foundProduct.colors && foundProduct.colors.length > 0) {
+          if (!activeImage) setActiveImage(foundProduct.image || '');
+          if (foundProduct.colors && foundProduct.colors.length > 0 && !selectedColor) {
             setSelectedColor(foundProduct.colors[0]);
           }
         }
 
-        // جلب تفاصيل المتجر المحيل إن وجد
-        if (storeRef) {
-          const storeRes = await fetch('/api/stores');
-          const storeData = await storeRes.json();
-          const foundStore = storeData.stores?.find(
+        if (storeResult?.stores && Array.isArray(storeResult.stores) && storeRef) {
+          const matchedStore = storeResult.stores.find(
             (s: any) => s.code?.toLowerCase() === storeRef.toLowerCase() || s.slug?.toLowerCase() === storeRef.toLowerCase()
           );
-          if (foundStore) {
-            setStore(foundStore);
-            // جلب سعر التاجر المخصص للمنتج إن وجد
-            try {
-              const spRes = await fetch(`/api/stores/products?storeCode=${foundStore.code || storeRef}`);
-              const spData = await spRes.json();
-              if (spData.success && spData.products) {
-                const spFound = spData.products.find((p: any) => p.id === productId || p.slug === productId);
-                if (spFound) {
-                  setProduct(spFound);
-                  setActiveImage(spFound.image || '');
-                }
-              }
-            } catch (e) {}
+          if (matchedStore) {
+            setStore(matchedStore);
           }
         }
       } catch (err) {
-        console.error('خطأ في تحميل تفاصيل المنتج:', err);
+        console.error('خطأ في استرجاع تفاصيل المنتج:', err);
       } finally {
         setLoading(false);
       }
@@ -180,12 +194,21 @@ function ProductDetailContent() {
     }
   };
 
-  if (loading) {
+  if (loading && !product) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-brand-200 border-t-brand-700 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-slate-600 font-medium">جاري تحميل تفاصيل المنتج...</p>
+      <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8 pb-24">
+        <div className="max-w-5xl mx-auto space-y-6">
+          <div className="w-32 h-9 bg-slate-200 animate-pulse rounded-xl" />
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-md p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="aspect-square bg-slate-200/70 rounded-2xl animate-pulse" />
+            <div className="space-y-4">
+              <div className="w-28 h-6 bg-slate-200 rounded-lg animate-pulse" />
+              <div className="w-full h-8 bg-slate-200 rounded-lg animate-pulse" />
+              <div className="w-48 h-12 bg-slate-100 rounded-2xl animate-pulse" />
+              <div className="w-full h-24 bg-slate-100 rounded-2xl animate-pulse" />
+              <div className="w-full h-12 bg-slate-200 rounded-xl animate-pulse" />
+            </div>
+          </div>
         </div>
       </div>
     );

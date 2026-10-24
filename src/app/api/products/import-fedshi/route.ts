@@ -106,6 +106,7 @@ export async function POST(request: NextRequest) {
       categoryId,
       subcategoryId,
       stockQuantity = 50,
+      supplierSource = 'fedshi',
     } = body;
 
     if (!name || (!fedshiPrice && !customWholesale)) {
@@ -184,7 +185,7 @@ export async function POST(request: NextRequest) {
       supplierPriceIqd: supplierCost,
       supplierCode: fedshiCode || '',
       supplierSku: fedshiSku || '',
-      supplierSource: 'fedshi',
+      supplierSource: supplierSource || 'fedshi',
       colors: colors,
       variants: colors.map((c: any, idx: number) => ({
         id: `variant-${idx}`,

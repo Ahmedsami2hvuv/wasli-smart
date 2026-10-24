@@ -300,6 +300,18 @@ function StorePageContent() {
     }));
   }, [products]);
 
+  // حفظ سريع لبيانات المنتج والمتجر في الذاكرة لتفتحه صفحة المنتج في 0.01 ثانية
+  const handleProductClick = (product: Product) => {
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.setItem(`wasli_prod_${product.id}`, JSON.stringify(product));
+        if (store) {
+          sessionStorage.setItem(`wasli_store_${code}`, JSON.stringify(store));
+        }
+      } catch (e) {}
+    }
+  };
+
   // 4. تبديل المفضلة
   const toggleFavorite = (productId: string) => {
     setFavorites(prev => {
@@ -628,6 +640,7 @@ function StorePageContent() {
                         {/* صورة المنتج الذكية ذات التحميل التدريجي المتوافقة مع كاش المتصفح */}
                         <Link 
                           href={`/p/${product.id}?ref=${code}`}
+                          onClick={() => handleProductClick(product)}
                           className="relative aspect-square overflow-hidden bg-slate-50 block"
                         >
                           <ProgressiveProductImage 
@@ -648,6 +661,7 @@ function StorePageContent() {
                           <div>
                             <Link 
                               href={`/p/${product.id}?ref=${code}`}
+                              onClick={() => handleProductClick(product)}
                               className="block font-bold text-slate-900 text-sm leading-snug line-clamp-2 hover:text-brand-700 transition-colors mb-2"
                               title={product.name}
                             >

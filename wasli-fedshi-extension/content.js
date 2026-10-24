@@ -551,6 +551,179 @@
   }
 
   // ========================================================
+  // استخراج تفاصيل المنتج من منصة موجود (mojod.app)
+  // ========================================================
+  async function extractMojodProductDetails(targetDoc = document, targetUrl = window.location.href) {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlId = urlParams.get('id') || '';
+
+      // محاولة قراءة كائن المنتج المخزن في الجلسة بواسطة سكربت موجود
+      let sessionProduct = null;
+      if (urlId) {
+        try {
+          const rawSaved = sessionStorage.getItem('mogod_product_' + urlId);
+          if (rawSaved) {
+            sessionProduct = JSON.parse(rawSaved);
+          }
+        } catch (e) {}
+      }
+
+      // 1. عنوان المنتج
+      let title = '';
+      const titleEl = targetDoc.getElementById('productTitle') || targetDoc.querySelector('.pd-title');
+      if (titleEl) {
+        const text = (titleEl.textContent || '').trim();
+        if (text && text !== '—' && text !== '...') {
+          title = text;
+        }
+      }
+      if (!title && sessionProduct?.name) {
+        title = sessionProduct.name.trim();
+      }
+
+      // 2. معرّف المنتج
+      let productCode = urlId;
+      if (!productCode && sessionProduct) {
+        productCode = String(sessionProduct.id || sessionProduct.idForUrl || '').trim();
+      }
+
+      // 3. الأسعار
+      // سعر الجملة في موجود (تكلفة المورد)
+      let wholesaleCost = 0;
+      if (sessionProduct && sessionProduct.price !== undefined) {
+        wholesaleCost = cleanNum(sessionProduct.price);
+      }
+      if (!wholesaleCost) {
+        const curPriceEl = targetDoc.getElementById('currentPriceNum') || targetDoc.querySelector('.pd-price-num');
+        if (curPriceEl) {
+          wholesaleCost = cleanNum(curPriceEl.textContent);
+        }
+      }
+
+      // أقل سعر مقترح للبيع
+      let lowPrice = 0;
+      if (sessionProduct && sessionProduct.lowPrice !== undefined) {
+        lowPrice = cleanNum(sessionProduct.lowPrice);
+      }
+      if (!lowPrice) {
+        const lowEl = targetDoc.getElementById('lowPriceVal') || targetDoc.querySelector('.pd-price-range-low');
+        if (lowEl) {
+          lowPrice = cleanNum(lowEl.textContent);
+        }
+      }
+
+      // أعلى سعر مقترح للبيع
+      let highPrice = 0;
+      if (sessionProduct && sessionProduct.highPrice !== undefined) {
+        highPrice = cleanNum(sessionProduct.highPrice);
+      }
+      if (!highPrice) {
+        const highEl = targetDoc.getElementById('highPriceVal') || targetDoc.querySelector('.pd-price-range-high');
+        if (highEl) {
+          highPrice = cleanNum(highEl.textContent);
+        }
+      }
+
+      // 4. تطبيق معادلة التسعير المطلوبة لمنصة وصلي:
+      // سعر جملة وصلي للتاجر = أقل سعر حدده المورد
+      const wasliWholesale = lowPrice || (wholesaleCost > 0 ? (wholesaleCost + 5000) : 0);
+      const wasliProfit = wholesaleCost > 0 ? Math.max(0, wasliWholesale - wholesaleCost) : 0;
+      const wasliMinPrice = wasliWholesale + 5000;
+      const wasliMaxPrice = highPrice && highPrice > wasliMinPrice ? highPrice : (wasliMinPrice + 15000);
+      let defaultStorePrice = wasliMinPrice;
+      if (wasliMaxPrice >= wasliWholesale + 10000) {
+        defaultStorePrice = wasliWholesale + 10000;
+      } else {
+        defaultStorePrice = Math.round(((wasliMinPrice + wasliMaxPrice) / 2) / 1000) * 1000;
+      }
+
+      // 5. استخراج كافة صور المنتج
+      const images = [];
+      const sliderImgs = Array.from(targetDoc.querySelectorAll('#slider img, .pd-slider-img, .pd-slider img'));
+      sliderImgs.forEach(img => {
+        let src = img.getAttribute('src') || img.src || '';
+        if (src) {
+          if (!src.startsWith('http://') && !src.startsWith('https://')) {
+            try {
+              src = new URL(src, window.location.href).href;
+            } catch (e) {}
+          }
+          if (!images.includes(src)) images.push(src);
+        }
+      });
+
+      // إضافة صور كائن الجلسة إن وُجدت
+      if (sessionProduct?.img && Array.isArray(sessionProduct.img)) {
+        sessionProduct.img.forEach(item => {
+          let u = item;
+          if (u && !u.startsWith('http://') && !u.startsWith('https://')) {
+            u = `https://mojod.app/website/assets/${u.replace(/^\/+/, '')}`;
+          }
+          if (u && !images.includes(u)) images.push(u);
+        });
+      }
+
+      // 6. المواصفات والوصف
+      let specifications = '';
+      const specsEl = targetDoc.getElementById('specsBody') || targetDoc.querySelector('.pd-tab-content--specs .pd-specs-body');
+      if (specsEl) {
+        specifications = (specsEl.innerText || specsEl.textContent || '').trim();
+      }
+      if (!specifications && sessionProduct?.body) {
+        specifications = sessionProduct.body.trim();
+      }
+
+      // 7. الوصف الترويجي
+      let promoDescription = '';
+      const postEl = targetDoc.getElementById('postBody') || targetDoc.querySelector('.pd-tab-content--post .pd-specs-body');
+      if (postEl) {
+        promoDescription = (postEl.innerText || postEl.textContent || '').trim();
+      }
+      if (!promoDescription && sessionProduct?.postBody) {
+        promoDescription = sessionProduct.postBody.trim();
+      }
+
+      // 8. الفيديوهات
+      let videoUrl = '';
+      const videoLinks = Array.from(targetDoc.querySelectorAll('#videosSection a, .pd-video-link a'));
+      if (videoLinks.length > 0) {
+        videoUrl = videoLinks[0].href || '';
+      }
+      if (!videoUrl && sessionProduct?.videosLinks && sessionProduct.videosLinks.length > 0) {
+        videoUrl = sessionProduct.videosLinks[0];
+      }
+
+      return {
+        title: title || '',
+        productCode: productCode || '',
+        skuCode: productCode || '',
+        category: 'عام',
+        subcategory: '',
+        fedshiWholesale: wholesaleCost,
+        fedshiProfit: wasliProfit,
+        minSuggested: lowPrice,
+        maxSuggested: highPrice,
+        wasliWholesale: wasliWholesale,
+        wasliProfit: wasliProfit,
+        wasliMinPrice: wasliMinPrice,
+        wasliMaxPrice: wasliMaxPrice,
+        defaultStorePrice: defaultStorePrice,
+        promoDescription: promoDescription || '',
+        specifications: specifications || '',
+        colors: [],
+        images: images.slice(0, 15),
+        videoUrl: videoUrl,
+        stock: 50,
+        supplierSource: 'mojod',
+      };
+    } catch (err) {
+      console.error('حدث خطأ أثناء استخراج بيانات صفحة موجود:', err);
+      return null;
+    }
+  }
+
+  // ========================================================
   // نظام الإشعارات العائمة الخلفية (بلوك صغير ومربع على اليمين)
   // ========================================================
   function getToastContainer() {
@@ -968,8 +1141,13 @@
     return { exists: false };
   }
 
-  // فحص شامل ودقيق لمعرفة ما إذا كانت الصفحة الحالية صفحة منتج فردي في فدشي
+  // فحص شامل ودقيق لمعرفة ما إذا كانت الصفحة الحالية صفحة منتج فردي في فدشي أو موجود
   function isProductPage() {
+    if (window.location.hostname.includes('mojod.app')) {
+      const p = window.location.pathname;
+      const href = window.location.href;
+      return p.includes('product-details.html') || href.includes('product-details.html?id=') || document.body.classList.contains('product-details-page') || Boolean(document.getElementById('productTitle'));
+    }
     const p = window.location.pathname;
     return p.includes('/products/') || p.includes('/product/') || /\/products?\/[^\/]+/.test(p);
   }
@@ -993,6 +1171,9 @@
     if (existing) {
       existing.remove();
     }
+
+    const isMojod = window.location.hostname.includes('mojod.app');
+    const sourceLabel = isMojod ? 'موجود' : 'فدشي';
 
     const container = document.createElement('div');
     container.id = 'wasli-importer-container';
@@ -1028,8 +1209,8 @@
               <path d="M16 10a4 4 0 0 1-8 0"></path>
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
-            <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.9</span>
+            <span class="wasli-badge-source">${sourceLabel}</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.5.0</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -1072,8 +1253,15 @@
     if (oldDraggable) oldDraggable.remove();
 
     // فحص ما إذا كان المنتج الحالي في هذه الصفحة مسحوباً ومرفوعاً مسبقاً في منصة وصلي
-    const pathParts = window.location.pathname.split('/').filter(Boolean);
-    const pageCode = pathParts[pathParts.length - 1] || '';
+    let pageCode = '';
+    if (isMojod) {
+      const pUrl = new URLSearchParams(window.location.search);
+      pageCode = (pUrl.get('id') || '').trim();
+    } else {
+      const pathParts = window.location.pathname.split('/').filter(Boolean);
+      pageCode = pathParts[pathParts.length - 1] || '';
+    }
+
     if (pageCode) {
       checkIfProductImported(pageCode).then((checkRes) => {
         if (checkRes && checkRes.exists) {
@@ -1086,15 +1274,16 @@
     }
 
     // دالة ذكية تنتظر اكتمال تحميل بيانات وسعر المنتج في الصفحة وتلتقطها فوراً
-    async function getReadyProductDetails(maxAttempts = 12, interval = 160) {
+    async function getReadyProductDetails(maxAttempts = 14, interval = 160) {
+      const isMojod = window.location.hostname.includes('mojod.app');
       for (let i = 0; i < maxAttempts; i++) {
-        const data = await extractFedshiProductDetails();
+        const data = isMojod ? await extractMojodProductDetails() : await extractFedshiProductDetails();
         if (data && (data.title || data.fedshiWholesale > 0)) {
           return data;
         }
         await new Promise(res => setTimeout(res, interval));
       }
-      return await extractFedshiProductDetails();
+      return isMojod ? await extractMojodProductDetails() : await extractFedshiProductDetails();
     }
 
     // دالة الاستيراد التلقائي الفوري بمجرد فتح صفحة المنتج الجديد دون الحاجة لأي نقر!
@@ -1120,6 +1309,10 @@
       // الرجوع النقي والمباشر عبر سجل المتصفح الداخلي للحفاظ على موضع التمرير في SPA
       if (window.history.length > 1) {
         window.history.back();
+      } else if (window.location.hostname.includes('mojod.app')) {
+        const backBtn = document.querySelector('.pd-header-back, a[href*="home.html"]');
+        if (backBtn) backBtn.click();
+        else window.location.href = 'home.html';
       }
     };
 
@@ -1196,6 +1389,7 @@
           images: data.images || [],
           videoUrl: data.videoUrl || '',
           stockQuantity: stock,
+          supplierSource: data.supplierSource || (window.location.hostname.includes('mojod.app') ? 'mojod' : 'fedshi'),
         };
 
         // 4. حفظ كود المنتج محلياً فوراً لمنع التكرار
@@ -1774,9 +1968,34 @@
   // ========================================================
   // اكتشاف بطاقات المنتجات في صفحات القوائم
   // ========================================================
+  // رصد بطاقات المنتجات في الصفحة الرئيسية والكتالوج (فدشي وموجود)
+  // ========================================================
   function findVisibleProductCards() {
     const cards = [];
     const seenCodes = new Set();
+    const isMojod = window.location.hostname.includes('mojod.app');
+
+    if (isMojod) {
+      const mojodCardElements = Array.from(document.querySelectorAll('.home-product-card, a[href*="product-details.html"]'));
+      mojodCardElements.forEach(cardEl => {
+        let code = cardEl.dataset.productId || '';
+        if (!code) {
+          const href = cardEl.getAttribute('href') || cardEl.href || '';
+          const match = href.match(/id=([A-Za-z0-9_-]+)/);
+          if (match) code = match[1];
+        }
+        if (!code || seenCodes.has(code)) return;
+        seenCodes.add(code);
+
+        cards.push({
+          code,
+          cardEl,
+          cardData: { title: cardEl.querySelector('.home-product-name, h3, h2')?.textContent?.trim() || `منتج موجود ${code}` },
+        });
+      });
+      return cards;
+    }
+
     const links = Array.from(document.querySelectorAll('a[href*="/products/"]'));
 
     links.forEach(link => {

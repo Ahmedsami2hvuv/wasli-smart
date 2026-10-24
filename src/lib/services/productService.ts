@@ -89,11 +89,63 @@ export async function getAllProducts(): Promise<Product[]> {
 }
 
 /**
- * جلب منتج محدد بواسطة المعرف أو الرابط (slug)
+ * جلب منتج محدد بواسطة المعرف أو الرابط (slug) مباشرة وبسرعة فائقة
  */
 export async function getProductByIdOrSlug(identifier: string): Promise<Product | null> {
-  const products = await getAllProducts();
+  if (!identifier) return null;
   const decoded = decodeURIComponent(identifier).toLowerCase();
+
+  // فحص الذاكرة المحلية أولاً (0 ميلي ثانية)
+  const localFound = localProducts.find(p => p.id === decoded || p.slug?.toLowerCase() === decoded);
+  if (localFound) return localFound;
+
+  // الاستعلام المباشر من سوبابيس لهذا المنتج فقط
+  const dbClient = supabaseAdmin || supabase;
+  if (dbClient) {
+    try {
+      const { data, error } = await dbClient
+        .from('products')
+        .select(`
+          *,
+          category:categories(name),
+          images:product_images(*)
+        `)
+        .or(`id.eq.${decoded},slug.eq.${decoded}`)
+        .maybeSingle();
+
+      if (!error && data) {
+        return {
+          id: data.id,
+          name: data.title || data.name,
+          slug: data.slug,
+          description: data.description || '',
+          priceIqd: data.price_iqd || data.price || 15000,
+          wholesalePriceIqd: data.wholesale_price_iqd || data.wholesale_price || 10000,
+          platformPriceIqd: data.platform_price_iqd || data.platform_price || 15000,
+          minPriceIqd: data.min_price_iqd || data.min_price || 15000,
+          maxPriceIqd: data.max_price_iqd || data.max_price || 25000,
+          promoDescription: data.promo_description || '',
+          specifications: data.specifications,
+          supplierCode: data.supplier_code,
+          category: data.category?.name || data.category || 'عام',
+          categoryId: data.category_id,
+          subcategory: data.subcategory || '',
+          subcategoryId: data.subcategory_id,
+          image: data.image || '/images/products/placeholder.webp',
+          images: Array.isArray(data.images) ? data.images.map((img: any) => img.localUrl || img.image_url || img) : [],
+          isAvailable: data.is_available ?? true,
+          status: data.status || 'published',
+          stockQuantity: data.stock_quantity ?? 100,
+          colors: data.colors || [],
+        };
+      }
+    } catch (err) {
+      console.warn('تعذر جلب المنتج المباشر من سوبابيس:', err);
+    }
+  }
+
+  // إذا لم يعثر عليه مباشرة نلجأ للقائمة الكاملة كاحتياط
+  const products = await getAllProducts();
   return products.find(p => p.id === decoded || p.slug?.toLowerCase() === decoded) || null;
 }
 
@@ -250,46 +302,10 @@ export async function createPlatformProduct(productData: {
 }
 
 /**
- * جلب منتج محدد بواسطة المعرف
+ * جلب منتج محدد بواسطة المعرف بسرعة فائقة
  */
 export async function getProductById(id: string): Promise<Product | null> {
-  const all = await getAllProducts();
-  const found = all.find(p => p.id === id);
-  if (found) return found;
-
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('id', id)
-        .single();
-      if (!error && data) {
-        return {
-          id: data.id,
-          name: data.title || data.name,
-          slug: data.slug,
-          description: data.description,
-          priceIqd: data.price_iqd || data.price,
-          wholesalePriceIqd: data.wholesale_price_iqd || data.price,
-          minPriceIqd: data.min_price_iqd || data.price,
-          maxPriceIqd: data.max_price_iqd || data.price * 1.3,
-          promoDescription: data.promo_description || data.description,
-          specifications: data.specifications,
-          supplierCode: data.supplier_code,
-          category: data.category || 'عام',
-          image: data.image || '/images/products/placeholder.webp',
-          images: Array.isArray(data.images) ? data.images : [],
-          isAvailable: true,
-          status: 'published',
-        };
-      }
-    } catch (err) {
-      console.warn('تعذر جلب المنتج من سوبابيس:', err);
-    }
-  }
-
-  return null;
+  return getProductByIdOrSlug(id);
 }
 
 /**
