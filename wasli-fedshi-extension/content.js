@@ -36,11 +36,13 @@
     return cleanNum(el.textContent);
   }
 
-  // تنشيط عنصر التبويب في React / Radix بأمان لإظهار محتواه
+  // تنشيط عنصر التبويب في React / Radix بأمان تام وبدون أي تمرير أو تحريك للصفحة نهائياً (Zero Scroll)
   function activateTabSafely(el) {
     if (!el) return;
     try {
-      el.focus();
+      if (typeof el.focus === 'function') {
+        try { el.focus({ preventScroll: true }); } catch (e) {}
+      }
       el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
       el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
       el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
@@ -110,76 +112,84 @@
     return '';
   }
 
-  // استخراج الوصف الترويجي والمواصفات من تبويبات Radix
+  // استخراج الوصف الترويجي والمواصفات بأمان فائق وبدون أي تمرير للشاشة
   async function extractRadixTabsContent() {
     let promoDescription = '';
     let specifications = '';
 
     try {
+      // 1. المحاولة الأولى فائقة السرعة (0ms) من السكربتات مباشرة لتجنب أي تحريك للشاشة
+      promoDescription = extractFieldFromScripts(/"detailed_description"\s*:\s*"([^"]+)"/);
+      specifications = extractFieldFromScripts(/"description"\s*:\s*"([^"]+)"/);
+
+      // إذا وُجدت البيانات من السكربتات لا داعي للمس أي أزرار في الصفحة
+      if (promoDescription && specifications) {
+        return { promoDescription, specifications };
+      }
+
       const allButtons = Array.from(document.querySelectorAll('button, [role="tab"]'));
 
-      // 1. استخراج الوصف الترويجي
-      const promoBtn = allButtons.find(b => {
-        const t = (b.textContent || '').trim();
-        const id = b.id || '';
-        const controls = b.getAttribute('aria-controls') || '';
-        return t.includes('وصف ترويجي') || controls.includes('detailed_description') || id.includes('detailed_description');
-      });
+      // 2. استخراج الوصف الترويجي من DOM إذا لم يتوفر في السكربت
+      if (!promoDescription) {
+        const promoBtn = allButtons.find(b => {
+          const t = (b.textContent || '').trim();
+          const id = b.id || '';
+          const controls = b.getAttribute('aria-controls') || '';
+          return t.includes('وصف ترويجي') || controls.includes('detailed_description') || id.includes('detailed_description');
+        });
 
-      if (promoBtn) {
-        activateTabSafely(promoBtn);
-        await new Promise(r => setTimeout(r, 220));
+        if (promoBtn) {
+          activateTabSafely(promoBtn);
+          await new Promise(r => setTimeout(r, 120));
 
-        const promoPanel = findElementByPartialId('content-detailed_description');
-        if (promoPanel) {
-          const raw = promoPanel.innerText || promoPanel.textContent || '';
-          promoDescription = raw.replace(/نسخ الوصف/g, '').trim();
-        }
+          const promoPanel = findElementByPartialId('content-detailed_description');
+          if (promoPanel) {
+            const raw = promoPanel.innerText || promoPanel.textContent || '';
+            promoDescription = raw.replace(/نسخ الوصف/g, '').trim();
+          }
 
-        if (!promoDescription) {
-          const copyBtn = Array.from(document.querySelectorAll('*')).find(el => {
-            return el.children.length === 0 && (el.textContent || '').trim() === 'نسخ الوصف';
-          });
-          if (copyBtn) {
-            const container = copyBtn.closest('div[class*="pt-"], [role="tabpanel"]') || copyBtn.parentElement;
-            if (container) {
-              const raw = container.innerText || container.textContent || '';
-              promoDescription = raw.replace(/نسخ الوصف/g, '').trim();
+          if (!promoDescription) {
+            const copyBtn = Array.from(document.querySelectorAll('*')).find(el => {
+              return el.children.length === 0 && (el.textContent || '').trim() === 'نسخ الوصف';
+            });
+            if (copyBtn) {
+              const container = copyBtn.closest('div[class*="pt-"], [role="tabpanel"]') || copyBtn.parentElement;
+              if (container) {
+                const raw = container.innerText || container.textContent || '';
+                promoDescription = raw.replace(/نسخ الوصف/g, '').trim();
+              }
             }
           }
         }
       }
 
-      // إذا لم يستخرج من DOM، ابحث في وسوم السكربت
-      if (!promoDescription) {
-        promoDescription = extractFieldFromScripts(/"detailed_description"\s*:\s*"([^"]+)"/);
-      }
+      // 3. استخراج المواصفات الفنية من DOM إذا لم تتوفر في السكربت
+      if (!specifications) {
+        const specsBtn = allButtons.find(b => {
+          const t = (b.textContent || '').trim();
+          const id = b.id || '';
+          const controls = b.getAttribute('aria-controls') || '';
+          const isNotDetailed = !controls.includes('detailed') && !id.includes('detailed');
+          return t.includes('المواصفات') || (controls.includes('description') && isNotDetailed);
+        });
 
-      // 2. استخراج المواصفات الفنية
-      const specsBtn = allButtons.find(b => {
-        const t = (b.textContent || '').trim();
-        const id = b.id || '';
-        const controls = b.getAttribute('aria-controls') || '';
-        const isNotDetailed = !controls.includes('detailed') && !id.includes('detailed');
-        return t.includes('المواصفات') || (controls.includes('description') && isNotDetailed);
-      });
+        if (specsBtn) {
+          activateTabSafely(specsBtn);
+          await new Promise(r => setTimeout(r, 120));
 
-      if (specsBtn) {
-        activateTabSafely(specsBtn);
-        await new Promise(r => setTimeout(r, 220));
-
-        const all = document.querySelectorAll('*');
-        let specsPanel = null;
-        for (let i = 0; i < all.length; i++) {
-          const id = all[i].id || '';
-          if (id.includes('content-description') && !id.includes('detailed')) {
-            specsPanel = all[i];
-            break;
+          const all = document.querySelectorAll('*');
+          let specsPanel = null;
+          for (let i = 0; i < all.length; i++) {
+            const id = all[i].id || '';
+            if (id.includes('content-description') && !id.includes('detailed')) {
+              specsPanel = all[i];
+              break;
+            }
           }
-        }
 
-        if (specsPanel) {
-          specifications = (specsPanel.innerText || specsPanel.textContent || '').trim();
+          if (specsPanel) {
+            specifications = (specsPanel.innerText || specsPanel.textContent || '').trim();
+          }
         }
       }
 
@@ -997,7 +1007,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.4</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.5</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -1053,23 +1063,9 @@
     // متغير لمنع الضغط المتكرر أثناء عملية السحب الفوري
     let isImportingInProgress = false;
 
-    // دالة الرجوع الذكية والسلسة بدون ريفريش للحفاظ على مكان التمرير في قائمة المنتجات
+    // دالة الرجوع المباشرة والسلسة بدون ريفريش وبدون أي نقر خاطئ على روابط أسفل الصفحة
     const navigateBackSmoothly = () => {
-      // 1. محاولة النقر على زر الرجوع الأصلي لموقع فدشي إن وجد
-      const candidates = Array.from(document.querySelectorAll('button, a'));
-      const fedshiBackBtn = candidates.find((el) => {
-        const aria = (el.getAttribute('aria-label') || '').toLowerCase();
-        const txt = (el.textContent || '').trim();
-        const hasBackArrow = el.querySelector('svg path, svg polyline') !== null;
-        return (aria.includes('back') || aria.includes('رجوع') || txt === 'رجوع' || txt === 'العودة') && el.offsetParent !== null;
-      });
-
-      if (fedshiBackBtn && typeof fedshiBackBtn.click === 'function') {
-        fedshiBackBtn.click();
-        return;
-      }
-
-      // 2. الرجوع الطبيعي عبر سجل المتصفح (SPA Pop State) دون أي ريفريش للحفاظ على موضع التمرير
+      // الرجوع النقي والمباشر عبر سجل المتصفح الداخلي للحفاظ على موضع التمرير في SPA
       if (window.history.length > 1) {
         window.history.back();
       }
@@ -1087,9 +1083,18 @@
       isImportingInProgress = true;
       floatingBtn.style.opacity = '0.9';
 
+      // تثبيت موضع التمرير الحالي تماماً لمنع أي تحرك أو قفز للشاشة لأسفل الصفحة
+      const lockedScrollY = window.scrollY;
+
       try {
-        // 1. استخراج بيانات المنتج من صفحة فدشي الحالية (أجزاء من الثانية فقط)
+        // 1. استخراج بيانات المنتج من صفحة فدشي الحالية (أجزاء من الثانية فقط وبدون أي تمرير)
         const data = await extractFedshiProductDetails();
+
+        // إعادة تثبيت الشاشة فوراً لمنع أي تذبذب أثناء استخراج البيانات
+        if (window.scrollY !== lockedScrollY) {
+          window.scrollTo({ top: lockedScrollY, behavior: 'instant' });
+        }
+
         if (!data || (!data.title && !data.fedshiWholesale)) {
           throw new Error('تعذر قراءة بيانات وسعر المنتج. يرجى الانتظار لحين اكتمال تحميل الصفحة.');
         }
