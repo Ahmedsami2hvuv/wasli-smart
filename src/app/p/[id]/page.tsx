@@ -95,7 +95,28 @@ function ProductDetailContent() {
         }
 
         if (foundProduct) {
+          // ضبط سعر البيع المعروض للزبون بدقة ليتطابق مع أرباح التاجر وسعر البيع المقترح
+          const minP = Number(foundProduct.minPriceIqd) || (foundProduct.wholesalePriceIqd ? foundProduct.wholesalePriceIqd + 5000 : 0);
+          const maxP = Number(foundProduct.maxPriceIqd) || (minP ? minP + 15000 : 0);
+          let finalPrice = Number(foundProduct.priceIqd) || Number(foundProduct.platformPriceIqd) || minP;
+
+          if (storeRef) {
+            // إذا كان الزبون يتصفح عبر متجر تاجر: يحسب السعر الافتراضي لبيع الزبون بما يضمن ربح التاجر كاملاً
+            const suggestedStorePrice = foundProduct.wholesalePriceIqd ? (foundProduct.wholesalePriceIqd + 10000) : minP;
+            finalPrice = Math.min(maxP, Math.max(minP, suggestedStorePrice));
+          } else {
+            finalPrice = Math.max(minP, finalPrice);
+          }
+
+          foundProduct.priceIqd = finalPrice;
           setProduct(foundProduct);
+
+          if (typeof window !== 'undefined') {
+            try {
+              sessionStorage.setItem(`wasli_prod_${productId}`, JSON.stringify(foundProduct));
+            } catch (e) {}
+          }
+
           if (!activeImage) setActiveImage(foundProduct.image || '');
           if (foundProduct.colors && foundProduct.colors.length > 0 && !selectedColor) {
             setSelectedColor(foundProduct.colors[0]);

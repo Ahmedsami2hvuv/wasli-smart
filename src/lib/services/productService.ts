@@ -114,28 +114,36 @@ export async function getProductByIdOrSlug(identifier: string): Promise<Product 
         .maybeSingle();
 
       if (!error && data) {
+        const wholesale = Number(data.wholesale_price) || Number(data.wholesale_price_iqd) || 0;
+        const platform = Number(data.platform_price) || Number(data.platform_price_iqd) || wholesale;
+        const minP = Number(data.min_price) || Number(data.min_price_iqd) || (wholesale > 0 ? wholesale + 5000 : 0);
+        const maxP = Number(data.max_price) || Number(data.max_price_iqd) || (minP > 0 ? minP + 15000 : 0);
+
+        // سعر البيع الفعلي للزبون: سعر المنصة أو الحد الأدنى للبيع
+        const displayPrice = Number(data.price_iqd) || Number(data.price) || minP || platform || wholesale;
+
         return {
           id: data.id,
           name: data.title || data.name,
           slug: data.slug,
           description: data.description || '',
-          priceIqd: data.price_iqd || data.price || 15000,
-          wholesalePriceIqd: data.wholesale_price_iqd || data.wholesale_price || 10000,
-          platformPriceIqd: data.platform_price_iqd || data.platform_price || 15000,
-          minPriceIqd: data.min_price_iqd || data.min_price || 15000,
-          maxPriceIqd: data.max_price_iqd || data.max_price || 25000,
+          priceIqd: displayPrice,
+          wholesalePriceIqd: wholesale,
+          platformPriceIqd: platform,
+          minPriceIqd: minP,
+          maxPriceIqd: maxP,
           promoDescription: data.promo_description || '',
-          specifications: data.specifications,
-          supplierCode: data.supplier_code,
+          specifications: data.specifications || data.description,
+          supplierCode: data.brand || data.supplier_code,
           category: data.category?.name || data.category || 'عام',
           categoryId: data.category_id,
           subcategory: data.subcategory || '',
           subcategoryId: data.subcategory_id,
-          image: data.image || '/images/products/placeholder.webp',
-          images: Array.isArray(data.images) ? data.images.map((img: any) => img.localUrl || img.image_url || img) : [],
+          image: data.image || (Array.isArray(data.images) && data.images[0] ? (data.images[0].localUrl || data.images[0].local_url || data.images[0].image_url) : '/images/products/placeholder.webp'),
+          images: Array.isArray(data.images) ? data.images.map((img: any) => img.localUrl || img.local_url || img.image_url || img) : [],
           isAvailable: data.is_available ?? true,
           status: data.status || 'published',
-          stockQuantity: data.stock_quantity ?? 100,
+          stockQuantity: data.stock_quantity ?? 50,
           colors: data.colors || [],
         };
       }
