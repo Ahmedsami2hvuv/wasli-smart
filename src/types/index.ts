@@ -171,6 +171,12 @@ export interface OrderItem {
   merchantProfit: number;
   platformProfit: number;
   productImage?: string;
+  supplierPrice?: number; // سعره بمنصة فدشي (تكلفة المورد)
+  supplierCode?: string; // رقم المنتج / كود فدشي
+  supplierSku?: string; // رقم نوع المنتج / رمز المتغير في فدشي
+  variantName?: string; // اسم النوع أو المتغير المختار
+  color?: string; // اللون المختار
+  size?: string; // المقاس المختار
 }
 
 export type OrderStatus = 

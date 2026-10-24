@@ -107,6 +107,10 @@ export async function createOrder(params: CreateOrderParams): Promise<{
       merchantProfit: merchantProfitPerUnit * qty,
       platformProfit: platformProfitPerUnit * qty,
       productImage: product.image,
+      supplierPrice: product.supplierPriceIqd || (wholesalePrice > 3000 ? wholesalePrice - 3000 : wholesalePrice),
+      supplierCode: product.supplierCode || product.id,
+      supplierSku: product.supplierSku || product.variants?.[0]?.sku || '',
+      variantName: product.variants?.[0]?.name || '',
     });
   }
 
@@ -280,7 +284,7 @@ export async function getAllOrders(): Promise<Order[]> {
             platform_price,
             merchant_profit_per_unit,
             platform_profit_per_unit,
-            product:products(title, images:product_images(local_url))
+            product:products(id, title, brand, metadata, wholesale_price, platform_price, images:product_images(local_url))
           )
         `)
         .order('created_at', { ascending: false });
@@ -289,18 +293,30 @@ export async function getAllOrders(): Promise<Order[]> {
         const dbOrders: Order[] = data.map((o: any) => {
           const localMatch = localOrders.find(lo => lo.orderNumber === o.order_number || lo.id === o.id);
           const parsedItems: OrderItem[] = (o.items && o.items.length > 0)
-            ? o.items.map((it: any) => ({
-                id: it.id,
-                productId: it.product_id,
-                productName: it.product?.title || 'منتج',
-                quantity: it.quantity,
-                sellingPrice: Number(it.selling_price),
-                wholesalePrice: Number(it.wholesale_price),
-                platformPrice: Number(it.platform_price),
-                merchantProfit: Number(it.merchant_profit_per_unit || 0),
-                platformProfit: Number(it.platform_profit_per_unit || 0),
-                productImage: it.product?.images?.[0]?.local_url || '',
-              }))
+            ? o.items.map((it: any) => {
+                const p = it.product;
+                const wholesale = Number(it.wholesale_price || p?.wholesale_price || 0);
+                const platform = Number(it.platform_price || p?.platform_price || wholesale);
+                const supplierPrice = p?.metadata?.supplierPrice || (wholesale > 3000 ? wholesale - 3000 : wholesale);
+                const supplierCode = p?.brand || p?.metadata?.supplierCode || p?.metadata?.fedshiCode || it.product_id;
+                const supplierSku = p?.metadata?.supplierSku || p?.metadata?.fedshiSku || '';
+
+                return {
+                  id: it.id,
+                  productId: it.product_id,
+                  productName: p?.title || 'منتج',
+                  quantity: it.quantity,
+                  sellingPrice: Number(it.selling_price),
+                  wholesalePrice: wholesale,
+                  platformPrice: platform,
+                  merchantProfit: Number(it.merchant_profit_per_unit || 0),
+                  platformProfit: Number(it.platform_profit_per_unit || 0),
+                  productImage: p?.images?.[0]?.local_url || '',
+                  supplierPrice: supplierPrice,
+                  supplierCode: supplierCode,
+                  supplierSku: supplierSku,
+                };
+              })
             : (localMatch?.items || []);
 
           return {

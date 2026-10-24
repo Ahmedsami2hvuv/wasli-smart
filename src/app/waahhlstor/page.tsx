@@ -49,6 +49,7 @@ export default function AdminDashboardPage() {
   // حالة فتح نافذة تفاصيل الطلب
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [copiedMessage, setCopiedMessage] = useState<string | null>(null);
+  const [productsList, setProductsList] = useState<any[]>([]);
 
   const copyToClipboard = (text: string, msg = 'تم النسخ بنجاح') => {
     if (navigator?.clipboard) {
@@ -81,6 +82,7 @@ export default function AdminDashboardPage() {
       const prodData = await prodRes.json();
       if (prodData.success && prodData.products) {
         setProductsCount(prodData.products.length);
+        setProductsList(prodData.products);
       }
 
       // الأقسام والأفرع
@@ -688,49 +690,138 @@ export default function AdminDashboardPage() {
               )}
             </div>
 
-            {/* قائمة المنتجات المطلوبة في هذا الطلب */}
-            <div className="space-y-2.5">
+            {/* قائمة المنتجات المطلوبة في هذا الطلب وتفاصيل أسعارها ومصادرها */}
+            <div className="space-y-3">
               <div className="text-xs font-black text-slate-800 flex items-center justify-between">
                 <span>المنتجات المطلوبة ({selectedOrder.items?.length || 1})</span>
-                <span className="text-[11px] text-slate-400 font-normal">تفاصيل الأصناف والكميات</span>
+                <span className="text-[11px] text-slate-400 font-normal">تفاصيل التكلفة والتسعير من فدشي ومنصتنا ومتجر التاجر</span>
               </div>
 
-              <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100">
+              <div className="space-y-3">
                 {(selectedOrder.items && selectedOrder.items.length > 0) ? (
-                  selectedOrder.items.map((item, idx) => (
-                    <div key={idx} className="p-3 bg-white flex items-center justify-between gap-3 text-xs">
-                      <div className="flex items-center gap-3">
-                        {item.productImage ? (
-                          <img
-                            src={item.productImage}
-                            alt={item.productName}
-                            className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 shrink-0 font-bold">
-                            <Package className="w-5 h-5 text-slate-400" />
+                  selectedOrder.items.map((item, idx) => {
+                    const matchedProduct = productsList.find(p => p.id === item.productId || p.name === item.productName);
+                    const fedshiPrice = item.supplierPrice || matchedProduct?.supplierPriceIqd || (item.wholesalePrice ? Math.max(0, item.wholesalePrice - 3000) : 0);
+                    const wasliPrice = item.platformPrice || item.wholesalePrice || matchedProduct?.platformPriceIqd || matchedProduct?.wholesalePriceIqd || (fedshiPrice + 5000);
+                    const merchantPrice = item.sellingPrice || wasliPrice;
+                    const productCode = item.supplierCode || matchedProduct?.supplierCode || matchedProduct?.id || item.productId;
+                    const productSku = item.supplierSku || matchedProduct?.supplierSku || matchedProduct?.variants?.[0]?.sku || 'افتراضي';
+
+                    const platformProfitUnit = Math.max(0, wasliPrice - fedshiPrice);
+                    const merchantProfitUnit = Math.max(0, merchantPrice - wasliPrice);
+
+                    return (
+                      <div key={idx} className="p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xs space-y-3 text-xs">
+                        {/* ترويسة المنتج والمعرفات */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            {item.productImage || matchedProduct?.image ? (
+                              <img
+                                src={item.productImage || matchedProduct?.image}
+                                alt={item.productName}
+                                className="w-14 h-14 rounded-2xl object-cover border border-slate-200 shrink-0"
+                              />
+                            ) : (
+                              <div className="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 shrink-0 font-bold">
+                                <Package className="w-6 h-6 text-slate-400" />
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-black text-slate-900 text-sm">{item.productName}</div>
+                              <div className="flex flex-wrap items-center gap-2 mt-1">
+                                {/* رقم المنتج / كود فدشي */}
+                                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-50 text-sky-800 border border-sky-200 text-[11px] font-bold">
+                                  <span>رقم المنتج:</span>
+                                  <strong className="font-mono">{productCode}</strong>
+                                  <button
+                                    type="button"
+                                    onClick={() => copyToClipboard(productCode, 'تم نسخ رقم المنتج')}
+                                    className="p-0.5 hover:text-sky-900 cursor-pointer"
+                                    title="نسخ رقم المنتج"
+                                  >
+                                    <Copy className="w-2.5 h-2.5" />
+                                  </button>
+                                </div>
+
+                                {/* رقم نوع المنتج */}
+                                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-50 text-purple-800 border border-purple-200 text-[11px] font-bold">
+                                  <span>رقم النوع:</span>
+                                  <strong className="font-mono">{productSku}</strong>
+                                  <button
+                                    type="button"
+                                    onClick={() => copyToClipboard(productSku, 'تم نسخ رقم نوع المنتج')}
+                                    className="p-0.5 hover:text-purple-900 cursor-pointer"
+                                    title="نسخ رقم نوع المنتج"
+                                  >
+                                    <Copy className="w-2.5 h-2.5" />
+                                  </button>
+                                </div>
+
+                                <div className="text-[11px] text-slate-500 font-bold">
+                                  الكمية المطلوبة: <strong className="text-slate-900">{item.quantity}</strong> قطعة
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                        )}
-                        <div>
-                          <div className="font-bold text-slate-900 line-clamp-1">{item.productName}</div>
-                          <div className="text-[11px] text-slate-500 mt-0.5">
-                            الكمية: <strong className="text-slate-800 font-bold">{item.quantity}</strong> قطعة
-                            {item.sellingPrice && (
-                              <span className="mr-2 text-slate-400">
-                                بسعر: {item.sellingPrice.toLocaleString('ar-IQ')} د.ع للقطعة
-                              </span>
+
+                          <div className="text-left sm:text-right shrink-0">
+                            <span className="text-[10px] text-slate-400 block">إجمالي هذا المنتج:</span>
+                            <span className="text-sm font-black text-slate-900 font-mono">
+                              {(merchantPrice * item.quantity).toLocaleString('ar-IQ')} د.ع
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* شبكة الأسعار الثلاثية: فدشي | وصلي | متجر التاجر */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-100">
+                          {/* 1. سعره بمنصة فدشي */}
+                          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                            <div className="text-[10px] font-bold text-slate-500 mb-0.5 flex items-center justify-between">
+                              <span>سعره بمنصة فد شي</span>
+                              <span className="text-[9px] bg-slate-200 px-1.5 py-0.2 rounded text-slate-600 font-bold">المورد</span>
+                            </div>
+                            <div className="text-xs font-black text-slate-800 font-mono">
+                              {fedshiPrice ? `${fedshiPrice.toLocaleString('ar-IQ')} د.ع` : 'غير محدد'}
+                            </div>
+                          </div>
+
+                          {/* 2. سعره بمنصتنا (وصلي) */}
+                          <div className="bg-sky-50/70 p-2.5 rounded-xl border border-sky-200">
+                            <div className="text-[10px] font-bold text-sky-700 mb-0.5 flex items-center justify-between">
+                              <span>سعره بمنصتنه (وصلي)</span>
+                              <span className="text-[9px] bg-sky-200/80 px-1.5 py-0.2 rounded text-sky-800 font-bold">الجملة</span>
+                            </div>
+                            <div className="text-xs font-black text-brand-800 font-mono">
+                              {wasliPrice.toLocaleString('ar-IQ')} د.ع
+                            </div>
+                            {platformProfitUnit > 0 && (
+                              <div className="text-[10px] font-bold text-emerald-700 mt-0.5">
+                                ربح المنصة: +{platformProfitUnit.toLocaleString('ar-IQ')} د.ع
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 3. سعره بمتجر التاجر */}
+                          <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200">
+                            <div className="text-[10px] font-bold text-emerald-700 mb-0.5 flex items-center justify-between">
+                              <span>سعره بمتجر التاجر</span>
+                              <span className="text-[9px] bg-emerald-200/80 px-1.5 py-0.2 rounded text-emerald-800 font-bold">للزبون</span>
+                            </div>
+                            <div className="text-xs font-black text-emerald-800 font-mono">
+                              {merchantPrice.toLocaleString('ar-IQ')} د.ع
+                            </div>
+                            {merchantProfitUnit > 0 && (
+                              <div className="text-[10px] font-bold text-emerald-600 mt-0.5">
+                                ربح التاجر: +{merchantProfitUnit.toLocaleString('ar-IQ')} د.ع
+                              </div>
                             )}
                           </div>
                         </div>
                       </div>
-
-                      <div className="text-left font-black text-slate-900 shrink-0">
-                        {((item.sellingPrice || 0) * (item.quantity || 1)).toLocaleString('ar-IQ')} د.ع
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
-                  <div className="p-4 text-center text-xs text-slate-500">
+                  <div className="p-4 text-center text-xs text-slate-500 bg-white rounded-2xl border border-slate-200">
                     منتج الطلبية الأساسي (الكمية: 1)
                   </div>
                 )}
@@ -789,9 +880,12 @@ export default function AdminDashboardPage() {
               <button
                 type="button"
                 onClick={() => {
-                  const itemsText = (selectedOrder.items || []).map((it, idx) => 
-                    `- ${it.productName} (العدد: ${it.quantity})`
-                  ).join('\n') || '- منتج الطلب';
+                  const itemsText = (selectedOrder.items || []).map((it, idx) => {
+                    const matchedProduct = productsList.find(p => p.id === it.productId || p.name === it.productName);
+                    const pCode = it.supplierCode || matchedProduct?.supplierCode || it.productId;
+                    const pSku = it.supplierSku || matchedProduct?.supplierSku || '';
+                    return `- ${it.productName} (العدد: ${it.quantity}) [رقم المنتج: ${pCode}${pSku ? ` | النوع: ${pSku}` : ''}]`;
+                  }).join('\n') || '- منتج الطلب';
 
                   const slip = `📦 بوليصة توصيل طلبية [${selectedOrder.orderNumber}]
 ------------------------------
@@ -801,7 +895,7 @@ export default function AdminDashboardPage() {
 🏙️ المدينة / القضاء: ${selectedOrder.city}
 🏠 العنوان التفصيلي: ${selectedOrder.address}
 ${selectedOrder.deliveryNotes ? `📝 ملاحظات: ${selectedOrder.deliveryNotes}\n` : ''}
-🛒 المنتجات:
+🛒 تفاصيل الأصناف المطلوبة:
 ${itemsText}
 
 💰 المبلغ المطلوب تحصيله عند الاستلام: ${selectedOrder.totalAmount.toLocaleString('ar-IQ')} د.ع (شامل التوصيل)
