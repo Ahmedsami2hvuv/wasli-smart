@@ -42,6 +42,19 @@ function CheckoutContent() {
           console.error('خطأ في استرجاع السلة:', e);
         }
       }
+
+      // استرجاع بيانات العميل المحفوظة تلقائياً من آخر طلب
+      try {
+        const savedProfile = localStorage.getItem('wasli_customer_profile');
+        if (savedProfile) {
+          const profile = JSON.parse(savedProfile);
+          if (profile.customerName) setCustomerName(profile.customerName);
+          if (profile.customerPhone) setCustomerPhone(profile.customerPhone);
+          if (profile.governorate) setGovernorate(profile.governorate);
+          if (profile.city) setCity(profile.city);
+          if (profile.address) setAddress(profile.address);
+        }
+      } catch (e) {}
     }
   }, []);
 
@@ -95,6 +108,44 @@ function CheckoutContent() {
       if (data.success && data.order) {
         if (typeof window !== 'undefined') {
           localStorage.removeItem('wasli_cart');
+
+          // حفظ الحساب الافتراضي للزبون من تفاصيل هذا الطلب
+          const profileData = {
+            customerName: customerName.trim(),
+            customerPhone: customerPhone.trim(),
+            governorate,
+            city: city.trim(),
+            address: address.trim(),
+            lastOrderDate: new Date().toISOString(),
+          };
+          localStorage.setItem('wasli_customer_profile', JSON.stringify(profileData));
+
+          // حفظ الطلب في سجل طلبات الزبون
+          try {
+            const existingOrders = JSON.parse(localStorage.getItem('wasli_customer_orders') || '[]');
+            const newOrderRecord = {
+              orderNumber: data.order.orderNumber,
+              storeCode: currentStoreCode,
+              storeName: cartData?.storeName || 'المتجر',
+              date: new Date().toISOString(),
+              items: items.map((i: any) => ({
+                productId: i.productId,
+                name: i.name,
+                priceIqd: i.priceIqd,
+                quantity: i.quantity,
+                image: i.image,
+              })),
+              totalAmount,
+              status: 'pending',
+              customerName: customerName.trim(),
+              customerPhone: customerPhone.trim(),
+              governorate,
+              city: city.trim(),
+              address: address.trim(),
+            };
+            const updatedOrders = [newOrderRecord, ...existingOrders.filter((o: any) => o.orderNumber !== data.order.orderNumber)];
+            localStorage.setItem('wasli_customer_orders', JSON.stringify(updatedOrders));
+          } catch (e) {}
         }
         const storeQuery = currentStoreCode ? `&store=${currentStoreCode}` : '';
         router.push(`/order-success?orderNumber=${data.order.orderNumber}${storeQuery}`);
