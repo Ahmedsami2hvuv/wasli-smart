@@ -985,7 +985,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.0</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.1</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -1135,6 +1135,18 @@
         floatingBtn.style.transition = 'transform 0.25s ease';
         floatingBtn.style.transform = 'scale(1.06)';
         setTimeout(() => { if (floatingBtn) floatingBtn.style.transform = ''; }, 350);
+
+        // 5. الرجوع التلقائي فوراً (Auto-Back) لصفحة المنتجات السابقة للدخول على المنتج التالي بسهولة
+        if (mainTextEl) mainTextEl.textContent = 'تم السحب! جاري الرجوع...';
+        if (subTextEl) subTextEl.textContent = 'العودة لقائمة المنتجات ✓';
+
+        setTimeout(() => {
+          if (window.history.length > 1) {
+            window.history.back();
+          } else {
+            window.location.href = 'https://web.fedshi.com/products';
+          }
+        }, 700);
 
       } catch (err) {
         console.error('فشل الاستيراد الفوري المباشر:', err);
