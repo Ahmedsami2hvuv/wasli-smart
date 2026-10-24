@@ -985,7 +985,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.9</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.0</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -1038,96 +1038,122 @@
       });
     }
 
-    // إدارة حالة زر التأكيد التفاعلي المباشر (نفس الزر يتحول لزر التأكيد)
-    let isConfirmMode = false;
-    let activeExecuteImport = null;
+    // متغير لمنع الضغط المتكرر أثناء عملية السحب الفوري
+    let isImportingInProgress = false;
 
-    // ربط أحداث الإغلاق
-    const closeModal = () => {
-      modalOverlay.classList.remove('wasli-active');
-      isConfirmMode = false;
-      floatingBtn.classList.remove('wasli-confirm-state');
-
-      // إعادة الزر لشكله الطبيعي
-      const pathCode = (window.location.pathname.split('/').pop() || '').trim();
-      if (pathCode && importedCodesSet.has(pathCode)) {
-        updateFloatingButtonToImported(floatingBtn);
-      } else {
-        floatingBtn.classList.remove('wasli-already-imported');
-        const contentBox = floatingBtn.querySelector('.wasli-btn-content-box');
-        if (contentBox) {
-          contentBox.innerHTML = `
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            <div class="wasli-btn-text-group">
-              <span class="wasli-btn-main-text">استيراد المنتج إلى وصلي</span>
-              <span class="wasli-btn-sub-text">انقر للسحب والتسعير الذكي</span>
-            </div>
-          `;
-        }
-      }
-    };
-
-    modalOverlay.querySelector('#wasli-modal-close').addEventListener('click', closeModal);
-    modalOverlay.querySelector('#wasli-btn-cancel').addEventListener('click', closeModal);
-    modalOverlay.addEventListener('click', (e) => {
-      if (e.target === modalOverlay) closeModal();
-    });
-
-    // معالج النقر المباشر على الزر العائم:
-    // النقرة الأولى تفتح النافذة وتجعل الزر نفسه زر التأكيد.
-    // النقرة الثانية على نفس الزر تؤكد وتنقل المنتج فوراً!
-    const handleFloatingBtnAction = async () => {
-      // إذا كان الزر في وضع التأكيد: ينفذ السحب فوراً!
-      if (isConfirmMode && typeof activeExecuteImport === 'function') {
-        activeExecuteImport(floatingBtn);
-        isConfirmMode = false;
-        return;
-      }
-
-      // إذا كان الزر في الوضع العادي: نفتح المودال ونحول الزر نفسه لزر التأكيد
-      const pathCode = (window.location.pathname.split('/').pop() || '').trim();
-      const isAlready = Boolean(pathCode && importedCodesSet.has(pathCode));
+    // معالج النقر المباشر: استيراد ونقل فوري للمنتج بضغطة زر واحدة وبدون أي تأكيد!
+    const handleDirectImportAction = async () => {
+      if (isImportingInProgress) return;
 
       const mainTextEl = floatingBtn.querySelector('.wasli-btn-main-text');
-      const originalText = mainTextEl ? mainTextEl.textContent : '';
-      if (mainTextEl) mainTextEl.textContent = 'جاري فحص الصفحة...';
+      const subTextEl = floatingBtn.querySelector('.wasli-btn-sub-text');
+      const originalMainText = mainTextEl ? mainTextEl.textContent : 'استيراد المنتج إلى وصلي';
+      const originalSubText = subTextEl ? subTextEl.textContent : '';
+
+      isImportingInProgress = true;
+      if (mainTextEl) mainTextEl.textContent = 'جاري السحب الفوري...';
+      if (subTextEl) subTextEl.textContent = 'يرجى الانتظار ثوانٍ معدودة';
+      floatingBtn.style.opacity = '0.85';
+
+      // إظهار إشعار فوري صغير في الركن الأيمن
+      const toast = showWasliToast({
+        title: 'جاري السحب...',
+        message: 'يتم الآن استيراد ونقل المنتج إلى منصة وصلي فوراً...',
+        type: 'loading'
+      });
 
       try {
+        // 1. استخراج بيانات المنتج من صفحة فدشي الحالية
         const data = await extractFedshiProductDetails();
         if (!data || (!data.title && !data.fedshiWholesale)) {
-          alert('تعذر قراءة بيانات المنتج الحالي. يرجى التأكد من أنك داخل صفحة منتج مفتوحة في فدشي وبها السعر والمعلومات.');
-          if (mainTextEl) mainTextEl.textContent = isAlready ? 'المنتج مرفوع مسبقاً ✓' : 'استيراد المنتج إلى وصلي';
-          return;
+          throw new Error('تعذر قراءة بيانات وسعر المنتج من الصفحة الحالية. يرجى التأكد من اكتمال تحميل الصفحة.');
         }
 
-        // رسم محتوى المودال
-        renderModalData(data, modalOverlay, (fn) => {
-          activeExecuteImport = fn;
+        const productTitle = data.title || 'منتج جديد';
+        const costPrice = parseInt(data.fedshiWholesale, 10) || 0;
+        const wholesale = parseInt(data.wasliWholesale, 10) || (costPrice + (data.wasliProfit || 3000));
+        const minPrice = parseInt(data.wasliMinPrice, 10) || (wholesale + 5000);
+        const maxPrice = parseInt(data.wasliMaxPrice, 10) || (wholesale + 20000);
+        const storePrice = parseInt(data.defaultStorePrice, 10) || (wholesale + 10000);
+        const stock = parseInt(data.stock, 10) || 50;
+
+        // تحديث رسالة الإشعار
+        toast.update({
+          type: 'loading',
+          title: 'جاري السحب...',
+          message: `يتم الآن استيراد <strong>${productTitle}</strong> ونشره في منصتك...`,
         });
-        modalOverlay.classList.add('wasli-active');
 
-        // تحويل الزر نفسه في مكانه فوراً لزر التأكيد الأخضر المتوهج
-        isConfirmMode = true;
-        floatingBtn.classList.add('wasli-confirm-state');
-        const contentBox = floatingBtn.querySelector('.wasli-btn-content-box');
-        if (contentBox) {
-          contentBox.innerHTML = `
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-            <div class="wasli-btn-text-group">
-              <span class="wasli-btn-main-text">${isAlready ? 'تأكيد وتحديث المنتج ✓' : 'تأكيد ونقل المنتج الآن ✓'}</span>
-              <span class="wasli-btn-sub-text">انقر هنا لإتمام النقل فوراً</span>
-            </div>
-          `;
+        // 2. تجهيز الحمولة مباشرة وإرسالها فوراً
+        const payload = {
+          name: productTitle,
+          fedshiCode: data.productCode || '',
+          fedshiSku: data.skuCode || '',
+          fedshiPrice: costPrice,
+          fedshiProfit: data.fedshiProfit || 0,
+          minSuggestedPrice: data.minSuggested || minPrice,
+          maxSuggestedPrice: maxPrice,
+          wholesalePriceIqd: wholesale,
+          platformPriceIqd: wholesale,
+          defaultPriceIqd: storePrice,
+          minPriceIqd: minPrice,
+          maxPriceIqd: maxPrice,
+          category: data.category || 'عام',
+          subcategory: data.subcategory || '',
+          description: data.specifications || data.promoDescription || productTitle,
+          promoDescription: data.promoDescription || '',
+          specifications: data.specifications || '',
+          colors: data.colors || [],
+          images: data.images || [],
+          videoUrl: data.videoUrl || '',
+          stockQuantity: stock,
+        };
+
+        const result = await sendProductPayloadToWasli(payload);
+        const prodId = result.product?.id || '';
+        const activeTarget = wasliServerUrl.trim().replace(/\/+$/, '');
+        const previewUrl = prodId ? `${activeTarget}/p/${prodId}` : activeTarget;
+        const adminUrl = `${activeTarget}/waahhlstor/products`;
+        const profitVal = result.financials?.platformProfit?.toLocaleString() || (wholesale - costPrice).toLocaleString();
+
+        // 3. تحديث الإشعار الصغير ليعلن نجاح العملية فوراً
+        toast.update({
+          type: 'success',
+          title: 'تم السحب بنجاح!',
+          message: `تم حفظ ونشر <strong>${productTitle}</strong>! ربحك الصافي: <strong>+${profitVal} د.ع</strong>`,
+          previewUrl,
+          adminUrl,
+        });
+
+        // 4. حفظ كود المنتج وتحديث مظهر الزر ليصبح أخضر مع إشارة صح
+        if (data.productCode) {
+          markProductAsImported(data.productCode);
         }
+        updateFloatingButtonToImported(floatingBtn, result.product);
+
+        // لمسة تأثير حركة خفيفة للزر لإشعار المستخدم بالنجاح
+        floatingBtn.style.transition = 'transform 0.25s ease';
+        floatingBtn.style.transform = 'scale(1.06)';
+        setTimeout(() => { if (floatingBtn) floatingBtn.style.transform = ''; }, 350);
+
       } catch (err) {
-        console.error('خطأ عند فتح تفاصيل المنتج:', err);
-        if (mainTextEl) mainTextEl.textContent = isAlready ? 'المنتج مرفوع مسبقاً ✓' : 'استيراد المنتج إلى وصلي';
+        console.error('فشل الاستيراد الفوري المباشر:', err);
+        toast.update({
+          type: 'error',
+          title: 'تعذر السحب',
+          message: `حدث خطأ أثناء سحب المنتج: ${err.message || err}`,
+        });
+
+        const pathCode = (window.location.pathname.split('/').pop() || '').trim();
+        if (pathCode && importedCodesSet.has(pathCode)) {
+          updateFloatingButtonToImported(floatingBtn);
+        } else {
+          if (mainTextEl) mainTextEl.textContent = originalMainText;
+          if (subTextEl) subTextEl.textContent = originalSubText;
+        }
+      } finally {
+        floatingBtn.style.opacity = '1';
+        isImportingInProgress = false;
       }
     };
 
@@ -1141,7 +1167,7 @@
       minHeight: 55,
       maxWidth: 650,
       maxHeight: 400,
-      onClick: handleFloatingBtnAction,
+      onClick: handleDirectImportAction,
     });
   }
 
