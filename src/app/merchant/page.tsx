@@ -22,6 +22,7 @@ import {
   AlertCircle,
   LogOut,
   Sparkles,
+  Flame,
   Link as LinkIcon,
   ArrowLeft,
   Sliders,
@@ -41,7 +42,8 @@ import {
   MessageCircle,
   FileText,
   Send,
-  Bell
+  Bell,
+  Menu
 } from 'lucide-react';
 import Link from 'next/link';
 import { Store as StoreType, Order } from '@/types';
@@ -100,6 +102,9 @@ function MerchantDashboardContent() {
   const [storeInput, setStoreInput] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // حالات القائمة الجانبية المنزلقة (Hamburger Menu)
+  const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState(false);
 
   // حالات نافذة تعديل المتجر
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -890,34 +895,48 @@ interface MerchantEditFormState {
         
         {/* الترويسة ومعلومات المتجر مع أزرار التحكم العلوية */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md flex flex-col lg:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4 text-center sm:text-right w-full lg:w-auto justify-center sm:justify-start">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-700 to-skybrand-600 flex items-center justify-center text-white font-black text-2xl shadow-md shrink-0 overflow-hidden">
-              {currentStore?.logoUrl && !currentStore.logoUrl.includes('store-default') ? (
-                <img 
-                  src={currentStore.logoUrl} 
-                  alt={currentStore.name} 
-                  className="w-full h-full object-cover" 
-                />
-              ) : (
-                <Store className="w-8 h-8" />
-              )}
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1 justify-center sm:justify-start">
-                <h1 className="text-xl sm:text-2xl font-black text-slate-900">
-                  لوحة تحكم: {currentStore?.name || 'متجري الإلكتروني'}
-                </h1>
-                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
-                  currentStore?.isOpen !== false 
-                    ? 'bg-emerald-100 text-emerald-800' 
-                    : 'bg-amber-100 text-amber-800'
-                }`}>
-                  {currentStore?.isOpen !== false ? 'نشط ومفعّل' : 'مغلق مؤقتاً'}
-                </span>
+          <div className="flex items-center gap-3 sm:gap-4 text-center sm:text-right w-full lg:w-auto justify-between sm:justify-start">
+            <div className="flex items-center gap-3">
+              {/* زر القائمة الجانبية (Hamburger Menu - الثلاث خطوط) */}
+              <button
+                type="button"
+                onClick={() => setIsSidebarDrawerOpen(true)}
+                className="p-3 sm:p-3.5 rounded-2xl bg-brand-700 hover:bg-brand-800 active:scale-95 text-white flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md shadow-brand-700/20 shrink-0"
+                title="فتح القائمة الجانبية (الثلاث خطوط)"
+              >
+                <Menu className="w-5 h-5" />
+                <span className="text-xs font-black hidden sm:inline">القائمة</span>
+              </button>
+
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-tr from-brand-700 to-skybrand-600 flex items-center justify-center text-white font-black text-2xl shadow-md shrink-0 overflow-hidden">
+                {currentStore?.logoUrl && !currentStore.logoUrl.includes('store-default') ? (
+                  <img 
+                    src={currentStore.logoUrl} 
+                    alt={currentStore.name} 
+                    className="w-full h-full object-cover" 
+                  />
+                ) : (
+                  <Store className="w-7 h-7 sm:w-8 sm:h-8" />
+                )}
               </div>
-              <p className="text-xs text-slate-500 font-mono">
-                كود المتجر: <strong className="text-brand-700 font-bold">{currentStore?.code}</strong> | {currentStore?.city || 'البصرة'} {currentStore?.district ? `(${currentStore.district})` : ''}
-              </p>
+
+              <div className="text-right">
+                <div className="flex items-center gap-2 mb-1 justify-start">
+                  <h1 className="text-lg sm:text-2xl font-black text-slate-900">
+                    لوحة تحكم: {currentStore?.name || 'متجري الإلكتروني'}
+                  </h1>
+                  <span className={`text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                    currentStore?.isOpen !== false 
+                      ? 'bg-emerald-100 text-emerald-800' 
+                      : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {currentStore?.isOpen !== false ? 'نشط ومفعّل' : 'مغلق مؤقتاً'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 font-mono">
+                  كود المتجر: <strong className="text-brand-700 font-bold">{currentStore?.code}</strong> | {currentStore?.city || 'البصرة'} {currentStore?.district ? `(${currentStore.district})` : ''}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -1569,7 +1588,18 @@ interface MerchantEditFormState {
                             )}
                           </button>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {/* زر نشر المنتج (صفحة العرض الترويجي الخاص مع تخفيض 10 ساعات وطلب واتساب) */}
+                            <Link
+                              href={`/offer/${currentStore?.code}/${product.id}?storeName=${encodeURIComponent(currentStore?.name || '')}&phone=${encodeURIComponent(currentStore?.phone || '')}`}
+                              target="_blank"
+                              className="py-1.5 px-3 rounded-xl bg-gradient-to-r from-amber-600 to-red-600 hover:from-amber-700 hover:to-red-700 active:scale-95 text-white font-black text-xs shadow-xs shadow-amber-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                              title="نشر صفحة العرض الحصري لهذا المنتج (تخفيض 10 ساعات وطلب واتساب مباشر)"
+                            >
+                              <Flame className="w-3.5 h-3.5" />
+                              <span>نشر المنتج</span>
+                            </Link>
+
                             {/* زر نسخ رابط المنتج */}
                             <button
                               type="button"
@@ -1955,6 +1985,236 @@ interface MerchantEditFormState {
               >
                 إغلاق
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* القائمة الجانبية المنبثقة (Hamburger Menu Drawer - الثلاث خطوط) */}
+      {isSidebarDrawerOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden" dir="rtl">
+          {/* خلفية معتمة تتيح الإغلاق عند النقر عليها */}
+          <div
+            onClick={() => setIsSidebarDrawerOpen(false)}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+          />
+
+          <div className="fixed inset-y-0 right-0 max-w-full flex z-10">
+            <div className="w-screen max-w-md bg-slate-50 shadow-2xl flex flex-col h-full border-l border-slate-200 animate-in slide-in-from-right duration-300">
+              
+              {/* ترويسة القائمة الجانبية */}
+              <div className="p-5 bg-white border-b border-slate-200 flex items-center justify-between shadow-2xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-brand-700 text-white flex items-center justify-center font-black shadow-xs">
+                    <Menu className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-black text-slate-900 text-base">القائمة الجانبية</h2>
+                    <p className="text-xs text-slate-500 font-mono">
+                      {currentStore?.name} (كود: {currentStore?.code})
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarDrawerOpen(false)}
+                  className="w-9 h-9 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+                  title="إغلاق القائمة"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* محتوى القائمة القابل للتمرير */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                {/* 1. بطاقة المحفظة والأرباح */}
+                <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-3.5">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+                        <Wallet className="w-4 h-4" />
+                      </div>
+                      <h3 className="font-black text-slate-900 text-sm">المحفظة والأرباح</h3>
+                    </div>
+                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                      تحديث فوري
+                    </span>
+                  </div>
+
+                  {/* الأرباح المستحقة */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200">
+                    <div className="text-xs font-bold text-emerald-800 mb-1 flex items-center justify-between">
+                      <span>الأرباح المستحقة:</span>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    </div>
+                    <div className="text-2xl font-black text-emerald-600 font-mono">
+                      {earnedProfits.toLocaleString('ar-IQ')} <span className="text-xs font-normal text-emerald-800">د.ع</span>
+                    </div>
+                    <div className="text-[11px] text-emerald-700 font-medium mt-1">
+                      جاهزة للسحب بعد تسليم الطلب للزبون
+                    </div>
+                  </div>
+
+                  {/* الأرباح المتوقعة */}
+                  <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+                    <div className="text-xs font-bold text-slate-500 mb-1">الأرباح المتوقعة (قيد التوصيل):</div>
+                    <div className="text-xl font-black text-brand-800 font-mono">
+                      {totalExpectedProfits.toLocaleString('ar-IQ')} <span className="text-xs font-normal text-slate-500">د.ع</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-1">من جميع الطلبات الجارية وغير المسلمة</div>
+                  </div>
+                </div>
+
+                {/* 2. نشاط وإحصائيات المتجر */}
+                <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-3">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center font-bold">
+                      <TrendingUp className="w-4 h-4" />
+                    </div>
+                    <h3 className="font-black text-slate-900 text-sm">نشاط وإحصائيات المتجر</h3>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+                      <div className="text-[11px] font-bold text-slate-500 mb-0.5">إجمالي الطلبات</div>
+                      <div className="text-lg font-black text-slate-900 font-mono">
+                        {orders.length} <span className="text-xs font-normal text-slate-500">طلب</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-1">عبر متجرك</div>
+                    </div>
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+                      <div className="text-[11px] font-bold text-slate-500 mb-0.5">المنتجات المعروضة</div>
+                      <div className="text-lg font-black text-slate-900 font-mono">
+                        {totalProductsCount} <span className="text-xs font-normal text-slate-500">منتج</span>
+                      </div>
+                      <div className="text-[10px] text-emerald-600 font-medium mt-1">جاهزة للبيع</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. بطاقة الاتصال ببوت الإشعارات الفورية */}
+                <div className="bg-gradient-to-br from-sky-50 via-white to-sky-50/50 rounded-3xl p-5 border border-sky-200/80 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-sky-100 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-sky-500 text-white flex items-center justify-center font-bold shadow-xs">
+                        <Send className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-black text-slate-900 text-sm">إشعارات تليجرام</h3>
+                        <p className="text-[10px] text-slate-500 font-medium">تنبيه فوري عند كل طلب جديد</p>
+                      </div>
+                    </div>
+
+                    {currentStore?.telegramChatId ? (
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                        متصل
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">
+                        غير متصل
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                    {currentStore?.telegramChatId 
+                      ? 'متجرك مربوط بالبوت بنجاح. ستصلك رسالة فورية مع تفاصيل الزبون والمنتجات والأرباح فور تسجيل أي طلب.'
+                      : 'اضغط على الزر أدناه ليفتح لك تليجرام ويسجل دخولك تلقائياً لتبدأ باستلام إشعارات المبيعات والأرباح فور حدوثها.'}
+                  </p>
+
+                  <a
+                    href={`https://t.me/wasliasharatbot?start=store_${currentStore?.code || ''}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-2.5 px-4 bg-sky-500 hover:bg-sky-600 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{currentStore?.telegramChatId ? 'إعادة الاتصال بالبوت' : 'الاتصال ببوت الإشعارات'}</span>
+                    <ExternalLink className="w-3 h-3 opacity-80" />
+                  </a>
+                </div>
+
+                {/* 4. حساب استلام الأرباح المعتمد */}
+                <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold">
+                        <CreditCard className="w-4 h-4" />
+                      </div>
+                      <h3 className="font-black text-slate-900 text-sm">حساب استلام الأرباح</h3>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSidebarDrawerOpen(false);
+                        setIsEditModalOpen(true);
+                      }}
+                      className="text-xs font-bold text-brand-700 hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <Sliders className="w-3 h-3" />
+                      <span>تعديل</span>
+                    </button>
+                  </div>
+
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/90 text-xs">
+                    {currentStore?.payoutMethod === 'mastercard' && (
+                      <div className="space-y-1">
+                        <div className="text-slate-500 text-[11px]">ماستر كارت:</div>
+                        <div className="font-mono font-bold text-slate-900" dir="ltr">{currentStore.payoutDetails?.mastercardNumber}</div>
+                        <div className="text-slate-600 text-[11px]">باسم: {currentStore.payoutDetails?.mastercardHolderName}</div>
+                      </div>
+                    )}
+                    {currentStore?.payoutMethod === 'zain_cash' && (
+                      <div className="space-y-1">
+                        <div className="text-slate-500 text-[11px]">محفظة زين كاش:</div>
+                        <div className="font-mono font-bold text-slate-900" dir="ltr">{currentStore.payoutDetails?.zainCashPhone}</div>
+                        <div className="text-slate-600 text-[11px]">باسم: {currentStore.payoutDetails?.zainCashHolderName}</div>
+                      </div>
+                    )}
+                    {currentStore?.payoutMethod === 'mobile_credit' && (
+                      <div className="space-y-1">
+                        <div className="text-slate-500 text-[11px]">رصيد هاتف:</div>
+                        <div className="font-mono font-bold text-slate-900" dir="ltr">{currentStore.payoutDetails?.creditPhone}</div>
+                      </div>
+                    )}
+                    {!currentStore?.payoutMethod && (
+                      <div className="text-center py-2 text-slate-500 text-xs">
+                        لم تحدد وسيلة سحب أرباحك بعد
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 5. إجراءات سريعة وإعدادات */}
+                <div className="pt-2 space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSidebarDrawerOpen(false);
+                      openEditModal();
+                    }}
+                    className="w-full py-3 px-4 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs rounded-xl border border-slate-200 shadow-2xs flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Sliders className="w-4 h-4 text-brand-700" />
+                    <span>إعدادات الحساب وتفاصيل المتجر</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSidebarDrawerOpen(false);
+                      handleLogout();
+                    }}
+                    className="w-full py-2.5 px-4 bg-red-50 hover:bg-red-100 text-red-700 font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>تبديل الحساب أو الخروج</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -2423,6 +2683,236 @@ interface MerchantEditFormState {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* القائمة الجانبية المنبثقة (Hamburger Menu Drawer - الثلاث خطوط) */}
+      {isSidebarDrawerOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden" dir="rtl">
+          {/* خلفية معتمة تتيح الإغلاق عند النقر عليها */}
+          <div
+            onClick={() => setIsSidebarDrawerOpen(false)}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+          />
+
+          <div className="fixed inset-y-0 right-0 max-w-full flex z-10">
+            <div className="w-screen max-w-md bg-slate-50 shadow-2xl flex flex-col h-full border-l border-slate-200 animate-in slide-in-from-right duration-300">
+              
+              {/* ترويسة القائمة الجانبية */}
+              <div className="p-5 bg-white border-b border-slate-200 flex items-center justify-between shadow-2xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-brand-700 text-white flex items-center justify-center font-black shadow-xs">
+                    <Menu className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-black text-slate-900 text-base">القائمة الجانبية</h2>
+                    <p className="text-xs text-slate-500 font-mono">
+                      {currentStore?.name} (كود: {currentStore?.code})
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarDrawerOpen(false)}
+                  className="w-9 h-9 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+                  title="إغلاق القائمة"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* محتوى القائمة القابل للتمرير */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                {/* 1. بطاقة المحفظة والأرباح */}
+                <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-3.5">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+                        <Wallet className="w-4 h-4" />
+                      </div>
+                      <h3 className="font-black text-slate-900 text-sm">المحفظة والأرباح</h3>
+                    </div>
+                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                      تحديث فوري
+                    </span>
+                  </div>
+
+                  {/* الأرباح المستحقة */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200">
+                    <div className="text-xs font-bold text-emerald-800 mb-1 flex items-center justify-between">
+                      <span>الأرباح المستحقة:</span>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    </div>
+                    <div className="text-2xl font-black text-emerald-600 font-mono">
+                      {earnedProfits.toLocaleString('ar-IQ')} <span className="text-xs font-normal text-emerald-800">د.ع</span>
+                    </div>
+                    <div className="text-[11px] text-emerald-700 font-medium mt-1">
+                      جاهزة للسحب بعد تسليم الطلب للزبون
+                    </div>
+                  </div>
+
+                  {/* الأرباح المتوقعة */}
+                  <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+                    <div className="text-xs font-bold text-slate-500 mb-1">الأرباح المتوقعة (قيد التوصيل):</div>
+                    <div className="text-xl font-black text-brand-800 font-mono">
+                      {totalExpectedProfits.toLocaleString('ar-IQ')} <span className="text-xs font-normal text-slate-500">د.ع</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-1">من جميع الطلبات الجارية وغير المسلمة</div>
+                  </div>
+                </div>
+
+                {/* 2. نشاط وإحصائيات المتجر */}
+                <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-3">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center font-bold">
+                      <TrendingUp className="w-4 h-4" />
+                    </div>
+                    <h3 className="font-black text-slate-900 text-sm">نشاط وإحصائيات المتجر</h3>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+                      <div className="text-[11px] font-bold text-slate-500 mb-0.5">إجمالي الطلبات</div>
+                      <div className="text-lg font-black text-slate-900 font-mono">
+                        {orders.length} <span className="text-xs font-normal text-slate-500">طلب</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-1">عبر متجرك</div>
+                    </div>
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+                      <div className="text-[11px] font-bold text-slate-500 mb-0.5">المنتجات المعروضة</div>
+                      <div className="text-lg font-black text-slate-900 font-mono">
+                        {totalProductsCount} <span className="text-xs font-normal text-slate-500">منتج</span>
+                      </div>
+                      <div className="text-[10px] text-emerald-600 font-medium mt-1">جاهزة للبيع</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. بطاقة الاتصال ببوت الإشعارات الفورية */}
+                <div className="bg-gradient-to-br from-sky-50 via-white to-sky-50/50 rounded-3xl p-5 border border-sky-200/80 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-sky-100 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-sky-500 text-white flex items-center justify-center font-bold shadow-xs">
+                        <Send className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-black text-slate-900 text-sm">إشعارات تليجرام</h3>
+                        <p className="text-[10px] text-slate-500 font-medium">تنبيه فوري عند كل طلب جديد</p>
+                      </div>
+                    </div>
+
+                    {currentStore?.telegramChatId ? (
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                        متصل
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">
+                        غير متصل
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                    {currentStore?.telegramChatId 
+                      ? 'متجرك مربوط بالبوت بنجاح. ستصلك رسالة فورية مع تفاصيل الزبون والمنتجات والأرباح فور تسجيل أي طلب.'
+                      : 'اضغط على الزر أدناه ليفتح لك تليجرام ويسجل دخولك تلقائياً لتبدأ باستلام إشعارات المبيعات والأرباح فور حدوثها.'}
+                  </p>
+
+                  <a
+                    href={`https://t.me/wasliasharatbot?start=store_${currentStore?.code || ''}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-2.5 px-4 bg-sky-500 hover:bg-sky-600 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{currentStore?.telegramChatId ? 'إعادة الاتصال بالبوت' : 'الاتصال ببوت الإشعارات'}</span>
+                    <ExternalLink className="w-3 h-3 opacity-80" />
+                  </a>
+                </div>
+
+                {/* 4. حساب استلام الأرباح المعتمد */}
+                <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold">
+                        <CreditCard className="w-4 h-4" />
+                      </div>
+                      <h3 className="font-black text-slate-900 text-sm">حساب استلام الأرباح</h3>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSidebarDrawerOpen(false);
+                        setIsEditModalOpen(true);
+                      }}
+                      className="text-xs font-bold text-brand-700 hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <Sliders className="w-3 h-3" />
+                      <span>تعديل</span>
+                    </button>
+                  </div>
+
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/90 text-xs">
+                    {currentStore?.payoutMethod === 'mastercard' && (
+                      <div className="space-y-1">
+                        <div className="text-slate-500 text-[11px]">ماستر كارت:</div>
+                        <div className="font-mono font-bold text-slate-900" dir="ltr">{currentStore.payoutDetails?.mastercardNumber}</div>
+                        <div className="text-slate-600 text-[11px]">باسم: {currentStore.payoutDetails?.mastercardHolderName}</div>
+                      </div>
+                    )}
+                    {currentStore?.payoutMethod === 'zain_cash' && (
+                      <div className="space-y-1">
+                        <div className="text-slate-500 text-[11px]">محفظة زين كاش:</div>
+                        <div className="font-mono font-bold text-slate-900" dir="ltr">{currentStore.payoutDetails?.zainCashPhone}</div>
+                        <div className="text-slate-600 text-[11px]">باسم: {currentStore.payoutDetails?.zainCashHolderName}</div>
+                      </div>
+                    )}
+                    {currentStore?.payoutMethod === 'mobile_credit' && (
+                      <div className="space-y-1">
+                        <div className="text-slate-500 text-[11px]">رصيد هاتف:</div>
+                        <div className="font-mono font-bold text-slate-900" dir="ltr">{currentStore.payoutDetails?.creditPhone}</div>
+                      </div>
+                    )}
+                    {!currentStore?.payoutMethod && (
+                      <div className="text-center py-2 text-slate-500 text-xs">
+                        لم تحدد وسيلة سحب أرباحك بعد
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 5. إجراءات سريعة وإعدادات */}
+                <div className="pt-2 space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSidebarDrawerOpen(false);
+                      openEditModal();
+                    }}
+                    className="w-full py-3 px-4 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs rounded-xl border border-slate-200 shadow-2xs flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Sliders className="w-4 h-4 text-brand-700" />
+                    <span>إعدادات الحساب وتفاصيل المتجر</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSidebarDrawerOpen(false);
+                      handleLogout();
+                    }}
+                    className="w-full py-2.5 px-4 bg-red-50 hover:bg-red-100 text-red-700 font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>تبديل الحساب أو الخروج</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
