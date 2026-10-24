@@ -43,10 +43,13 @@ import {
   FileText,
   Send,
   Bell,
-  Menu
+  Menu,
+  PackageCheck
 } from 'lucide-react';
 import Link from 'next/link';
 import { Store as StoreType, Order } from '@/types';
+import PromoLinkModal from '@/components/PromoLinkModal';
+import { PromoLink } from '@/lib/services/promoLinkService';
 
 const IRAQI_GOVERNORATES = [
   'بغداد',
@@ -91,7 +94,13 @@ function MerchantDashboardContent() {
   const [productFeedback, setProductFeedback] = useState<Record<string, string>>({});
   const [productFilter, setProductFilter] = useState<'all' | 'active' | 'hidden'>('all');
   const [productSearch, setProductSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'products' | 'orders'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'links'>('products');
+
+  // حالات نظام روابط البيع الخاصة (روابطي)
+  const [promoLinks, setPromoLinks] = useState<PromoLink[]>([]);
+  const [selectedProductForPromo, setSelectedProductForPromo] = useState<any>(null);
+  const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
+  const [promoToast, setPromoToast] = useState('');
 
   // حالات نافذة تفاصيل وتأكيد ومراسلة الطلب
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -294,6 +303,17 @@ interface MerchantEditFormState {
           } catch (e) {
             console.warn('تعذر جلب منتجات المتجر:', e);
           }
+
+          // جلب روابط البيع الخاصة بالتاجر
+          try {
+            const promoRes = await fetch(`/api/promo-links?storeCode=${found.code || found.id}`);
+            if (promoRes.ok) {
+              const promoData = await promoRes.json();
+              if (promoData.success && Array.isArray(promoData.links)) {
+                setPromoLinks(promoData.links);
+              }
+            }
+          } catch (e) {}
         } else {
           setCurrentStore(null);
         }
@@ -528,6 +548,23 @@ interface MerchantEditFormState {
     setEditSuccessMsg('');
     setEditErrorMsg('');
     setIsEditModalOpen(true);
+  };
+
+  const openPromoModal = (product: any) => {
+    setSelectedProductForPromo(product);
+    setIsPromoModalOpen(true);
+  };
+
+  const handleLinkUpdated = (updatedLink: PromoLink) => {
+    setPromoLinks(prev => {
+      const idx = prev.findIndex(l => l.id === updatedLink.id || (l.storeCode === updatedLink.storeCode && l.productId === updatedLink.productId));
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = updatedLink;
+        return copy;
+      }
+      return [updatedLink, ...prev];
+    });
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'banner') => {
@@ -1032,6 +1069,24 @@ interface MerchantEditFormState {
                   {orders.length}
                 </span>
               </button>
+
+              {/* تبويب روابطي المخصص لروابط البيع الخاصة */}
+              <button
+                onClick={() => setActiveTab('links')}
+                className={`py-3 px-5 rounded-2xl font-black text-sm flex items-center gap-2 transition-all cursor-pointer ${
+                  activeTab === 'links'
+                    ? 'bg-emerald-800 text-white shadow-md shadow-emerald-800/20'
+                    : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <LinkIcon className="w-4 h-4 text-emerald-400" />
+                <span>روابطي (روابط البيع الخاصة)</span>
+                <span className={`text-xs px-2.5 py-0.5 rounded-full font-mono font-bold ${
+                  activeTab === 'links' ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                }`}>
+                  {promoLinks.length}
+                </span>
+              </button>
             </div>
 
         {/* 1. قسم منتجات متجري وتعديل الأسعار */}
@@ -1350,6 +1405,39 @@ interface MerchantEditFormState {
                               </div>
                             )}
                           </div>
+
+                          {/* زر إنشاء رابط البيع الخاص المميز (مثل منصة موجود) */}
+                          {(() => {
+                            const existingLink = promoLinks.find(l => l.productId === product.id);
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => openPromoModal(product)}
+                                className="w-full my-1 py-2.5 px-3.5 rounded-2xl bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 hover:from-emerald-900 hover:to-teal-900 text-white font-black text-xs shadow-xs transition-all flex items-center justify-between group cursor-pointer active:scale-98"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                                    <LinkIcon className="w-3.5 h-3.5 text-emerald-200" />
+                                  </div>
+                                  <div className="text-right">
+                                    <span className="block text-white font-bold text-xs">
+                                      {existingLink ? 'إحصائيات ورابط البيع الخاص' : 'إنشاء رابط البيع الخاص'}
+                                    </span>
+                                    <span className="text-[10px] text-emerald-200">
+                                      {existingLink 
+                                        ? `${existingLink.visitsCount} زيارة • ${existingLink.ordersCount} طلب • ${existingLink.totalProfit?.toLocaleString('ar-IQ')} د.ع أرباح`
+                                        : 'أنشئ رابطاً خاصاً بك واربح من كل طلب'
+                                      }
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 text-emerald-200 text-[11px]">
+                                  <span>{existingLink ? 'الإحصائيات' : 'توليد الرابط'}</span>
+                                  <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" />
+                                </div>
+                              </button>
+                            );
+                          })()}
                         </div>
 
                         {/* الجزء السفلي: أزرار التحكم بالمشاركة والإظهار والإخفاء */}
@@ -1540,6 +1628,218 @@ interface MerchantEditFormState {
             </div>
           )}
         </div>
+        )}
+
+        {/* 3. قسم روابطي المخصص (روابط البيع الخاصة وإحصائياتها الشاملة) */}
+        {activeTab === 'links' && (
+          <div className="space-y-6">
+            {/* رأس قسم روابطي */}
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                    <LinkIcon className="w-5 h-5 text-emerald-700" />
+                    <span>روابطي (روابط البيع الخاصة)</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    تابع إحصائيات حملاتك الإعلانية، عدد الزيارات، الطلبات، وأرباحك من كل رابط بيع مخصص.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('products')}
+                  className="py-2.5 px-4 bg-emerald-800 hover:bg-emerald-900 text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>إنشاء رابط لمنتج آخر</span>
+                </button>
+              </div>
+
+              {/* بطاقات الإحصائيات العامة المجمعة لكافة الروابط */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-5">
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
+                  <div className="flex items-center justify-between text-xs text-slate-500 font-bold mb-1">
+                    <span>إجمالي الروابط النشطة</span>
+                    <LinkIcon className="w-4 h-4 text-slate-400" />
+                  </div>
+                  <div className="text-2xl font-black text-slate-900 font-mono">
+                    {promoLinks.length}
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">رابط ترويج مخصص</div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-sky-50 border border-sky-100">
+                  <div className="flex items-center justify-between text-xs text-sky-700 font-bold mb-1">
+                    <span>إجمالي الزيارات</span>
+                    <Eye className="w-4 h-4 text-sky-500" />
+                  </div>
+                  <div className="text-2xl font-black text-sky-900 font-mono">
+                    {promoLinks.reduce((sum, l) => sum + (l.visitsCount || 0), 0)}
+                  </div>
+                  <div className="text-[10px] text-sky-600 mt-0.5">زيارة حقيقية للروابط</div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100">
+                  <div className="flex items-center justify-between text-xs text-amber-700 font-bold mb-1">
+                    <span>إجمالي الطلبات</span>
+                    <ShoppingBag className="w-4 h-4 text-amber-500" />
+                  </div>
+                  <div className="text-2xl font-black text-amber-900 font-mono">
+                    {promoLinks.reduce((sum, l) => sum + (l.ordersCount || 0), 0)}
+                  </div>
+                  <div className="text-[10px] text-amber-600 mt-0.5">طلب مؤكد من الروابط</div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
+                  <div className="flex items-center justify-between text-xs text-emerald-800 font-bold mb-1">
+                    <span>أرباحك من الروابط</span>
+                    <TrendingUp className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <div className="text-2xl font-black text-emerald-900 font-mono">
+                    {promoLinks.reduce((sum, l) => sum + (l.totalProfit || 0), 0).toLocaleString('ar-IQ')}
+                    <span className="text-xs font-bold text-emerald-700 mr-1">د.ع</span>
+                  </div>
+                  <div className="text-[10px] text-emerald-600 mt-0.5">أرباح صافية محققة</div>
+                </div>
+              </div>
+            </div>
+
+            {/* قائمة روابط التاجر */}
+            {promoLinks.length === 0 ? (
+              <div className="bg-white rounded-3xl p-12 text-center border border-slate-200/80 shadow-md">
+                <div className="w-16 h-16 bg-emerald-50 text-emerald-700 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-emerald-100">
+                  <LinkIcon className="w-8 h-8" />
+                </div>
+                <h3 className="text-lg font-black text-slate-900 mb-1">لم تقم بإنشاء أي رابط بيع خاص حتى الآن</h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto mb-6 leading-relaxed">
+                  أنشئ روابط بيع خاصة لمنتجاتك لتبدأ ترويجها في إعلاناتك وصفحاتك على السوشيال ميديا، واربح من كل طلب يتم تأكيده تلقائياً!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('products')}
+                  className="py-3 px-6 rounded-2xl bg-emerald-800 hover:bg-emerald-900 text-white font-black text-xs shadow-md shadow-emerald-800/20 transition-all inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>اختر منتجاً وأنشئ له رابط بيع الآن</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {promoLinks.map((link) => {
+                  const matchingProd = merchantProducts.find(p => p.id === link.productId);
+                  const fullLink = typeof window !== 'undefined' ? `${window.location.origin}${link.url}` : link.url;
+                  return (
+                    <div 
+                      key={link.id} 
+                      className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+                    >
+                      {/* رأس بطاقة الرابط */}
+                      <div className="flex items-start gap-3">
+                        <img 
+                          src={link.productImage} 
+                          alt={link.productName} 
+                          className="w-16 h-16 rounded-2xl object-cover border border-slate-200 shrink-0" 
+                        />
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-bold text-slate-900 text-sm truncate" title={link.productName}>
+                            {link.productName}
+                          </h4>
+                          <div className="flex items-center gap-2 text-xs mt-1">
+                            <span className="text-slate-500 font-medium">سعر البيع: <strong className="text-slate-900 font-mono">{link.sellingPrice?.toLocaleString('ar-IQ')} د.ع</strong></span>
+                            <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                              ربحك: +{link.profitPerItem?.toLocaleString('ar-IQ')} د.ع
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* شريط الإحصائيات السريعة للرابط */}
+                      <div className="grid grid-cols-4 gap-2 bg-slate-50 p-2.5 rounded-2xl border border-slate-100 text-center text-xs">
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-bold">الزيارات</div>
+                          <div className="font-black text-slate-800 font-mono text-sm mt-0.5">{link.visitsCount || 0}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-bold">الطلبات</div>
+                          <div className="font-black text-brand-700 font-mono text-sm mt-0.5">{link.ordersCount || 0}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-bold">التحويل</div>
+                          <div className="font-black text-purple-700 font-mono text-sm mt-0.5">{link.conversionRate || 0}%</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-bold">الأرباح</div>
+                          <div className="font-black text-emerald-700 font-mono text-sm mt-0.5">{link.totalProfit?.toLocaleString('ar-IQ')} د.ع</div>
+                        </div>
+                      </div>
+
+                      {/* شريط الرابط وأزرار الإجراء */}
+                      <div className="space-y-2 pt-1 border-t border-slate-100">
+                        <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 text-xs">
+                          <span className="flex-1 font-mono text-[11px] text-slate-600 truncate" dir="ltr">
+                            {fullLink}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (navigator.clipboard) {
+                                navigator.clipboard.writeText(fullLink);
+                                setPromoToast(link.id);
+                                setTimeout(() => setPromoToast(''), 2500);
+                              }
+                            }}
+                            className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 border border-slate-200 hover:border-emerald-300 font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                          >
+                            {promoToast === link.id ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-600" />
+                                <span>تم!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3 text-emerald-600" />
+                                <span>نسخ</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              openPromoModal(matchingProd || {
+                                id: link.productId,
+                                name: link.productName,
+                                image: link.productImage,
+                                priceIqd: link.sellingPrice,
+                                wholesalePriceIqd: link.wholesalePrice,
+                              });
+                            }}
+                            className="flex-1 py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <TrendingUp className="w-3.5 h-3.5 text-emerald-700" />
+                            <span>عرض الإحصائيات والطلبات التفصيلية</span>
+                          </button>
+
+                          <a
+                            href={link.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-colors"
+                            title="فتح ومعاينة الرابط"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         )}
         </div>
       </div>
@@ -2474,6 +2774,23 @@ interface MerchantEditFormState {
             </div>
           </div>
         </div>
+      )}
+
+      {/* نافذة مودال إنشاء وإحصائيات رابط البيع الخاص (مثل منصة موجود) */}
+      {selectedProductForPromo && currentStore && (
+        <PromoLinkModal
+          isOpen={isPromoModalOpen}
+          onClose={() => {
+            setIsPromoModalOpen(false);
+            setSelectedProductForPromo(null);
+          }}
+          product={selectedProductForPromo}
+          store={{
+            code: currentStore.code || '',
+            name: currentStore.name || 'متجري',
+          }}
+          onLinkUpdated={handleLinkUpdated}
+        />
       )}
     </div>
   );

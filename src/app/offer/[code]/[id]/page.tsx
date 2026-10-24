@@ -206,6 +206,7 @@ function OfferPageContent() {
 
   const [product, setProduct] = useState<Product | null>(null);
   const [store, setStore] = useState<Store | null>(null);
+  const [customLinkData, setCustomLinkData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   const [zoomImage, setZoomImage] = useState<string | null>(null);
@@ -326,6 +327,23 @@ function OfferPageContent() {
           setProduct(foundProduct);
         }
 
+        // جلب بيانات الرابط الخاص إن وجد وتسجيل زيارة فورية
+        try {
+          fetch('/api/promo-links/visit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storeCode, productId }),
+          }).catch(() => {});
+
+          const linkRes = await fetch(`/api/promo-links?storeCode=${storeCode}&productId=${productId}`);
+          if (linkRes.ok) {
+            const linkData = await linkRes.json();
+            if (linkData.success && linkData.link) {
+              setCustomLinkData(linkData.link);
+            }
+          }
+        } catch (e) {}
+
         // تحديث عنوان التاب في المتصفح باسم المتجر والمنتج حصراً بدون اسم وصلي
         if (typeof document !== 'undefined') {
           const finalStoreName = foundStore?.name || queryStoreName || 'متجر معتمد';
@@ -359,9 +377,12 @@ function OfferPageContent() {
   }, [product]);
 
   const currentPrice = useMemo(() => {
+    if (customLinkData?.sellingPrice) {
+      return Number(customLinkData.sellingPrice);
+    }
     if (!product) return 10000;
     return (product as any).sellingPrice || product.platformPriceIqd || product.priceIqd || 10000;
-  }, [product]);
+  }, [product, customLinkData]);
 
   const previousPrice = currentPrice + 20000;
   const discountAmount = 20000;
@@ -401,6 +422,9 @@ function OfferPageContent() {
     setIsSubmitting(true);
 
     try {
+      const generatedOrderNumber = `ORD-${Math.floor(10000 + Math.random() * 90000)}`;
+
+      // تسجيل الطلب في نظام الطلبات العام
       try {
         await fetch('/api/orders', {
           method: 'POST',
@@ -420,12 +444,30 @@ function OfferPageContent() {
               }
             ],
             totalAmount: totalPrice,
-            notes: 'طلب سريع من صفحة العرض',
+            notes: 'طلب سريع من رابط البيع الخاص',
           }),
         });
       } catch (errOrder) {
         console.warn('تنبيه حفظ الطلب في النظام:', errOrder);
       }
+
+      // تسجيل الطلب في إحصائيات الرابط الخاص للتاجر
+      try {
+        fetch('/api/promo-links/order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            storeCode: storeCode || store?.code,
+            productId: product?.id,
+            orderNumber: generatedOrderNumber,
+            customerName: customerName.trim(),
+            customerPhone: customerPhone.trim(),
+            customerCity,
+            quantity,
+            totalPrice,
+          }),
+        }).catch(() => {});
+      } catch (errLink) {}
 
       const storeName = store?.name || 'متجرك الإلكتروني';
       const cleanMerchantPhone = (store?.phone || queryPhone || '').replace(/[^0-9]/g, '');
