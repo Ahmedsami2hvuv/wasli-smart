@@ -42,6 +42,7 @@ export default function AdminProductsPage() {
   const [editSubcategory, setEditSubcategory] = useState('');
   const [editSubcategoryId, setEditSubcategoryId] = useState('');
   const [editImage, setEditImage] = useState('');
+  const [editSupplierPrice, setEditSupplierPrice] = useState<number>(0);
   const [editWholesalePrice, setEditWholesalePrice] = useState<number>(0);
   const [editPlatformPrice, setEditPlatformPrice] = useState<number>(0);
   const [editMinPrice, setEditMinPrice] = useState<number>(0);
@@ -60,6 +61,7 @@ export default function AdminProductsPage() {
     setEditSubcategory(p.subcategory || '');
     setEditSubcategoryId(p.subcategoryId || '');
     setEditImage(p.image || '');
+    setEditSupplierPrice(p.supplierPriceIqd || 0);
     setEditWholesalePrice(p.wholesalePriceIqd || 0);
     setEditPlatformPrice(p.platformPriceIqd || p.priceIqd || 0);
     setEditMinPrice(p.minPriceIqd || 0);
@@ -86,6 +88,7 @@ export default function AdminProductsPage() {
           subcategoryId: editSubcategoryId,
           image: editImage.trim() || editingProduct.image,
           description: editDescription.trim(),
+          supplierPriceIqd: editSupplierPrice,
           wholesalePriceIqd: editWholesalePrice,
           platformPriceIqd: editPlatformPrice,
           priceIqd: editPlatformPrice,
@@ -106,6 +109,7 @@ export default function AdminProductsPage() {
           subcategoryId: editSubcategoryId,
           image: editImage.trim() || p.image,
           description: editDescription.trim(),
+          supplierPriceIqd: editSupplierPrice,
           wholesalePriceIqd: editWholesalePrice,
           platformPriceIqd: editPlatformPrice,
           priceIqd: editPlatformPrice,
@@ -817,7 +821,18 @@ export default function AdminProductsPage() {
                     <span>تعديل الأسعار والحدود (بالدينار العراقي):</span>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-amber-700 mb-1">تكلفة المورد (فدشي)</label>
+                      <input
+                        type="number"
+                        step="500"
+                        required
+                        value={editSupplierPrice}
+                        onChange={(e) => setEditSupplierPrice(Number(e.target.value))}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50/50 text-xs font-bold text-amber-900"
+                      />
+                    </div>
                     <div>
                       <label className="block text-[11px] font-bold text-slate-600 mb-1">سعر الجملة (للتاجر)</label>
                       <input
@@ -862,6 +877,12 @@ export default function AdminProductsPage() {
                         className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800"
                       />
                     </div>
+                  </div>
+
+                  <div className="text-[11px] text-slate-600 pt-2 flex items-center gap-4 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 mt-2">
+                    <span>ربح المنصة الصافي من هذا المنتج: <strong className="text-emerald-700 font-bold">{Math.max(0, editWholesalePrice - editSupplierPrice).toLocaleString('ar-IQ')} د.ع</strong></span>
+                    <span>•</span>
+                    <span>أقل ربح متوقع للتاجر: <strong className="text-brand-800 font-bold">{Math.max(0, editMinPrice - editWholesalePrice).toLocaleString('ar-IQ')} د.ع</strong></span>
                   </div>
                 </div>
 

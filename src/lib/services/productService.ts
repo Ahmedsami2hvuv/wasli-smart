@@ -73,9 +73,13 @@ export async function getAllProducts(): Promise<Product[]> {
           image: item.images?.[0]?.local_url || '/placeholder-product.svg',
           category: item.category?.name || 'عام',
           categoryId: item.category_id,
-          promoDescription: item.description,
-          specifications: item.description,
-          supplierPriceIqd: Number(item.wholesale_price) - 3000,
+          promoDescription: (item.description || '').replace(/<!--WASLI_SUPPLIER_PRICE:\d+-->/g, '').trim(),
+          specifications: (item.description || '').replace(/<!--WASLI_SUPPLIER_PRICE:\d+-->/g, '').trim(),
+          supplierPriceIqd: (() => {
+            const supplierMatch = (item.description || '').match(/<!--WASLI_SUPPLIER_PRICE:(\d+)-->/);
+            if (supplierMatch) return Number(supplierMatch[1]);
+            return Number(item.wholesale_price) || 0;
+          })(),
           supplierCode: item.brand || item.metadata?.supplierCode,
           images: item.images?.map((im: any) => im.local_url) || [],
         }));
@@ -262,11 +266,16 @@ export async function createPlatformProduct(productData: {
   const dbClient = supabaseAdmin || supabase;
   if (dbClient) {
     try {
+      let storedDescription = newProduct.description || '';
+      if (newProduct.supplierPriceIqd && newProduct.supplierPriceIqd > 0) {
+        storedDescription = `${storedDescription.replace(/<!--WASLI_SUPPLIER_PRICE:\d+-->/g, '').trim()}\n\n<!--WASLI_SUPPLIER_PRICE:${newProduct.supplierPriceIqd}-->`;
+      }
+
       const { error: insertError } = await dbClient.from('products').insert({
         id: newProduct.id,
         title: newProduct.name,
         slug: newProduct.slug,
-        description: newProduct.description,
+        description: storedDescription,
         short_description: newProduct.shortDescription,
         wholesale_price: newProduct.wholesalePriceIqd,
         platform_price: newProduct.platformPriceIqd,
@@ -335,6 +344,12 @@ export async function updatePlatformProduct(id: string, updates: Partial<Product
       if (updates.categoryId) updateData.category_id = updates.categoryId;
       if (updates.status) updateData.status = updates.status;
       if (updates.isAvailable !== undefined) updateData.is_available = updates.isAvailable;
+
+      if (updates.supplierPriceIqd !== undefined) {
+        const { data: curr } = await dbClient.from('products').select('description').eq('id', id).maybeSingle();
+        const baseDesc = ((updates.description !== undefined ? updates.description : curr?.description) || '').replace(/<!--WASLI_SUPPLIER_PRICE:\d+-->/g, '').trim();
+        updateData.description = `${baseDesc}\n\n<!--WASLI_SUPPLIER_PRICE:${updates.supplierPriceIqd}-->`;
+      }
 
       await dbClient.from('products').update(updateData).eq('id', id);
     } catch (err) {
