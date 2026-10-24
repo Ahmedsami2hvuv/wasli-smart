@@ -42,6 +42,113 @@
   background: linear-gradient(135deg, #1E40AF 0%, #0369A1 100%) !important;
 }
 
+/* شكل الزر العائم المميز إذا كان المنتج مرفوعاً مسبقاً */
+.wasli-floating-btn.wasli-already-imported {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  box-shadow: 0 10px 25px -5px rgba(22, 163, 74, 0.45), 0 8px 10px -6px rgba(22, 163, 74, 0.25) !important;
+}
+
+.wasli-floating-btn.wasli-already-imported:hover {
+  transform: translateY(-3px) scale(1.02) !important;
+  background: linear-gradient(135deg, #15803d 0%, #166534 100%) !important;
+  box-shadow: 0 15px 30px -5px rgba(22, 163, 74, 0.6) !important;
+}
+
+/* شريط التنبيه داخل المودال عند وجود المنتج مسبقاً */
+.wasli-already-imported-banner {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
+  border: 1.5px solid #86efac !important;
+  border-radius: 14px !important;
+  padding: 12px 14px !important;
+  margin-bottom: 14px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  direction: rtl !important;
+}
+
+.wasli-already-imported-info {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.wasli-already-imported-icon {
+  flex-shrink: 0 !important;
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50% !important;
+  background: #ffffff !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 2px 6px rgba(22, 163, 74, 0.15) !important;
+}
+
+.wasli-already-imported-text {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  text-align: right !important;
+}
+
+.wasli-already-imported-text strong {
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  color: #14532d !important;
+}
+
+.wasli-already-imported-text span {
+  font-size: 11px !important;
+  color: #166534 !important;
+}
+
+.wasli-already-imported-links {
+  display: flex !important;
+  gap: 6px !important;
+  flex-shrink: 0 !important;
+}
+
+.wasli-banner-btn {
+  padding: 6px 12px !important;
+  background: #16a34a !important;
+  color: #ffffff !important;
+  border-radius: 8px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  text-decoration: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  transition: all 0.2s ease !important;
+  white-space: nowrap !important;
+}
+
+.wasli-banner-btn:hover {
+  background: #15803d !important;
+  color: #ffffff !important;
+}
+
+.wasli-banner-btn.admin {
+  background: #0284c7 !important;
+}
+
+.wasli-banner-btn.admin:hover {
+  background: #0369a1 !important;
+  color: #ffffff !important;
+}
+
+.wasli-submit-btn.wasli-update-btn,
+.wasli-submit-btn-top.wasli-update-btn {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+}
+
+.wasli-submit-btn.wasli-update-btn:hover,
+.wasli-submit-btn-top.wasli-update-btn:hover {
+  background: linear-gradient(135deg, #15803d 0%, #166534 100%) !important;
+}
+
 .wasli-floating-btn svg {
   width: 18px !important;
   height: 18px !important;

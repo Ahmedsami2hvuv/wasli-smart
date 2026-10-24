@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPlatformProduct } from '@/lib/services/productService';
+import { createPlatformProduct, findProductBySupplierCode } from '@/lib/services/productService';
 import { findOrCreateCategoryAndSubcategory } from '@/lib/services/categoryService';
 import { publishProductToTelegramChannel } from '@/lib/telegram/vault';
 
@@ -13,6 +13,71 @@ export async function OPTIONS() {
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   });
+}
+
+// فحص ما إذا كان المنتج مسحوباً ومرفوعاً مسبقاً في منصة وصلي
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const code = searchParams.get('code') || searchParams.get('fedshiCode');
+
+    if (!code) {
+      return NextResponse.json(
+        { exists: false, message: 'كود المنتج مطلوب' },
+        { 
+          status: 400,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          }
+        }
+      );
+    }
+
+    const found = await findProductBySupplierCode(code.trim());
+    if (found) {
+      return NextResponse.json(
+        {
+          exists: true,
+          product: {
+            id: found.id,
+            name: found.name || found.title,
+            wholesalePriceIqd: found.wholesalePriceIqd || found.wholesale_price,
+            supplierCode: found.supplierCode || code,
+          }
+        },
+        { 
+          status: 200,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          }
+        }
+      );
+    }
+
+    return NextResponse.json(
+      { exists: false },
+      { 
+        status: 200,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        }
+      }
+    );
+  } catch (err: any) {
+    return NextResponse.json(
+      { exists: false, error: err.message || 'حدث خطأ أثناء فحص المنتج' },
+      { 
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        }
+      }
+    );
+  }
 }
 
 export async function POST(request: NextRequest) {

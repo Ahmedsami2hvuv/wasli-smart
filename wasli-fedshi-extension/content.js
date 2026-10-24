@@ -620,6 +620,97 @@
     };
   }
 
+  // ========================================================
+  // إدارة قائمة المعرفات المسحوبة محلياً ودائماً لمنع التكرار
+  // ========================================================
+  const importedCodesSet = new Set();
+  try {
+    const savedLocal = JSON.parse(localStorage.getItem('wasli_imported_codes') || '[]');
+    const savedSession = JSON.parse(sessionStorage.getItem('wasli_imported_codes') || '[]');
+    [...savedLocal, ...savedSession].forEach(c => {
+      if (c) importedCodesSet.add(c);
+    });
+  } catch (e) {}
+
+  function updateFloatingButtonToImported(btn, productInfo) {
+    if (!btn) return;
+    btn.classList.add('wasli-already-imported');
+    btn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+      <span>المنتج مرفوع مسبقاً ✓</span>
+    `;
+    btn.title = 'هذا المنتج تم استيراده ورفعه مسبقاً إلى منصة وصلي - انقر للمعاينة أو التحديث';
+  }
+
+  function markProductAsImported(code) {
+    if (!code) return;
+    importedCodesSet.add(code);
+    try {
+      const arr = Array.from(importedCodesSet);
+      localStorage.setItem('wasli_imported_codes', JSON.stringify(arr));
+      sessionStorage.setItem('wasli_imported_codes', JSON.stringify(arr));
+    } catch (e) {}
+
+    // تحديث أي زر في بطاقات الصفحة يخص هذا المنتج فوراً
+    const buttons = document.querySelectorAll(`[data-wasli-code="${code}"]`);
+    buttons.forEach(btn => {
+      btn.className = 'wasli-card-quick-btn wasli-done';
+      btn.innerHTML = `
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span>تم السحب</span>
+      `;
+      btn.title = 'تم استيراد هذا المنتج بنجاح إلى منصة وصلي';
+    });
+
+    // تحديث الزر العائم في صفحة المنتج الفردي إذا كان يخص هذا الكود
+    const floatingBtn = document.querySelector('.wasli-floating-btn');
+    if (floatingBtn && window.location.pathname.includes(code)) {
+      updateFloatingButtonToImported(floatingBtn);
+    }
+  }
+
+  // فحص حالة استيراد المنتج (محلياً وفورياً من خادم وصلي)
+  async function checkIfProductImported(code) {
+    if (!code) return { exists: false };
+
+    // 1. الفحص الفوري من الذاكرة المحلية (0ms)
+    if (importedCodesSet.has(code)) {
+      return { exists: true, source: 'local' };
+    }
+
+    // 2. الفحص الحي من خادم وصلي عبر Service Worker لتجاوز أي قيود حظر
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+      try {
+        const targetUrl = wasliServerUrl.trim().replace(/\/+$/, '') + '/api/products/import-fedshi';
+        const bgRes = await new Promise((resolve) => {
+          chrome.runtime.sendMessage(
+            { action: 'checkProductExists', code, url: targetUrl },
+            (res) => {
+              if (chrome.runtime.lastError || !res) {
+                resolve({ exists: false });
+              } else {
+                resolve(res.result || { exists: false });
+              }
+            }
+          );
+        });
+
+        if (bgRes && bgRes.exists) {
+          markProductAsImported(code);
+          return { exists: true, product: bgRes.product, source: 'server' };
+        }
+      } catch (e) {
+        console.warn('تعذر فحص وجود المنتج من الخادم:', e);
+      }
+    }
+
+    return { exists: false };
+  }
+
   // بناء واجهة الإضافة الذكية
   function initWasliUI() {
     // تشغيل واجهة المنتج الفردي فقط في صفحات المنتجات الفعلية
@@ -664,7 +755,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.3</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.4</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -701,6 +792,17 @@
     container.appendChild(floatingBtn);
     container.appendChild(modalOverlay);
     document.body.appendChild(container);
+
+    // فحص ما إذا كان المنتج الحالي في هذه الصفحة مسحوباً ومرفوعاً مسبقاً في منصة وصلي
+    const pathParts = window.location.pathname.split('/').filter(Boolean);
+    const pageCode = pathParts[pathParts.length - 1] || '';
+    if (pageCode) {
+      checkIfProductImported(pageCode).then((checkRes) => {
+        if (checkRes && checkRes.exists) {
+          updateFloatingButtonToImported(floatingBtn, checkRes.product);
+        }
+      });
+    }
 
     // إنشاء زر السحب العائم المربع والقابل للتحريك والمحفوظ مكانه
     const draggableConfirmBtn = document.createElement('button');
@@ -844,8 +946,31 @@
   function renderModalData(data, overlay) {
     const content = overlay.querySelector('#wasli-modal-content');
     const firstImg = (data.images && data.images[0]) || (data.colors && data.colors[0] && data.colors[0].image) || '';
+    const isAlreadyImported = Boolean(data.productCode && importedCodesSet.has(data.productCode));
+
+    const alreadyBannerHtml = isAlreadyImported ? `
+      <!-- شريط تنبيه المنتج المرفوع مسبقاً -->
+      <div class="wasli-already-imported-banner">
+        <div class="wasli-already-imported-info">
+          <div class="wasli-already-imported-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.8">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+          </div>
+          <div class="wasli-already-imported-text">
+            <strong>هذا المنتج مرفوع مسبقاً في منصة وصلي!</strong>
+            <span>المنتج مسجل بالفعل في منصتك، يمكنك تعديل الأسعار والتفاصيل أو إدارته من لوحة التحكم.</span>
+          </div>
+        </div>
+        <div class="wasli-already-imported-links">
+          <a href="${wasliServerUrl}/waahhlstor/products" target="_blank" class="wasli-banner-btn admin">لوحة التحكم ↗</a>
+        </div>
+      </div>
+    ` : '';
 
     content.innerHTML = `
+      ${alreadyBannerHtml}
       <!-- شريط معلومات الربط -->
       <div style="background: #eff6ff; padding: 10px 14px; border-radius: 12px; border: 1px solid #bfdbfe; display: flex; justify-content: space-between; align-items: center;">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -1088,6 +1213,38 @@
     const confirmBtn = overlay.querySelector('#wasli-btn-confirm');
     const confirmBtnDraggable = overlay.querySelector('#wasli-btn-confirm-draggable');
 
+    if (isAlreadyImported) {
+      if (confirmBtnTop) {
+        confirmBtnTop.classList.add('wasli-update-btn');
+        const spanTop = confirmBtnTop.querySelector('span');
+        if (spanTop) spanTop.textContent = 'تحديث بيانات المنتج';
+      }
+      if (confirmBtn) {
+        confirmBtn.classList.add('wasli-update-btn');
+        const spanMain = confirmBtn.querySelector('span');
+        if (spanMain) spanMain.textContent = 'تحديث بيانات المنتج في منصتي ✓';
+      }
+      if (confirmBtnDraggable) {
+        const titleEl = confirmBtnDraggable.querySelector('.wasli-draggable-title');
+        if (titleEl) titleEl.textContent = 'تحديث وسحب';
+      }
+    } else {
+      if (confirmBtnTop) {
+        confirmBtnTop.classList.remove('wasli-update-btn');
+        const spanTop = confirmBtnTop.querySelector('span');
+        if (spanTop) spanTop.textContent = 'تأكيد وسحب للمنصة';
+      }
+      if (confirmBtn) {
+        confirmBtn.classList.remove('wasli-update-btn');
+        const spanMain = confirmBtn.querySelector('span');
+        if (spanMain) spanMain.textContent = 'تأكيد ونقل المنتج إلى منصتي الآن';
+      }
+      if (confirmBtnDraggable) {
+        const titleEl = confirmBtnDraggable.querySelector('.wasli-draggable-title');
+        if (titleEl) titleEl.textContent = 'تأكيد وسحب';
+      }
+    }
+
     if (confirmBtnTop) confirmBtnTop.onclick = executeBackgroundImport;
     if (confirmBtn) confirmBtn.onclick = executeBackgroundImport;
     if (confirmBtnDraggable) {
@@ -1170,34 +1327,6 @@
     } else {
       throw new Error(result?.message || 'حدث خطأ في استجابة الخادم أثناء حفظ المنتج');
     }
-  }
-
-  // حفظ وإدارة قائمة المعرفات المسحوبة في الجلسة لمنع التكرار
-  const importedCodesSet = new Set();
-  try {
-    const saved = JSON.parse(sessionStorage.getItem('wasli_imported_codes') || '[]');
-    if (Array.isArray(saved)) saved.forEach(c => importedCodesSet.add(c));
-  } catch (e) {}
-
-  function markProductAsImported(code) {
-    if (!code) return;
-    importedCodesSet.add(code);
-    try {
-      sessionStorage.setItem('wasli_imported_codes', JSON.stringify(Array.from(importedCodesSet)));
-    } catch (e) {}
-
-    // تحديث أي زر في الصفحة يخص هذا المنتج فوراً
-    const buttons = document.querySelectorAll(`[data-wasli-code="${code}"]`);
-    buttons.forEach(btn => {
-      btn.className = 'wasli-card-quick-btn wasli-done';
-      btn.innerHTML = `
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-          <polyline points="20 6 9 17 4 12"></polyline>
-        </svg>
-        <span>تم السحب</span>
-      `;
-      btn.title = 'تم استيراد هذا المنتج بنجاح إلى منصة وصلي';
-    });
   }
 
   // ========================================================

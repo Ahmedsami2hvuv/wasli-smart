@@ -349,3 +349,49 @@ export async function deleteOrArchiveProduct(id: string): Promise<boolean> {
   }
   return true;
 }
+
+/**
+ * البحث عن منتج بواسطة كود المورد (كود فدشي) للتأكد من وجوده مسبقاً
+ */
+export async function findProductBySupplierCode(code: string): Promise<any | null> {
+  if (!code) return null;
+  const cleanCode = code.trim().toLowerCase();
+
+  // 1. البحث في الذاكرة المؤقتة
+  const localMatch = localProducts.find(p => 
+    p.supplierCode?.toLowerCase() === cleanCode || 
+    p.slug?.toLowerCase().includes(cleanCode) ||
+    p.id?.toLowerCase() === cleanCode
+  );
+  if (localMatch) return localMatch;
+
+  // 2. البحث في سوبابيس
+  const dbClient = supabaseAdmin || supabase;
+  if (dbClient) {
+    try {
+      const { data, error } = await dbClient
+        .from('products')
+        .select('*')
+        .or(`brand.eq.${code.trim()},slug.ilike.%${cleanCode}%,title.ilike.%${cleanCode}%`)
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data) {
+        return {
+          id: data.id,
+          name: data.title,
+          wholesalePriceIqd: Number(data.wholesale_price) || 0,
+          platformPriceIqd: Number(data.platform_price) || 0,
+          minPriceIqd: Number(data.min_price) || 0,
+          maxPriceIqd: Number(data.max_price) || 0,
+          supplierCode: data.brand,
+          slug: data.slug,
+        };
+      }
+    } catch (err) {
+      console.warn('تعذر البحث عن كود المورد في سوبابيس:', err);
+    }
+  }
+
+  return null;
+}
