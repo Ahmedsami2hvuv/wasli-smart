@@ -241,8 +241,9 @@ export async function createOrder(params: CreateOrderParams): Promise<{
     };
 
     // إشعار صاحب المتجر في حال كان حسابه مربوطاً بمعرف تيليجرام
-    if (store && store.telegramChatId) {
-      await sendStoreOrderNotification(store.telegramChatId, notificationPayload);
+    const storeChatId = store?.telegramChatId || (store as any)?.settings?.telegram_chat_id;
+    if (storeChatId) {
+      await sendStoreOrderNotification(storeChatId, notificationPayload);
     }
 
     // إشعار إدارة المنصة

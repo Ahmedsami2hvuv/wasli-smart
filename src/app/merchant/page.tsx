@@ -16,6 +16,7 @@ import {
   ArrowUpRight, 
   ExternalLink,
   Plus,
+  Minus,
   Clock,
   CheckCircle2,
   AlertCircle,
@@ -38,7 +39,9 @@ import {
   Tag,
   Filter,
   MessageCircle,
-  FileText
+  FileText,
+  Send,
+  Bell
 } from 'lucide-react';
 import Link from 'next/link';
 import { Store as StoreType, Order } from '@/types';
@@ -1121,6 +1124,57 @@ interface MerchantEditFormState {
               </div>
             </div>
 
+            {/* بطاقة الاتصال ببوت الإشعارات الفورية على تليجرام */}
+            <div className="bg-gradient-to-br from-sky-50 via-white to-sky-50/50 rounded-3xl p-5 sm:p-6 border border-sky-200/80 shadow-xs space-y-3.5">
+              <div className="flex items-center justify-between border-b border-sky-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-sky-500 text-white flex items-center justify-center font-bold shadow-xs">
+                    <Send className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-900 text-sm">إشعارات تليجرام</h3>
+                    <p className="text-[10px] text-slate-500 font-medium">تنبيه فوري عند كل طلب جديد</p>
+                  </div>
+                </div>
+
+                {currentStore?.telegramChatId ? (
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                    متصل
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full border border-slate-200">
+                    غير متصل
+                  </span>
+                )}
+              </div>
+
+              <div className="text-xs text-slate-600 leading-relaxed font-medium">
+                {currentStore?.telegramChatId ? (
+                  <p>
+                    متجرك مربوط ببوت الإشعارات بنجاح. ستصلك رسالة فورية مع تفاصيل الزبون والمنتجات والأرباح فور تسجيل أي طلب جديد.
+                  </p>
+                ) : (
+                  <p>
+                    اضغط على الزر أدناه ليفتح لك تليجرام ويسجل دخولك تلقائياً لتبدأ باستلام إشعارات المبيعات والأرباح فور حدوثها.
+                  </p>
+                )}
+              </div>
+
+              <div className="pt-1">
+                <a
+                  href={`https://t.me/wasliasharatbot?start=store_${currentStore?.code || ''}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3 px-4 bg-sky-500 hover:bg-sky-600 active:scale-[0.99] text-white font-black text-xs sm:text-sm rounded-2xl shadow-sm shadow-sky-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>{currentStore?.telegramChatId ? 'إعادة الاتصال ببوت الإشعارات' : 'الاتصال ببوت الإشعارات'}</span>
+                  <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                </a>
+              </div>
+            </div>
+
             {/* زر تعديل إعدادات المتجر والحساب */}
             <button
               type="button"
@@ -1264,6 +1318,8 @@ interface MerchantEditFormState {
                   })
                   .map((product) => {
                     const baseCost = product.platformPriceIqd || product.priceIqd || 10000;
+                    const minPrice = product.minPriceIqd || baseCost;
+                    const maxPrice = product.maxPriceIqd || Math.max(baseCost + 35000, Math.round(baseCost * 2));
                     const userPrice = editingPrices[product.id] !== undefined ? editingPrices[product.id] : product.sellingPrice || baseCost;
                     const calculatedProfit = Math.max(0, userPrice - baseCost);
                     const isSaving = savingProductId === product.id;
@@ -1319,74 +1375,161 @@ interface MerchantEditFormState {
                             </div>
                           </div>
 
-                          {/* حقل تعديل السعر وحساب الربح الفوري */}
-                          <div className="mt-4 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2.5">
-                            <div className="flex items-center justify-between">
-                              <label className="text-xs font-bold text-slate-700">
-                                سعر بيعك للزبون (د.ع):
-                              </label>
-                              <span className="text-[11px] text-slate-400 font-mono">
-                                الأدنى: {product.minPriceIqd ? product.minPriceIqd.toLocaleString('ar-IQ') : baseCost.toLocaleString('ar-IQ')} د.ع
-                              </span>
+                          {/* حقل تعديل السعر وحساب الربح الفوري مع خط السلايدر وزري الزائد والناقص */}
+                          <div className="mt-4 p-3.5 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-3">
+                            {/* رأس تعديل السعر: حقل السعر وزر الحفظ */}
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <label className="text-xs font-black text-slate-800 block">
+                                  سعر بيعك للزبون:
+                                </label>
+                                <span className="text-[10px] text-slate-500 font-medium">
+                                  حرّك الخط أو استخدم الزائد والناقص
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    step="500"
+                                    min={minPrice}
+                                    max={maxPrice}
+                                    value={userPrice}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value);
+                                      setEditingPrices({
+                                        ...editingPrices,
+                                        [product.id]: val,
+                                      });
+                                    }}
+                                    className="w-28 px-2.5 py-1.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-sm font-mono font-black text-slate-900 bg-white outline-none text-center shadow-xs"
+                                  />
+                                  <span className="text-[10px] font-bold text-slate-400 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none">
+                                    د.ع
+                                  </span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  disabled={isSaving}
+                                  onClick={() => handleSaveProductPrice(product.id, userPrice)}
+                                  className="py-1.5 px-3 rounded-xl bg-brand-700 hover:bg-brand-800 active:bg-brand-900 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50 shrink-0"
+                                  title="حفظ سعر البيع لهذا المنتج"
+                                >
+                                  {isSaving ? (
+                                    <span>حفظ...</span>
+                                  ) : (
+                                    <>
+                                      <Save className="w-3.5 h-3.5" />
+                                      <span>حفظ السعر</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
                             </div>
 
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                step="500"
-                                min={product.minPriceIqd || baseCost}
-                                max={product.maxPriceIqd || baseCost * 2}
-                                value={userPrice}
-                                onChange={(e) => {
-                                  setEditingPrices({
-                                    ...editingPrices,
-                                    [product.id]: Number(e.target.value),
-                                  });
-                                }}
-                                className="flex-1 px-3 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-sm font-mono font-black text-slate-900 bg-white outline-none"
-                              />
+                            {/* خط السعر التفاعلي (أقل شيء في بدايته وأعلى شيء في نهايته مع زري الناقص والزائد) */}
+                            <div className="p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs space-y-2">
+                              {/* تسميات الحد الأدنى والحد الأقصى */}
+                              <div className="flex items-center justify-between text-[11px] font-bold">
+                                <div className="flex items-center gap-1 text-slate-600">
+                                  <span className="text-slate-400 text-[10px]">أقل شيء:</span>
+                                  <span className="font-mono text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded-md">
+                                    {minPrice.toLocaleString('ar-IQ')} د.ع
+                                  </span>
+                                </div>
 
-                              <button
-                                type="button"
-                                disabled={isSaving}
-                                onClick={() => handleSaveProductPrice(product.id, userPrice)}
-                                className="py-2 px-4 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
-                              >
-                                {isSaving ? (
-                                  <span>حفظ...</span>
-                                ) : (
-                                  <>
-                                    <Save className="w-3.5 h-3.5" />
-                                    <span>حفظ السعر</span>
-                                  </>
-                                )}
-                              </button>
+                                <div className="flex items-center gap-1 text-slate-600">
+                                  <span className="text-slate-400 text-[10px]">أعلى شيء:</span>
+                                  <span className="font-mono text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded-md">
+                                    {maxPrice.toLocaleString('ar-IQ')} د.ع
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* شريط السحب محاطاً بزري الناقص والزائد */}
+                              <div className="flex items-center gap-2">
+                                {/* زر الناقص (-) لتقليل السعر للحد الأدنى */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newPrice = Math.max(minPrice, userPrice - 1000);
+                                    setEditingPrices({
+                                      ...editingPrices,
+                                      [product.id]: newPrice,
+                                    });
+                                  }}
+                                  disabled={userPrice <= minPrice}
+                                  className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 border border-slate-200/80 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center shrink-0 transition-all cursor-pointer"
+                                  title="تقليل السعر (-1,000 د.ع)"
+                                >
+                                  <Minus className="w-4 h-4 stroke-[2.5]" />
+                                </button>
+
+                                {/* الخط التفاعلي (Range Slider) */}
+                                <div className="flex-1 flex items-center px-1">
+                                  <input
+                                    type="range"
+                                    min={minPrice}
+                                    max={maxPrice}
+                                    step={500}
+                                    value={userPrice}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value);
+                                      setEditingPrices({
+                                        ...editingPrices,
+                                        [product.id]: val,
+                                      });
+                                    }}
+                                    className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-brand-700 hover:accent-brand-800 transition-all focus:outline-none"
+                                  />
+                                </div>
+
+                                {/* زر الزائد (+) لزيادة السعر للحد الأقصى */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newPrice = Math.min(maxPrice, userPrice + 1000);
+                                    setEditingPrices({
+                                      ...editingPrices,
+                                      [product.id]: newPrice,
+                                    });
+                                  }}
+                                  disabled={userPrice >= maxPrice}
+                                  className="w-8 h-8 rounded-xl bg-brand-50 hover:bg-brand-100 active:scale-95 text-brand-700 border border-brand-200/80 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center shrink-0 transition-all cursor-pointer"
+                                  title="زيادة السعر (+1,000 د.ع)"
+                                >
+                                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                                </button>
+                              </div>
                             </div>
 
                             {/* أزرار زيادة سريعة للسعر */}
-                            <div className="flex items-center gap-1.5 pt-1">
+                            <div className="flex items-center gap-1.5 pt-0.5">
                               <span className="text-[10px] text-slate-400 font-bold ml-1">زيادة سريعة:</span>
                               {[2000, 5000, 10000].map((addAmount) => (
                                 <button
                                   key={addAmount}
                                   type="button"
                                   onClick={() => {
+                                    const targetPrice = Math.min(maxPrice, baseCost + addAmount);
                                     setEditingPrices({
                                       ...editingPrices,
-                                      [product.id]: baseCost + addAmount,
+                                      [product.id]: targetPrice,
                                     });
                                   }}
-                                  className="py-1 px-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 text-[10px] font-bold font-mono transition-colors cursor-pointer"
+                                  className="py-1 px-2.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 active:scale-95 text-[10px] font-bold font-mono transition-all cursor-pointer"
                                 >
                                   +{addAmount.toLocaleString('ar-IQ')}
                                 </button>
                               ))}
                             </div>
 
-                            {/* شريط ربح التاجر الصافي */}
-                            <div className="pt-1 flex items-center justify-between border-t border-slate-200/70 text-xs font-bold">
-                              <span className="text-emerald-800">ربحك الصافي من كل بيعة:</span>
-                              <span className="text-emerald-600 font-black font-mono text-sm">
+                            {/* شريط ربح التاجر الصافي والتغذية الراجعة */}
+                            <div className="pt-2 flex items-center justify-between border-t border-slate-200/70 text-xs font-bold">
+                              <span className="text-slate-700">ربحك الصافي من كل بيعة:</span>
+                              <span className={`font-mono text-sm font-black ${calculatedProfit > 0 ? 'text-emerald-600' : 'text-slate-500'}`}>
                                 +{calculatedProfit.toLocaleString('ar-IQ')} د.ع
                               </span>
                             </div>
@@ -2215,6 +2358,43 @@ interface MerchantEditFormState {
                       </label>
                     </div>
                   </div>
+                </div>
+
+                {/* إشعارات بوت تليجرام الفورية */}
+                <div className="p-4 rounded-2xl bg-sky-50/70 border border-sky-200/70 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-sky-500 text-white flex items-center justify-center font-bold">
+                        <Send className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="text-xs font-black text-slate-800">إشعارات تليجرام الفورية</span>
+                    </div>
+
+                    {currentStore?.telegramChatId ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                        متصل بالبوت
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">
+                        غير متصل
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                    تلقي إشعار فوري بكافة تفاصيل الطلب وأرباحك على تليجرام فور تسجيل أي طلب لمتجرك.
+                  </p>
+
+                  <a
+                    href={`https://t.me/wasliasharatbot?start=store_${currentStore?.code || ''}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-black text-sky-600 hover:text-sky-700 hover:underline pt-0.5"
+                  >
+                    <span>{currentStore?.telegramChatId ? 'فتح المحادثة أو إعادة الاتصال' : 'الاتصال ببوت الإشعارات'}</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
                 </div>
               </div>
 
