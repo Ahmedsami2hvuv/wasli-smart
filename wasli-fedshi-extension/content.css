@@ -585,3 +585,167 @@
   border-radius: 999px !important;
   line-height: 1.2 !important;
 }
+
+/* ========================================================
+   زر السحب السريع الفردي فوق كل بطاقة منتج في صفحات القوائم
+   ======================================================== */
+.wasli-card-quick-btn {
+  position: absolute !important;
+  top: 8px !important;
+  left: 8px !important;
+  z-index: 50 !important;
+  background: linear-gradient(135deg, #1D4ED8 0%, #0284C7 100%) !important;
+  color: #ffffff !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.35) !important;
+  border-radius: 9999px !important;
+  padding: 5px 12px !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  user-select: none !important;
+  font-family: 'Cairo', sans-serif !important;
+  direction: rtl !important;
+  line-height: 1.3 !important;
+}
+
+.wasli-card-quick-btn:hover {
+  transform: translateY(-2px) scale(1.04) !important;
+  box-shadow: 0 6px 16px rgba(2, 132, 199, 0.5) !important;
+  background: linear-gradient(135deg, #1E40AF 0%, #0369A1 100%) !important;
+}
+
+.wasli-card-quick-btn:active {
+  transform: translateY(0) scale(0.98) !important;
+}
+
+.wasli-card-quick-btn.wasli-loading {
+  background: linear-gradient(135deg, #475569 0%, #334155 100%) !important;
+  cursor: wait !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  box-shadow: none !important;
+  pointer-events: none !important;
+}
+
+.wasli-card-quick-btn.wasli-done {
+  background: linear-gradient(135deg, #059669 0%, #10B981 100%) !important;
+  border-color: rgba(255, 255, 255, 0.5) !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35) !important;
+  cursor: default !important;
+}
+
+.wasli-card-quick-btn.wasli-done:hover {
+  transform: none !important;
+}
+
+.wasli-card-quick-btn.wasli-error {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* ========================================================
+   الشريط العلوي العائم لسحب جميع منتجات الصفحة دفعة واحدة
+   ======================================================== */
+.wasli-batch-toolbar {
+  position: fixed !important;
+  top: 14px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 999998 !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  border: 1.5px solid #0284C7 !important;
+  border-radius: 9999px !important;
+  padding: 6px 16px !important;
+  box-shadow: 0 10px 25px -4px rgba(2, 132, 199, 0.25), 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  font-family: 'Cairo', sans-serif !important;
+  direction: rtl !important;
+  color: #0f172a !important;
+  animation: wasliSlideIn 0.3s ease !important;
+}
+
+.wasli-batch-brand {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  color: #1D4ED8 !important;
+}
+
+.wasli-batch-count {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #64748b !important;
+  background: #f1f5f9 !important;
+  padding: 3px 8px !important;
+  border-radius: 999px !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.wasli-batch-count strong {
+  color: #0284C7 !important;
+}
+
+.wasli-batch-btn {
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 9999px !important;
+  padding: 7px 16px !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  white-space: nowrap !important;
+}
+
+.wasli-batch-btn:hover {
+  transform: translateY(-1px) scale(1.02) !important;
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.45) !important;
+  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+}
+
+.wasli-batch-btn:active {
+  transform: translateY(0) scale(0.98) !important;
+}
+
+.wasli-batch-btn.wasli-working {
+  background: linear-gradient(135deg, #0284C7 0%, #1D4ED8 100%) !important;
+  cursor: wait !important;
+}
+
+.wasli-batch-btn.wasli-completed {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+  cursor: default !important;
+}
+
+.wasli-batch-stop-btn {
+  background: #fee2e2 !important;
+  color: #dc2626 !important;
+  border: 1px solid #fca5a5 !important;
+  border-radius: 9999px !important;
+  padding: 6px 12px !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  display: none;
+}
+
+.wasli-batch-stop-btn:hover {
+  background: #fecaca !important;
+}
+

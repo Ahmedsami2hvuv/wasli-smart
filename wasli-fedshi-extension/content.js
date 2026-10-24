@@ -63,9 +63,9 @@
   }
 
   // استخراج البيانات الأولية من سكربت Next.js الأساسي (__NEXT_DATA__) إن وُجد
-  function extractFromNextDataScript() {
+  function extractFromNextDataScript(targetDoc = document) {
     try {
-      const nextDataEl = document.getElementById('__NEXT_DATA__');
+      const nextDataEl = targetDoc.getElementById ? targetDoc.getElementById('__NEXT_DATA__') : targetDoc.querySelector('#__NEXT_DATA__');
       if (!nextDataEl || !nextDataEl.textContent) return null;
 
       const parsed = JSON.parse(nextDataEl.textContent);
@@ -92,9 +92,9 @@
   }
 
   // استخراج النصوص من وسوم السكربت الخاصة بـ Next.js كاحتياط دقيق
-  function extractFieldFromScripts(regex) {
+  function extractFieldFromScripts(regex, targetDoc = document) {
     try {
-      const scripts = Array.from(document.querySelectorAll('script'));
+      const scripts = Array.from(targetDoc.querySelectorAll('script'));
       for (const s of scripts) {
         const text = s.textContent || '';
         const match = text.match(regex);
@@ -194,14 +194,14 @@
   }
 
   // استخراج تفاصيل المنتج الحالي بدقة مطلقة
-  async function extractFedshiProductDetails() {
+  async function extractFedshiProductDetails(targetDoc = document, targetUrl = window.location.href) {
     try {
       // قراءة بيانات السكربت الداخلي إن وجدت
-      const scriptProduct = extractFromNextDataScript();
+      const scriptProduct = extractFromNextDataScript(targetDoc);
 
       // 1. استخراج اسم المنتج الحقيقي
       let title = '';
-      const h1El = document.querySelector('main h1, h1.text-xl');
+      const h1El = targetDoc.querySelector('main h1, h1.text-xl, h1');
       if (h1El) {
         title = (h1El.textContent || '').trim();
       }
@@ -211,7 +211,7 @@
       }
 
       if (!title) {
-        const breadcrumbLast = document.querySelector('nav[aria-label="breadcrumb"] ol li:last-child, [data-slot="breadcrumb"] li:last-child');
+        const breadcrumbLast = targetDoc.querySelector('nav[aria-label="breadcrumb"] ol li:last-child, [data-slot="breadcrumb"] li:last-child');
         if (breadcrumbLast) {
           title = (breadcrumbLast.textContent || '').trim();
         }
@@ -219,13 +219,13 @@
 
       // 2. معرّف المنتج (productCode) ومعرّف نوع المنتج (skuCode)
       let productCode = '';
-      const urlMatch = window.location.pathname.match(/\/products\/([A-Za-z0-9_-]+)/);
+      const urlMatch = targetUrl.match(/\/products\/([A-Za-z0-9_-]+)/);
       if (urlMatch && urlMatch[1]) {
         productCode = urlMatch[1].trim();
       }
 
       let skuCode = '';
-      const allTextElements = Array.from(document.querySelectorAll('button, span, p, div, label'));
+      const allTextElements = Array.from(targetDoc.querySelectorAll('button, span, p, div, label'));
       for (const el of allTextElements) {
         const text = (el.textContent || '').trim();
         if (!productCode && text.includes('رقم المنتج:')) {
@@ -265,7 +265,7 @@
 
       // ب) فحص العنصر ذي اللون الأساسي المكتشف في F12: .text-primary-500 [data-amount="true"]
       if (!fedshiWholesale) {
-        const primaryAmount = document.querySelector('.text-primary-500 [data-amount="true"]');
+        const primaryAmount = targetDoc.querySelector('.text-primary-500 [data-amount="true"]');
         if (primaryAmount) {
           fedshiWholesale = readDataAmount(primaryAmount);
         }
@@ -292,7 +292,7 @@
       let maxSuggested = 0;
 
       // أ) استخراج مباشر وقاطع بنمط Regex من نص الصفحة الكامل
-      const pageFullText = (document.body ? document.body.innerText : '') + ' ' + (document.body ? document.body.textContent : '');
+      const pageFullText = (targetDoc.body ? targetDoc.body.innerText : '') + ' ' + (targetDoc.body ? targetDoc.body.textContent : '');
       const rangeMatch = pageFullText.match(/سعر الزبون المقترح[^\d]*(\d[\d,]*)[^\d]+(\d[\d,]*)/);
       if (rangeMatch && rangeMatch[1] && rangeMatch[2]) {
         const val1 = cleanNum(rangeMatch[1]);
@@ -305,7 +305,7 @@
 
       // ب) فحص عناصر DOM المباشرة كاحتياط
       if (!minSuggested || !maxSuggested) {
-        const allTextNodes = Array.from(document.querySelectorAll('p, div, span')).filter(el => {
+        const allTextNodes = Array.from(targetDoc.querySelectorAll('p, div, span')).filter(el => {
           const t = (el.textContent || '').trim();
           return t.includes('سعر الزبون المقترح') && t.length < 120 && el.children.length <= 4;
         });
@@ -325,7 +325,7 @@
 
       // ج) استخراج بديل مضمون اعتماداً على (سعر الجملة + ربح فدشي المعلن)
       if (!minSuggested && fedshiWholesale > 0 && fedshiProfit > 0) {
-        minSuggested = fedshiWholesale + fedshiProfit; // 25,000 + 15,000 = 40,000 د.ع
+        minSuggested = fedshiWholesale + fedshiProfit;
         if (!maxSuggested) maxSuggested = minSuggested + 20000;
       }
 
@@ -351,14 +351,14 @@
       // السعر الافتراضي المعروض في متجر التاجر (مثلاً 50,000 د.ع)
       let defaultStorePrice = wasliMinPrice;
       if (wasliMaxPrice >= wasliWholesale + 10000) {
-        defaultStorePrice = wasliWholesale + 10000; // 50,000 د.ع
+        defaultStorePrice = wasliWholesale + 10000;
       } else {
         defaultStorePrice = Math.round(((wasliMinPrice + wasliMaxPrice) / 2) / 1000) * 1000;
       }
 
       // 6. استخراج رابط الفيديو
       let videoUrl = '';
-      const videoEl = document.querySelector('main video[src], video source, video');
+      const videoEl = targetDoc.querySelector('main video[src], video source, video');
       if (videoEl) {
         videoUrl = videoEl.getAttribute('src') || videoEl.src || '';
       }
@@ -368,7 +368,7 @@
 
       // 7. استخراج كافة صور المنتج عالية الدقة
       const images = [];
-      const imageCandidates = Array.from(document.querySelectorAll('main img, .swiper-slide img, [role="tabpanel"] img, [aria-roledescription="slide"] img, button img, img[alt]'));
+      const imageCandidates = Array.from(targetDoc.querySelectorAll('main img, .swiper-slide img, [role="tabpanel"] img, [aria-roledescription="slide"] img, button img, img[alt], img[src]'));
 
       imageCandidates.forEach(img => {
         let src = img.getAttribute('src') || img.src || '';
@@ -438,13 +438,32 @@
         }
       }
 
-      // 9. استخراج "الوصف الترويجي" و "المواصفات" من التبويبات الفعلية
-      const { promoDescription, specifications } = await extractRadixTabsContent();
+      // 9. استخراج "الوصف الترويجي" و "المواصفات"
+      let promoDescription = '';
+      let specifications = '';
+
+      if (targetDoc === document) {
+        const tabsData = await extractRadixTabsContent();
+        promoDescription = tabsData.promoDescription;
+        specifications = tabsData.specifications;
+      } else {
+        promoDescription = extractFieldFromScripts(/"detailed_description"\s*:\s*"([^"]+)"/, targetDoc);
+        specifications = extractFieldFromScripts(/"description"\s*:\s*"([^"]+)"/, targetDoc);
+
+        if (!promoDescription) {
+          const pEl = targetDoc.querySelector('[id*="content-detailed_description"], [role="tabpanel"]');
+          if (pEl) promoDescription = (pEl.innerText || pEl.textContent || '').replace(/نسخ الوصف/g, '').trim();
+        }
+        if (!specifications) {
+          const sEl = targetDoc.querySelector('[id*="content-description"]');
+          if (sEl) specifications = (sEl.innerText || sEl.textContent || '').trim();
+        }
+      }
 
       // مسار احتياطي للمواصفات إن لم تتوفر
       let finalSpecs = specifications;
       if (!finalSpecs) {
-        const contentParagraphs = Array.from(document.querySelectorAll('div, p')).filter(el => {
+        const contentParagraphs = Array.from(targetDoc.querySelectorAll('div, p')).filter(el => {
           if (el.children.length > 3) return false;
           const t = (el.textContent || '').trim();
           return t.length > 40 &&
@@ -464,7 +483,7 @@
       // استخراج القسم الفرعي أو مسار التنقل إن وجد
       let category = 'أجهزة ومنزلية';
       let subcategory = '';
-      const breadcrumbLinks = Array.from(document.querySelectorAll('nav[aria-label="breadcrumb"] a, [data-slot="breadcrumb"] a'));
+      const breadcrumbLinks = Array.from(targetDoc.querySelectorAll('nav[aria-label="breadcrumb"] a, [data-slot="breadcrumb"] a'));
       if (breadcrumbLinks.length >= 2) {
         const textParts = breadcrumbLinks.map(a => a.textContent.trim()).filter(t => t && t !== 'الرئيسية');
         if (textParts.length > 0) category = textParts[0];
@@ -536,7 +555,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.2.7</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.2.8</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -998,54 +1017,25 @@
         type: 'loading'
       });
 
-      // 3. تشغيل الطلب في الخلفية
+      // 3. تشغيل الطلب في الخلفية باستخدام الدالة المركزية
       (async () => {
         try {
-          let response = null;
-          let result = null;
-          let activeTarget = targetUrl;
+          const result = await sendProductPayloadToWasli(payload);
+          const prodId = result.product?.id || '';
+          const activeTarget = wasliServerUrl.trim().replace(/\/+$/, '');
+          const previewUrl = prodId ? `${activeTarget}/p/${prodId}` : activeTarget;
+          const adminUrl = `${activeTarget}/waahhlstor/products`;
+          const profitVal = result.financials?.platformProfit?.toLocaleString() || wholesale - costPrice;
 
-          try {
-            response = await fetch(`${activeTarget}/api/products/import-fedshi`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
-            });
-            result = await response.json();
-          } catch (fetchErr) {
-            if (activeTarget !== 'https://wasli-smart.vercel.app') {
-              activeTarget = 'https://wasli-smart.vercel.app';
-              wasliServerUrl = activeTarget;
-              if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-                chrome.storage.sync.set({ wasliCustomUrl: activeTarget });
-              }
-              response = await fetch(`${activeTarget}/api/products/import-fedshi`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-              });
-              result = await response.json();
-            } else {
-              throw fetchErr;
-            }
-          }
+          toast.update({
+            type: 'success',
+            title: 'تم استيراد المنتج بنجاح!',
+            message: `تم حفظ <strong>${productTitle}</strong> بنجاح! ربحك الصافي: <strong>+${profitVal.toLocaleString()} د.ع</strong>`,
+            previewUrl,
+            adminUrl,
+          });
 
-          if (response.ok && result.success) {
-            const prodId = result.product?.id || '';
-            const previewUrl = prodId ? `${activeTarget}/p/${prodId}` : activeTarget;
-            const adminUrl = `${activeTarget}/waahhlstor/products`;
-            const profitVal = result.financials?.platformProfit?.toLocaleString() || wholesale - costPrice;
-
-            toast.update({
-              type: 'success',
-              title: 'تم استيراد المنتج بنجاح!',
-              message: `تم حفظ <strong>${productTitle}</strong> بنجاح! ربحك الصافي: <strong>+${profitVal.toLocaleString()} د.ع</strong>`,
-              previewUrl,
-              adminUrl,
-            });
-          } else {
-            throw new Error(result.message || 'حدث خطأ في استجابة الخادم');
-          }
+          if (data.productCode) markProductAsImported(data.productCode);
         } catch (err) {
           console.error('فشل الاستيراد في الخلفية:', err);
           toast.update({
@@ -1066,7 +1056,6 @@
     if (confirmBtn) confirmBtn.onclick = executeBackgroundImport;
     if (confirmBtnDraggable) {
       confirmBtnDraggable.onclick = () => {
-        // إذا كان الزر تم تحريكه أثناء السحب، لا ننفذ النقرة
         if (confirmBtnDraggable.getAttribute('data-has-moved') === 'true') {
           confirmBtnDraggable.removeAttribute('data-has-moved');
           return;
@@ -1076,10 +1065,473 @@
     }
   }
 
+  // ========================================================
+  // نظام الاستيراد وإرسال البيانات المركزي لخادم وصلي
+  // ========================================================
+  async function sendProductPayloadToWasli(payload) {
+    let targetUrl = wasliServerUrl.trim().replace(/\/+$/, '');
+    let response = null;
+    let result = null;
+
+    try {
+      response = await fetch(`${targetUrl}/api/products/import-fedshi`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      result = await response.json();
+    } catch (fetchErr) {
+      if (targetUrl !== 'https://wasli-smart.vercel.app') {
+        targetUrl = 'https://wasli-smart.vercel.app';
+        wasliServerUrl = targetUrl;
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+          chrome.storage.sync.set({ wasliCustomUrl: targetUrl });
+        }
+        response = await fetch(`${targetUrl}/api/products/import-fedshi`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        result = await response.json();
+      } else {
+        throw fetchErr;
+      }
+    }
+
+    if (response.ok && result.success) {
+      return result;
+    } else {
+      throw new Error(result?.message || 'حدث خطأ في استجابة الخادم أثناء حفظ المنتج');
+    }
+  }
+
+  // حفظ وإدارة قائمة المعرفات المسحوبة في الجلسة لمنع التكرار
+  const importedCodesSet = new Set();
+  try {
+    const saved = JSON.parse(sessionStorage.getItem('wasli_imported_codes') || '[]');
+    if (Array.isArray(saved)) saved.forEach(c => importedCodesSet.add(c));
+  } catch (e) {}
+
+  function markProductAsImported(code) {
+    if (!code) return;
+    importedCodesSet.add(code);
+    try {
+      sessionStorage.setItem('wasli_imported_codes', JSON.stringify(Array.from(importedCodesSet)));
+    } catch (e) {}
+
+    // تحديث أي زر في الصفحة يخص هذا المنتج فوراً
+    const buttons = document.querySelectorAll(`[data-wasli-code="${code}"]`);
+    buttons.forEach(btn => {
+      btn.className = 'wasli-card-quick-btn wasli-done';
+      btn.innerHTML = `
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span>تم السحب</span>
+      `;
+      btn.title = 'تم استيراد هذا المنتج بنجاح إلى منصة وصلي';
+    });
+  }
+
+  // ========================================================
+  // سحب منتج كامل من رابطه مباشرة بالخلفية
+  // ========================================================
+  async function importProductByUrl(productUrl, productCode) {
+    const res = await fetch(productUrl);
+    if (!res.ok) throw new Error(`تعذر فتح صفحة المنتج (${res.status})`);
+    const html = await res.text();
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    const data = await extractFedshiProductDetails(doc, productUrl);
+    if (!data || !data.title) {
+      throw new Error('تعذر قراءة بيانات المنتج من الصفحة');
+    }
+
+    const payload = {
+      name: data.title,
+      fedshiCode: data.productCode || productCode,
+      fedshiSku: data.skuCode,
+      fedshiPrice: data.fedshiWholesale,
+      fedshiProfit: data.fedshiProfit,
+      minSuggestedPrice: data.minSuggested || data.wasliMinPrice,
+      maxSuggestedPrice: data.maxSuggested || data.wasliMaxPrice,
+      wholesalePriceIqd: data.wasliWholesale,
+      platformPriceIqd: data.wasliWholesale,
+      defaultPriceIqd: data.defaultStorePrice,
+      minPriceIqd: data.wasliMinPrice,
+      maxPriceIqd: data.wasliMaxPrice,
+      category: data.category || 'عام',
+      subcategory: data.subcategory || '',
+      description: data.specifications || data.promoDescription || data.title,
+      promoDescription: data.promoDescription || '',
+      specifications: data.specifications || '',
+      colors: data.colors || [],
+      images: data.images || [],
+      videoUrl: data.videoUrl || '',
+      stockQuantity: data.stock || 50,
+    };
+
+    const result = await sendProductPayloadToWasli(payload);
+    markProductAsImported(payload.fedshiCode);
+    return { result, data };
+  }
+
+  // ========================================================
+  // اكتشاف بطاقات المنتجات في صفحات القوائم
+  // ========================================================
+  function findVisibleProductCards() {
+    const cards = [];
+    const seenCodes = new Set();
+    const links = Array.from(document.querySelectorAll('a[href*="/products/"]'));
+
+    links.forEach(link => {
+      const href = link.getAttribute('href') || link.href || '';
+      const match = href.match(/\/products\/([A-Za-z0-9_-]+)/);
+      if (!match) return;
+      const code = match[1];
+
+      if (seenCodes.has(code)) return;
+      seenCodes.add(code);
+
+      // العثور على العنصر الأنسب ليمثل كارت المنتج
+      let cardEl = link;
+      let curr = link;
+      for (let i = 0; i < 6; i++) {
+        if (!curr || curr === document.body) break;
+        if (curr.querySelector && (curr.querySelector('[data-amount="true"]') || curr.textContent.includes('سعر الجملة'))) {
+          cardEl = curr;
+        }
+        curr = curr.parentElement;
+      }
+
+      const fullUrl = href.startsWith('http') ? href : `https://web.fedshi.com/products/${code}`;
+
+      cards.push({
+        code,
+        url: fullUrl,
+        cardEl,
+        linkEl: link,
+      });
+    });
+
+    return cards;
+  }
+
+  // ========================================================
+  // 1. حقن زر "سحب" فوق كل بطاقة منتج
+  // ========================================================
+  function injectProductCardButtons() {
+    // إذا كانت الصفحة الحالية صفحة منتج فردي فقط، لا نحقن أزرار البطاقات
+    if (window.location.pathname.startsWith('/products/')) {
+      return;
+    }
+
+    const cards = findVisibleProductCards();
+    cards.forEach(({ code, url, cardEl }) => {
+      if (!cardEl) return;
+
+      // التأكد من عدم تكرار الزر على نفس الكارت
+      if (cardEl.querySelector(`.wasli-card-quick-btn`)) {
+        return;
+      }
+
+      // ضبط موضع الكارت ليكون نسبياً حتى يظهر الزر في زاويته
+      const compPos = window.getComputedStyle(cardEl).position;
+      if (compPos === 'static') {
+        cardEl.style.position = 'relative';
+      }
+
+      const isImported = importedCodesSet.has(code);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `wasli-card-quick-btn ${isImported ? 'wasli-done' : ''}`;
+      btn.setAttribute('data-wasli-code', code);
+      btn.title = isImported ? 'تم استيراد هذا المنتج مسبقاً' : 'سحب هذا المنتج فوراً إلى منصة وصلي بنقرة واحدة';
+
+      if (isImported) {
+        btn.innerHTML = `
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>تم السحب</span>
+        `;
+      } else {
+        btn.innerHTML = `
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+          <span>سحب</span>
+        `;
+      }
+
+      // عند النقر على الزر الفردي
+      btn.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (btn.classList.contains('wasli-loading') || btn.classList.contains('wasli-done')) {
+          return;
+        }
+
+        btn.className = 'wasli-card-quick-btn wasli-loading';
+        btn.innerHTML = `
+          <svg class="wasli-spinner" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="2" x2="12" y2="6"></line>
+            <line x1="12" y1="18" x2="12" y2="22"></line>
+            <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+            <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+            <line x1="2" y1="12" x2="6" y2="12"></line>
+            <line x1="18" y1="12" x2="22" y2="12"></line>
+            <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+            <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+          </svg>
+          <span>جاري...</span>
+        `;
+
+        const toast = showWasliToast({
+          title: 'جاري سحب المنتج في الخلفية...',
+          message: `يتم الآن قراءة منتج <strong>(${code})</strong> واستيراده إلى منصتك ونشره.`,
+          type: 'loading'
+        });
+
+        try {
+          const { result, data } = await importProductByUrl(url, code);
+          const prodId = result.product?.id || '';
+          const activeTarget = wasliServerUrl.trim().replace(/\/+$/, '');
+          const previewUrl = prodId ? `${activeTarget}/p/${prodId}` : activeTarget;
+          const adminUrl = `${activeTarget}/waahhlstor/products`;
+          const profitVal = result.financials?.platformProfit?.toLocaleString() || (data.wasliWholesale - data.fedshiWholesale);
+
+          btn.className = 'wasli-card-quick-btn wasli-done';
+          btn.innerHTML = `
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <span>تم السحب</span>
+          `;
+
+          toast.update({
+            type: 'success',
+            title: 'تم استيراد المنتج بنجاح!',
+            message: `تم سحب <strong>${data.title}</strong> بنجاح! ربحك الصافي: <strong>+${profitVal.toLocaleString()} د.ع</strong>`,
+            previewUrl,
+            adminUrl,
+          });
+        } catch (err) {
+          console.error('فشل سحب المنتج الفردي:', err);
+          btn.className = 'wasli-card-quick-btn wasli-error';
+          btn.innerHTML = `<span>إعادة ↺</span>`;
+          toast.update({
+            type: 'error',
+            title: 'فشل استيراد المنتج',
+            message: `تعذر سحب المنتج (${code}): ${err.message}`,
+          });
+          setTimeout(() => {
+            btn.className = 'wasli-card-quick-btn';
+            btn.innerHTML = `
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+              <span>سحب</span>
+            `;
+          }, 3000);
+        }
+      };
+
+      // حقن الزر في أعلى الكارت
+      cardEl.appendChild(btn);
+    });
+  }
+
+  // ========================================================
+  // 2. الشريط العلوي العائم وزر "سحب جميع منتجات الصفحة"
+  // ========================================================
+  let isBatchRunning = false;
+  let shouldStopBatch = false;
+
+  function injectBatchToolbar() {
+    // لا يظهر في صفحات المنتجات الفردية
+    if (window.location.pathname.startsWith('/products/')) {
+      const oldToolbar = document.getElementById('wasli-batch-toolbar');
+      if (oldToolbar) oldToolbar.remove();
+      return;
+    }
+
+    const cards = findVisibleProductCards();
+    if (cards.length === 0) {
+      const oldToolbar = document.getElementById('wasli-batch-toolbar');
+      if (oldToolbar) oldToolbar.remove();
+      return;
+    }
+
+    let toolbar = document.getElementById('wasli-batch-toolbar');
+    if (!toolbar) {
+      toolbar = document.createElement('div');
+      toolbar.id = 'wasli-batch-toolbar';
+      toolbar.className = 'wasli-batch-toolbar';
+      toolbar.innerHTML = `
+        <div class="wasli-batch-brand">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D4ED8" stroke-width="2.5">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+          <span>منصة وصلي</span>
+        </div>
+        <div class="wasli-batch-count" id="wasli-batch-count">
+          منتجات الصفحة: <strong id="wasli-batch-count-val">${cards.length}</strong>
+        </div>
+        <button type="button" class="wasli-batch-btn" id="wasli-batch-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span id="wasli-batch-btn-text">سحب جميع منتجات الصفحة (${cards.length})</span>
+        </button>
+        <button type="button" class="wasli-batch-stop-btn" id="wasli-batch-stop-btn">
+          إيقاف ⏸
+        </button>
+      `;
+
+      document.body.appendChild(toolbar);
+
+      // زر إيقاف السحب
+      const stopBtn = toolbar.querySelector('#wasli-batch-stop-btn');
+      stopBtn.onclick = () => {
+        shouldStopBatch = true;
+        stopBtn.textContent = 'جاري الإيقاف...';
+      };
+
+      // زر سحب جميع منتجات الصفحة
+      const batchBtn = toolbar.querySelector('#wasli-batch-btn');
+      batchBtn.onclick = async () => {
+        if (isBatchRunning) return;
+
+        const currentCards = findVisibleProductCards();
+        const pendingCards = currentCards.filter(c => !importedCodesSet.has(c.code));
+
+        if (pendingCards.length === 0) {
+          showWasliToast({
+            title: 'تم استيرادها بالكامل',
+            message: 'جميع المنتجات المعروضة في هذه الصفحة تم استيرادها بالفعل إلى منصتك!',
+            type: 'success'
+          });
+          return;
+        }
+
+        isBatchRunning = true;
+        shouldStopBatch = false;
+        stopBtn.style.display = 'inline-block';
+        stopBtn.textContent = 'إيقاف ⏸';
+        batchBtn.className = 'wasli-batch-btn wasli-working';
+
+        const btnText = toolbar.querySelector('#wasli-batch-btn-text');
+        const total = pendingCards.length;
+        let successCount = 0;
+        let failCount = 0;
+
+        const batchToast = showWasliToast({
+          title: 'جاري سحب منتجات الصفحة بالكامل...',
+          message: `بدء عملية الاستيراد التتابعي لـ <strong>${total}</strong> منتجاً إلى منصة وصلي ونشرها تلقائياً.`,
+          type: 'loading'
+        });
+
+        for (let i = 0; i < total; i++) {
+          if (shouldStopBatch) {
+            batchToast.update({
+              type: 'info',
+              title: 'تم إيقاف السحب مؤقتاً',
+              message: `تم إيقاف العملية. نجح سحب <strong>${successCount}</strong> منتج بنجاح.`,
+            });
+            break;
+          }
+
+          const card = pendingCards[i];
+          const currentNum = i + 1;
+          btnText.textContent = `جاري سحب (${currentNum} من ${total})...`;
+
+          batchToast.update({
+            type: 'loading',
+            title: `جاري سحب (${currentNum} من ${total})...`,
+            message: `يتم الآن سحب المنتج <strong>${card.code}</strong> وحفظه في منصة وصلي.`,
+          });
+
+          // تمييز زر الكارت بأنه قيد السحب
+          const cardBtn = document.querySelector(`[data-wasli-code="${card.code}"]`);
+          if (cardBtn) {
+            cardBtn.className = 'wasli-card-quick-btn wasli-loading';
+            cardBtn.innerHTML = `
+              <svg class="wasli-spinner" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="12" y1="2" x2="12" y2="6"></line>
+                <line x1="12" y1="18" x2="12" y2="22"></line>
+                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+              </svg>
+              <span>جاري...</span>
+            `;
+          }
+
+          try {
+            await importProductByUrl(card.url, card.code);
+            successCount++;
+          } catch (err) {
+            console.warn(`فشل سحب المنتج ${card.code}:`, err);
+            failCount++;
+            if (cardBtn) {
+              cardBtn.className = 'wasli-card-quick-btn wasli-error';
+              cardBtn.innerHTML = `<span>إعادة ↺</span>`;
+            }
+          }
+
+          // فاصل زمني بسيط 800 ميلي ثانية بين كل منتج والآخر لضمان استقرار الخوادم
+          if (i < total - 1 && !shouldStopBatch) {
+            await new Promise(r => setTimeout(r, 800));
+          }
+        }
+
+        isBatchRunning = false;
+        stopBtn.style.display = 'none';
+
+        if (successCount > 0) {
+          batchBtn.className = 'wasli-batch-btn wasli-completed';
+          btnText.textContent = `✔ تم سحب ${successCount} منتج بنجاح!`;
+
+          const activeTarget = wasliServerUrl.trim().replace(/\/+$/, '');
+          batchToast.update({
+            type: 'success',
+            title: 'اكتمل استيراد منتجات الصفحة بنجاح!',
+            message: `تم سحب ونشر <strong>${successCount}</strong> منتجاً إلى منصتك بنجاح! ${failCount > 0 ? `(تعذر: ${failCount})` : ''}`,
+            adminUrl: `${activeTarget}/waahhlstor/products`,
+          });
+
+          setTimeout(() => {
+            batchBtn.className = 'wasli-batch-btn';
+            const updatedCards = findVisibleProductCards();
+            btnText.textContent = `سحب جميع منتجات الصفحة (${updatedCards.length})`;
+          }, 6000);
+        } else {
+          batchBtn.className = 'wasli-batch-btn';
+          btnText.textContent = `سحب جميع منتجات الصفحة (${cards.length})`;
+        }
+      };
+    } else {
+      // تحديث العداد إن كان الشريط موجوداً
+      const countEl = toolbar.querySelector('#wasli-batch-count-val');
+      const btnText = toolbar.querySelector('#wasli-batch-btn-text');
+      if (countEl) countEl.textContent = cards.length;
+      if (btnText && !isBatchRunning) {
+        btnText.textContent = `سحب جميع منتجات الصفحة (${cards.length})`;
+      }
+    }
+  }
+
   // تفعيل الواجهة
   initWasliUI();
+  injectProductCardButtons();
+  injectBatchToolbar();
 
-  // مراقبة التنقل بين صفحات المنتجات في SPA
+  // مراقبة التنقل بين صفحات المنتجات والقوائم في SPA
   let lastUrl = location.href;
   new MutationObserver(() => {
     const url = location.href;
@@ -1090,10 +1542,15 @@
       if (old) old.remove();
       initWasliUI();
     }
+    // فحص وتحديث كروت المنتجات والشريط العلوي في كل تغير DOM
+    injectProductCardButtons();
+    injectBatchToolbar();
   }).observe(document, { subtree: true, childList: true });
 
   setInterval(() => {
     initWasliUI();
-  }, 2000);
+    injectProductCardButtons();
+    injectBatchToolbar();
+  }, 1800);
 
 })();
