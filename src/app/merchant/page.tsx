@@ -36,7 +36,9 @@ import {
   Save,
   Search,
   Tag,
-  Filter
+  Filter,
+  MessageCircle,
+  FileText
 } from 'lucide-react';
 import Link from 'next/link';
 import { Store as StoreType, Order } from '@/types';
@@ -85,6 +87,11 @@ function MerchantDashboardContent() {
   const [productFilter, setProductFilter] = useState<'all' | 'active' | 'hidden'>('all');
   const [productSearch, setProductSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'products' | 'orders'>('products');
+
+  // حالات نافذة تفاصيل وتأكيد ومراسلة الطلب
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [isConfirmingOrder, setIsConfirmingOrder] = useState(false);
+  const [orderActionMsg, setOrderActionMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   // حالة تسجيل الدخول برابط المتجر إذا لم يتم تحديد متجر
   const [storeInput, setStoreInput] = useState('');
@@ -695,6 +702,82 @@ interface MerchantEditFormState {
           return next;
         });
       }, 2000);
+    }
+  };
+
+  // دوال مراسلة واتساب وتأكيد وإدارة الطلب
+  const getWhatsAppLink = (order: Order) => {
+    let phone = order.customerPhone.replace(/[^0-9]/g, '');
+    if (phone.startsWith('0')) {
+      phone = '964' + phone.substring(1);
+    } else if (!phone.startsWith('964')) {
+      phone = '964' + phone;
+    }
+
+    const itemsSummary = order.items && order.items.length > 0
+      ? order.items.map(it => `${it.productName} (${it.quantity} قطعة)`).join(' + ')
+      : 'طلبك';
+
+    const storeName = currentStore?.name || 'متجرنا';
+    const text = `مرحباً أستاذ ${order.customerName}، معك متجر "${storeName}".\n\nبخصوص طلبكم رقم (${order.orderNumber}):\nالمنتجات: ${itemsSummary}\nالمبلغ الإجمالي المطلوب عند الاستلام: ${order.totalAmount.toLocaleString('ar-IQ')} د.ع\nعنوان التوصيل: ${order.governorate} - ${order.city} (${order.address}).\n\nيرجى تأكيد جهوزيتكم لاستلام الطلب ليتم تسليمه لشركة التوصيل فوراً. شكراً لتسوقكم معنا!`;
+
+    return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+  };
+
+  const handleConfirmOrder = async (orderId: string) => {
+    setIsConfirmingOrder(true);
+    setOrderActionMsg(null);
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'reviewed' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOrders(prev =>
+          prev.map(o => (o.id === orderId || o.orderNumber === orderId ? { ...o, status: 'reviewed' } : o))
+        );
+        if (selectedOrder && (selectedOrder.id === orderId || selectedOrder.orderNumber === orderId)) {
+          setSelectedOrder(prev => prev ? { ...prev, status: 'reviewed' } : null);
+        }
+        setOrderActionMsg({ text: 'تم تأكيد الطلب بنجاح وتم إرساله لقسم التجهيز والشحن!', type: 'success' });
+      } else {
+        setOrderActionMsg({ text: data.message || 'تعذر تأكيد الطلب', type: 'error' });
+      }
+    } catch (err) {
+      setOrderActionMsg({ text: 'حدث خطأ في الاتصال بالسيرفر', type: 'error' });
+    } finally {
+      setIsConfirmingOrder(false);
+    }
+  };
+
+  const handleCancelOrder = async (orderId: string) => {
+    if (!confirm('هل أنت متأكد من رغبتك بإلغاء هذا الطلب؟')) return;
+    setIsConfirmingOrder(true);
+    setOrderActionMsg(null);
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'cancelled' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOrders(prev =>
+          prev.map(o => (o.id === orderId || o.orderNumber === orderId ? { ...o, status: 'cancelled' } : o))
+        );
+        if (selectedOrder && (selectedOrder.id === orderId || selectedOrder.orderNumber === orderId)) {
+          setSelectedOrder(prev => prev ? { ...prev, status: 'cancelled' } : null);
+        }
+        setOrderActionMsg({ text: 'تم إلغاء الطلب بنجاح', type: 'success' });
+      } else {
+        setOrderActionMsg({ text: data.message || 'تعذر إلغاء الطلب', type: 'error' });
+      }
+    } catch (err) {
+      setOrderActionMsg({ text: 'حدث خطأ في الاتصال بالسيرفر', type: 'error' });
+    } finally {
+      setIsConfirmingOrder(false);
     }
   };
 
@@ -1371,17 +1454,40 @@ interface MerchantEditFormState {
                     <th className="py-3 px-3">الإجمالي</th>
                     <th className="py-3 px-3">ربحك</th>
                     <th className="py-3 px-3">حالة الطلب</th>
+                    <th className="py-3 px-3 text-center">الإجراءات والتواصل</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {orders.map((order) => (
-                    <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr
+                      key={order.id}
+                      onClick={() => {
+                        setSelectedOrder(order);
+                        setOrderActionMsg(null);
+                      }}
+                      className="hover:bg-brand-50/60 transition-colors cursor-pointer group"
+                      title="انقر لعرض تفاصيل الطلب والتواصل مع الزبون"
+                    >
                       <td className="py-3.5 px-3 font-mono font-bold text-brand-700">
                         {order.orderNumber}
                       </td>
                       <td className="py-3.5 px-3">
-                        <div className="font-semibold text-slate-800">{order.customerName}</div>
-                        <div className="text-xs text-slate-400" dir="ltr">{order.customerPhone}</div>
+                        <div className="font-semibold text-slate-900 group-hover:text-brand-700 transition-colors">
+                          {order.customerName}
+                        </div>
+                        <div className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5" dir="ltr">
+                          <span>{order.customerPhone}</span>
+                          <a
+                            href={getWhatsAppLink(order)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-emerald-600 hover:text-emerald-700 p-0.5 rounded hover:bg-emerald-50 transition-colors inline-flex"
+                            title="مراسلة سريعة عبر واتساب"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
                       </td>
                       <td className="py-3.5 px-3 text-xs text-slate-600">
                         {order.governorate} - {order.city}
@@ -1397,6 +1503,7 @@ interface MerchantEditFormState {
                           order.status === 'delivered' ? 'bg-emerald-100 text-emerald-800' :
                           order.status === 'cancelled' ? 'bg-red-100 text-red-800' :
                           order.status === 'shipped' ? 'bg-blue-100 text-blue-800' :
+                          order.status === 'reviewed' ? 'bg-sky-100 text-sky-800' :
                           'bg-amber-100 text-amber-800'
                         }`}>
                           {order.status === 'new' && 'طلب جديد'}
@@ -1407,6 +1514,20 @@ interface MerchantEditFormState {
                           {order.status === 'cancelled' && 'ملغي'}
                         </span>
                       </td>
+                      <td className="py-3.5 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedOrder(order);
+                            setOrderActionMsg(null);
+                          }}
+                          className="py-1.5 px-3 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-700 font-bold text-xs transition-colors inline-flex items-center gap-1.5 border border-brand-200"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>التفاصيل والتأكيد</span>
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1416,6 +1537,241 @@ interface MerchantEditFormState {
         </div>
         )}
       </div>
+
+      {/* نافذة منبثقة فاخرة لتفاصيل الطلب ومراسلة واتساب وتأكيد الطلب */}
+      {selectedOrder && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto" dir="rtl">
+          <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col my-auto">
+            {/* رأس النافذة */}
+            <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-brand-50 border border-brand-200 text-brand-700 flex items-center justify-center shrink-0">
+                  <FileText className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-black text-slate-900 font-mono">
+                      {selectedOrder.orderNumber}
+                    </h3>
+                    <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                      selectedOrder.status === 'delivered' ? 'bg-emerald-100 text-emerald-800' :
+                      selectedOrder.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                      selectedOrder.status === 'shipped' ? 'bg-blue-100 text-blue-800' :
+                      selectedOrder.status === 'reviewed' ? 'bg-sky-100 text-sky-800' :
+                      'bg-amber-100 text-amber-800'
+                    }`}>
+                      {selectedOrder.status === 'new' && 'طلب جديد'}
+                      {selectedOrder.status === 'reviewed' && 'تمت المراجعة والتأكيد'}
+                      {selectedOrder.status === 'processing' && 'قيد التجهيز'}
+                      {selectedOrder.status === 'shipped' && 'خرج للتوصيل'}
+                      {selectedOrder.status === 'delivered' && 'تم التسليم'}
+                      {selectedOrder.status === 'cancelled' && 'ملغي'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    تاريخ الطلب: {new Date(selectedOrder.createdAt).toLocaleDateString('ar-IQ', { dateStyle: 'long' })}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedOrder(null)}
+                className="w-9 h-9 rounded-full hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* محتوى التفاصيل */}
+            <div className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1">
+              {/* إشعار الإجراء */}
+              {orderActionMsg && (
+                <div className={`p-3.5 rounded-2xl text-xs font-bold flex items-center gap-2 border ${
+                  orderActionMsg.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : 'bg-red-50 text-red-800 border-red-200'
+                }`}>
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{orderActionMsg.text}</span>
+                </div>
+              )}
+
+              {/* بطاقة معلومات الزبون والتوصيل */}
+              <div className="bg-slate-50 rounded-2xl p-4 sm:p-5 border border-slate-200/80 space-y-3">
+                <div className="text-xs font-black text-slate-400 uppercase tracking-wider">بيانات الزبون والتوصيل</div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 shrink-0">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-slate-400">اسم الزبون:</div>
+                      <div className="text-sm font-bold text-slate-900">{selectedOrder.customerName}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 shrink-0">
+                      <Phone className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-slate-400">رقم الهاتف:</div>
+                      <a href={`tel:${selectedOrder.customerPhone}`} className="text-sm font-bold text-brand-700 font-mono hover:underline" dir="ltr">
+                        {selectedOrder.customerPhone}
+                      </a>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 sm:col-span-2">
+                    <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 shrink-0">
+                      <MapPin className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-slate-400">عنوان التوصيل:</div>
+                      <div className="text-xs sm:text-sm font-bold text-slate-800">
+                        {selectedOrder.governorate} - {selectedOrder.city} ({selectedOrder.address})
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedOrder.deliveryNotes && (
+                    <div className="sm:col-span-2 p-2.5 rounded-xl bg-white border border-slate-200 text-xs text-slate-600">
+                      <span className="font-bold text-slate-700 ml-1">ملاحظات الزبون:</span>
+                      {selectedOrder.deliveryNotes}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* قائمة المنتجات المطلوبة */}
+              <div>
+                <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2.5">المنتجات المطلوبة في هذا الطلب</div>
+                {selectedOrder.items && selectedOrder.items.length > 0 ? (
+                  <div className="space-y-2 border border-slate-200/80 rounded-2xl p-3 bg-white divide-y divide-slate-100">
+                    {selectedOrder.items.map((it, idx) => (
+                      <div key={idx} className="flex items-center justify-between gap-3 pt-2 first:pt-0">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-xl bg-slate-100 overflow-hidden border border-slate-200 shrink-0">
+                            {it.productImage ? (
+                              <img src={it.productImage} alt={it.productName} className="w-full h-full object-cover" />
+                            ) : (
+                              <Package className="w-6 h-6 text-slate-400 m-auto mt-3" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-bold text-xs sm:text-sm text-slate-900 line-clamp-1">{it.productName}</div>
+                            <div className="text-[11px] text-slate-400 font-mono">
+                              الكمية: <strong className="text-slate-700">{it.quantity}</strong> × {it.sellingPrice?.toLocaleString('ar-IQ')} د.ع
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-left font-mono">
+                          <div className="font-black text-xs sm:text-sm text-slate-900">
+                            {((it.sellingPrice || 0) * (it.quantity || 1)).toLocaleString('ar-IQ')} د.ع
+                          </div>
+                          {it.merchantProfit > 0 && (
+                            <div className="text-[10px] font-bold text-emerald-600">
+                              ربحك: +{(it.merchantProfit * (it.quantity || 1)).toLocaleString('ar-IQ')} د.ع
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500 text-center">
+                    تم تضمين المنتجات المطلوبة في إجمالي الفاتورة
+                  </div>
+                )}
+              </div>
+
+              {/* الحسابات المالية والربح الصافي للتاجر */}
+              <div className="bg-slate-50 rounded-2xl p-4 sm:p-5 border border-slate-200/80 space-y-2.5">
+                <div className="flex justify-between text-xs text-slate-600">
+                  <span>مجموع المنتجات:</span>
+                  <span className="font-mono font-bold text-slate-800">{selectedOrder.subtotal?.toLocaleString('ar-IQ')} د.ع</span>
+                </div>
+                <div className="flex justify-between text-xs text-slate-600">
+                  <span>كلفة التوصيل:</span>
+                  <span className="font-mono font-bold text-slate-800">{selectedOrder.deliveryFee?.toLocaleString('ar-IQ')} د.ع</span>
+                </div>
+                <div className="flex justify-between text-sm sm:text-base font-black text-slate-900 pt-2 border-t border-slate-200">
+                  <span>المبلغ المطلوب من الزبون:</span>
+                  <span className="font-mono text-brand-700">{selectedOrder.totalAmount?.toLocaleString('ar-IQ')} د.ع</span>
+                </div>
+
+                {/* كارت الربح الصافي المستحق للتاجر */}
+                <div className="mt-3 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-emerald-900">ربحك الصافي من هذا الطلب:</div>
+                    <div className="text-[11px] text-emerald-700 mt-0.5">يضاف لرصيدك المستحق بعد تسليم الطلب للزبون</div>
+                  </div>
+                  <div className="font-black text-base sm:text-lg text-emerald-600 font-mono">
+                    +{selectedOrder.merchantProfit?.toLocaleString('ar-IQ')} د.ع
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* أزرار الإجراءات في الأسفل (مراسلة واتساب + تأكيد الطلب) */}
+            <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/70 flex flex-col sm:flex-row items-center justify-between gap-3">
+              {/* زر مراسلة الزبون على واتساب */}
+              <a
+                href={getWhatsAppLink(selectedOrder)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full sm:w-auto flex-1 py-3 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-xs sm:text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer text-center"
+              >
+                <MessageCircle className="w-4 h-4 text-white" />
+                <span>مراسلة الزبون على واتساب</span>
+              </a>
+
+              {/* زر تأكيد الطلب */}
+              {selectedOrder.status === 'new' ? (
+                <button
+                  type="button"
+                  disabled={isConfirmingOrder}
+                  onClick={() => handleConfirmOrder(selectedOrder.id)}
+                  className="w-full sm:w-auto flex-1 py-3 px-5 rounded-xl bg-brand-700 hover:bg-brand-800 active:bg-brand-900 text-white font-black text-xs sm:text-sm shadow-md shadow-brand-700/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                >
+                  {isConfirmingOrder ? (
+                    <span>جاري التأكيد...</span>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>تأكيد الطلب الآن</span>
+                    </>
+                  )}
+                </button>
+              ) : selectedOrder.status === 'reviewed' ? (
+                <div className="flex items-center gap-2 w-full sm:w-auto flex-1">
+                  <div className="py-2.5 px-4 rounded-xl bg-sky-50 border border-sky-200 text-sky-800 font-bold text-xs flex items-center justify-center gap-1.5 flex-1">
+                    <Check className="w-4 h-4 text-sky-600" />
+                    <span>تم تأكيد الطلب وهو قيد المعالجة</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCancelOrder(selectedOrder.id)}
+                    className="py-2.5 px-3 rounded-xl text-red-600 hover:bg-red-50 text-xs font-bold transition-colors cursor-pointer border border-red-200"
+                    title="إلغاء الطلب إذا اعتذر الزبون"
+                  >
+                    إلغاء الطلب
+                  </button>
+                </div>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => setSelectedOrder(null)}
+                className="w-full sm:w-auto py-3 px-4 rounded-xl text-slate-600 hover:bg-slate-200 font-bold text-xs transition-colors cursor-pointer"
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* نافذة مودال لتعديل بيانات المتجر ("يكدر يعدل اي شي من المتجر") */}
       {isEditModalOpen && (
