@@ -4,7 +4,7 @@ export const CATEGORIES: Category[] = [
   {
     id: 'iraq-special',
     name: 'منتجات عراقية مميزة',
-    description: 'تمور فاخرة، منتجات محلية، ومتاجر عراقية عريقة ومختارة',
+    description: 'منتجات محلية ومتاجر عراقية عريقة ومختارة',
     iconName: 'Palmtree',
     badge: 'مختارة',
   },
@@ -58,7 +58,7 @@ export const FEATURES = [
   },
   {
     title: 'متاجر محلية موثوقة ومختارة',
-    description: 'ننتقي أفضل المطاعم، محلات التمور، الأسواق والصيدليات لتضمن جودة وسعر منتجاتك.',
+    description: 'ننتقي أفضل المتاجر والمطاعم والأسواق المعتمدة لتضمن جودة وسعر منتجاتك.',
     iconName: 'ShieldCheck',
   },
   {

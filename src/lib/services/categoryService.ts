@@ -1,5 +1,6 @@
 import { Category, Subcategory } from '@/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase/admin';
 
 // الأقسام والأفرع النموذجية المعتمدة لمنصة وصلي للتجارة والدروب شيبينغ
 const initialCategories: (Category & { subcategories: Subcategory[] })[] = [
@@ -62,20 +63,6 @@ const initialCategories: (Category & { subcategories: Subcategory[] })[] = [
     ]
   },
   {
-    id: 'cat-iraqi-special',
-    name: 'تمور ومأكولات عراقية أصيلة',
-    slug: 'iraqi-special',
-    description: 'أجود تمور البصرة والعراق، دبس التمر، وحلويات وكليجة عراقية طازجة',
-    iconName: 'Palmtree',
-    badge: 'منتج محلي',
-    subcategories: [
-      { id: 'sub-dates-basra', categoryId: 'cat-iraqi-special', name: 'تمور برحي وخستاوي وزاهدي معبأة', isActive: true },
-      { id: 'sub-date-syrup', categoryId: 'cat-iraqi-special', name: 'دبس ومربيات طبيعية', isActive: true },
-      { id: 'sub-kleicha-sweets', categoryId: 'cat-iraqi-special', name: 'كليجة عراقية ومعجنات تقليدية', isActive: true },
-      { id: 'sub-tea-coffee', categoryId: 'cat-iraqi-special', name: 'شاي عراقي أصيل ومخدر وقهوة عربية', isActive: true },
-    ]
-  },
-  {
     id: 'cat-watches-gifts',
     name: 'ساعات وهدايا واكسسوارات',
     slug: 'watches-gifts',
@@ -83,6 +70,12 @@ const initialCategories: (Category & { subcategories: Subcategory[] })[] = [
     iconName: 'Watch',
     subcategories: [
       { id: 'sub-luxury-watches', categoryId: 'cat-watches-gifts', name: 'ساعات يد رجالية ونسائية', isActive: true },
+      { id: 'sub-sunglasses', categoryId: 'cat-watches-gifts', name: 'نظارات شمسية عصرية', isActive: true },
+      { id: 'sub-accessories', categoryId: 'cat-watches-gifts', name: 'أساور وخواتم ومجوهرات بديلة', isActive: true },
+      { id: 'sub-gift-sets', categoryId: 'cat-watches-gifts', name: 'أطقم وبكجات هدايا جاهزة', isActive: true },
+    ]
+  }
+];
       { id: 'sub-sunglasses', categoryId: 'cat-watches-gifts', name: 'نظارات شمسية عصرية', isActive: true },
       { id: 'sub-accessories', categoryId: 'cat-watches-gifts', name: 'أساور وخواتم ومجوهرات بديلة', isActive: true },
       { id: 'sub-gift-sets', categoryId: 'cat-watches-gifts', name: 'أطقم وبكجات هدايا جاهزة', isActive: true },
@@ -286,17 +279,23 @@ export async function updateSubcategory(
  * حذف قسم رئيسي مع كافة أفرعه
  */
 export async function deleteCategory(id: string): Promise<boolean> {
-  const idx = localCategories.findIndex(c => c.id === id);
-  if (idx === -1) return false;
-
-  localCategories.splice(idx, 1);
-
-  if (isSupabaseConfigured && supabase) {
+  // 1. الحذف من قاعدة بيانات سوبابيس
+  const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+  if (activeSupabase) {
     try {
-      await supabase.from('categories').delete().eq('id', id);
+      // حذف أي أفرع تابعة لهذا القسم أولاً
+      await activeSupabase.from('categories').delete().eq('parent_id', id);
+      // ثم حذف القسم نفسه
+      await activeSupabase.from('categories').delete().eq('id', id);
     } catch (err) {
-      console.warn('خطأ حذف القسم من سوبابيس:', err);
+      console.warn('تنبيه أثناء حذف القسم من سوبابيس:', err);
     }
+  }
+
+  // 2. الحذف من المخزن المحلي
+  const idx = localCategories.findIndex(c => c.id === id);
+  if (idx !== -1) {
+    localCategories.splice(idx, 1);
   }
 
   return true;

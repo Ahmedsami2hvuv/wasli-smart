@@ -9,8 +9,7 @@ export type CategoryId =
   | 'beauty'
   | 'home'
   | 'perfumes' 
-  | 'iraq-special'
-  | 'abi-alkhaseeb-special';
+  | 'iraq-special';
 
 export interface Subcategory {
   id: string;

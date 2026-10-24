@@ -88,7 +88,7 @@ export const CategorySlider: React.FC<CategorySliderProps> = ({
           {/* قائمة التصنيفات */}
           {CATEGORIES.map((cat) => {
             const isSelected = selectedCategory === cat.id;
-            const isSpecial = cat.id === 'iraq-special' || cat.id === 'abi-alkhaseeb-special';
+            const isSpecial = cat.id === 'iraq-special';
 
             return (
               <button
