@@ -20,7 +20,8 @@ import {
   RefreshCw,
   Edit3,
   Eye,
-  EyeOff
+  EyeOff,
+  Search
 } from 'lucide-react';
 import Link from 'next/link';
 import { Product, Category, Subcategory } from '@/types';
@@ -30,6 +31,7 @@ export default function AdminProductsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // حالة تعديل المنتج
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -37,6 +39,9 @@ export default function AdminProductsPage() {
   const [editName, setEditName] = useState('');
   const [editCategory, setEditCategory] = useState('');
   const [editCategoryId, setEditCategoryId] = useState('');
+  const [editSubcategory, setEditSubcategory] = useState('');
+  const [editSubcategoryId, setEditSubcategoryId] = useState('');
+  const [editImage, setEditImage] = useState('');
   const [editWholesalePrice, setEditWholesalePrice] = useState<number>(0);
   const [editPlatformPrice, setEditPlatformPrice] = useState<number>(0);
   const [editMinPrice, setEditMinPrice] = useState<number>(0);
@@ -45,12 +50,16 @@ export default function AdminProductsPage() {
   const [editDescription, setEditDescription] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [togglingStatusId, setTogglingStatusId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleOpenEditModal = (p: Product) => {
     setEditingProduct(p);
     setEditName(p.name);
     setEditCategory(p.category || 'عام');
     setEditCategoryId(p.categoryId || '');
+    setEditSubcategory(p.subcategory || '');
+    setEditSubcategoryId(p.subcategoryId || '');
+    setEditImage(p.image || '');
     setEditWholesalePrice(p.wholesalePriceIqd || 0);
     setEditPlatformPrice(p.platformPriceIqd || p.priceIqd || 0);
     setEditMinPrice(p.minPriceIqd || 0);
@@ -73,6 +82,9 @@ export default function AdminProductsPage() {
           name: editName.trim(),
           category: editCategory,
           categoryId: editCategoryId,
+          subcategory: editSubcategory,
+          subcategoryId: editSubcategoryId,
+          image: editImage.trim() || editingProduct.image,
           description: editDescription.trim(),
           wholesalePriceIqd: editWholesalePrice,
           platformPriceIqd: editPlatformPrice,
@@ -90,6 +102,9 @@ export default function AdminProductsPage() {
           name: editName.trim(),
           category: editCategory,
           categoryId: editCategoryId,
+          subcategory: editSubcategory,
+          subcategoryId: editSubcategoryId,
+          image: editImage.trim() || p.image,
           description: editDescription.trim(),
           wholesalePriceIqd: editWholesalePrice,
           platformPriceIqd: editPlatformPrice,
@@ -105,6 +120,32 @@ export default function AdminProductsPage() {
       console.error('خطأ في حفظ التعديلات:', err);
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  const handleDeleteProduct = async (prodId: string, prodName: string) => {
+    if (!confirm(`هل أنت متأكد من رغبتك في حذف المنتج "${prodName}" نهائياً من المنصة؟`)) {
+      return;
+    }
+
+    try {
+      setDeletingId(prodId);
+      // حذف بؤري فوري من الشاشة
+      setProducts(prev => prev.filter(p => p.id !== prodId));
+
+      const res = await fetch(`/api/products/${prodId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!data.success) {
+        console.warn('تنبيه أثناء الحذف:', data.message);
+        fetchInitialData();
+      }
+    } catch (err) {
+      console.error('خطأ في حذف المنتج:', err);
+      fetchInitialData();
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -686,7 +727,7 @@ export default function AdminProductsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">القسم</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">القسم الرئيسي</label>
                     <select
                       value={editCategoryId || ''}
                       onChange={(e) => {
@@ -695,9 +736,16 @@ export default function AdminProductsPage() {
                         const selectedCat = categories.find(c => c.id === selectedId);
                         if (selectedCat) {
                           setEditCategory(selectedCat.name);
+                          if (selectedCat.subcategories && selectedCat.subcategories.length > 0) {
+                            setEditSubcategory(selectedCat.subcategories[0].name);
+                            setEditSubcategoryId(selectedCat.subcategories[0].id);
+                          } else {
+                            setEditSubcategory('');
+                            setEditSubcategoryId('');
+                          }
                         }
                       }}
-                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none bg-white focus:border-brand-600"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none bg-white focus:border-brand-600 font-medium"
                     >
                       {categories.map((c) => (
                         <option key={c.id} value={c.id}>
@@ -705,6 +753,50 @@ export default function AdminProductsPage() {
                         </option>
                       ))}
                     </select>
+                  </div>
+                </div>
+
+                {/* الفرع التابع للقسم في نافذة التعديل */}
+                {(() => {
+                  const currentSelectedCat = categories.find(c => c.id === editCategoryId);
+                  const availableSubs = currentSelectedCat?.subcategories || [];
+                  if (availableSubs.length === 0) return null;
+                  return (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">الفرع التابع للقسم</label>
+                      <select
+                        value={editSubcategoryId || ''}
+                        onChange={(e) => {
+                          const subId = e.target.value;
+                          setEditSubcategoryId(subId);
+                          const subObj = availableSubs.find(s => s.id === subId);
+                          if (subObj) setEditSubcategory(subObj.name);
+                        }}
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none bg-white focus:border-brand-600 font-medium"
+                      >
+                        <option value="">بدون فرع محدد (عام)</option>
+                        {availableSubs.map(sub => (
+                          <option key={sub.id} value={sub.id}>{sub.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })()}
+
+                {/* رابط الصورة الأساسية */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">رابط الصورة الأساسية</label>
+                  <div className="flex items-center gap-2">
+                    {editImage && (
+                      <img src={editImage} alt="معاينة" className="w-10 h-10 rounded-xl object-cover border border-slate-200 shrink-0" />
+                    )}
+                    <input
+                      type="text"
+                      placeholder="https://..."
+                      value={editImage}
+                      onChange={(e) => setEditImage(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none focus:border-brand-600 font-mono"
+                    />
                   </div>
                 </div>
 
@@ -819,12 +911,37 @@ export default function AdminProductsPage() {
         )}
 
         {/* جدول المنتجات الحالي */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md">
-          <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
-            <h2 className="text-lg font-black text-slate-900">قائمة المنتجات الحالية ({products.length})</h2>
-            <span className="text-xs bg-slate-100 text-slate-600 font-bold px-3 py-1 rounded-full">
-              تحديث مباشر
-            </span>
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+            <div>
+              <h2 className="text-lg font-black text-slate-900">قائمة المنتجات الحالية ({products.length})</h2>
+              <p className="text-xs text-slate-500 mt-0.5">عرض وتعديل أسعار ومخزون وحالة كافة المنتجات في المنصة</p>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              {/* شريط البحث السريع */}
+              <div className="relative w-full sm:w-64">
+                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="ابحث باسم المنتج، القسم، كود فدشي..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pr-9 pl-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-brand-600 focus:bg-white bg-slate-50 transition-all"
+                />
+              </div>
+
+              <span className="text-xs bg-slate-100 text-slate-600 font-bold px-3 py-2 rounded-xl shrink-0">
+                {products.filter(p => {
+                  if (!searchQuery.trim()) return true;
+                  const q = searchQuery.toLowerCase();
+                  return p.name.toLowerCase().includes(q) || 
+                         p.category?.toLowerCase().includes(q) || 
+                         p.supplierCode?.toLowerCase().includes(q) ||
+                         p.id.toLowerCase().includes(q);
+                }).length} منتج
+              </span>
+            </div>
           </div>
 
           {loading ? (
@@ -849,12 +966,20 @@ export default function AdminProductsPage() {
                     <th className="py-3 px-3">حدود بيع الزبون</th>
                     <th className="py-3 px-3">المخزون والخيارات</th>
                     <th className="py-3 px-3">الحالة</th>
-                    <th className="py-3 px-3">الإجراءات والمشاركة</th>
+                    <th className="py-3 px-3">الإجراءات والتحكم</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {products.map((p) => {
+                  {products.filter(p => {
+                    if (!searchQuery.trim()) return true;
+                    const q = searchQuery.toLowerCase();
+                    return p.name.toLowerCase().includes(q) || 
+                           p.category?.toLowerCase().includes(q) || 
+                           p.supplierCode?.toLowerCase().includes(q) ||
+                           p.id.toLowerCase().includes(q);
+                  }).map((p) => {
                     const platformProfit = (p.wholesalePriceIqd || 0) - (p.supplierPriceIqd || 0);
+                    const isDeleting = deletingId === p.id;
                     return (
                       <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="py-3.5 px-3">
@@ -874,7 +999,12 @@ export default function AdminProductsPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="py-3.5 px-3 text-slate-600 font-medium">{p.category}</td>
+                        <td className="py-3.5 px-3">
+                          <span className="font-bold text-slate-800 block">{p.category}</span>
+                          {p.subcategory && (
+                            <span className="text-[10px] text-slate-400 block">{p.subcategory}</span>
+                          )}
+                        </td>
                         <td className="py-3.5 px-3 font-semibold text-slate-600">
                           {p.supplierPriceIqd ? `${p.supplierPriceIqd.toLocaleString('ar-IQ')} د.ع` : '-'}
                         </td>
@@ -924,10 +1054,11 @@ export default function AdminProductsPage() {
                           })()}
                         </td>
                         <td className="py-3.5 px-3">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => handleOpenEditModal(p)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-xl text-xs border border-amber-200 transition-all cursor-pointer shadow-2xs"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-xl text-xs border border-amber-200 transition-all cursor-pointer shadow-2xs"
+                              title="تعديل بيانات المنتج وأسعاره ومخزونه"
                             >
                               <Edit3 className="w-3.5 h-3.5 text-amber-600" />
                               <span>تعديل</span>
@@ -936,11 +1067,27 @@ export default function AdminProductsPage() {
                             <Link
                               href={`/p/${p.id}`}
                               target="_blank"
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs border border-slate-200 transition-all"
+                              className="inline-flex items-center gap-1 px-2 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs border border-slate-200 transition-all"
+                              title="معاينة صفحة المنتج كما تظهر للزبائن"
                             >
-                              <span>معاينة</span>
                               <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                              <span>معاينة</span>
                             </Link>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteProduct(p.id, p.name)}
+                              disabled={isDeleting}
+                              className="inline-flex items-center gap-1 px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-xl text-xs border border-red-200 transition-all cursor-pointer disabled:opacity-50"
+                              title="حذف هذا المنتج نهائياً من المنصة"
+                            >
+                              {isDeleting ? (
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" />
+                              )}
+                              <span>حذف</span>
+                            </button>
                           </div>
                         </td>
                       </tr>

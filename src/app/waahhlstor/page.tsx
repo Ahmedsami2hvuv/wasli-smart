@@ -169,7 +169,7 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* بطاقات المؤشرات المالية والتشغيلية */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
           <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
             <div className="text-xs font-bold text-slate-500 mb-1">إجمالي المبيعات</div>
             <div className="text-xl font-black text-slate-900">
@@ -211,10 +211,27 @@ export default function AdminDashboardPage() {
               <Users className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
             </div>
             <div className="text-xl font-black text-slate-900">
-              {storesCount} <span className="text-xs text-slate-400 font-normal">تاجر</span> / {productsCount} <span className="text-xs text-slate-400 font-normal">منتج</span>
+              {storesCount} <span className="text-xs text-slate-400 font-normal">تاجر</span>
             </div>
             <div className="text-[11px] text-emerald-700 font-bold mt-2 flex items-center gap-1">
-              <span>عرض التفاصيل المملة</span>
+              <span>عرض حسابات التجار</span>
+              <span>&larr;</span>
+            </div>
+          </Link>
+
+          <Link 
+            href="/waahhlstor/products"
+            className="bg-white hover:bg-brand-50/50 transition-colors rounded-2xl p-5 border border-slate-200/80 shadow-xs group block"
+          >
+            <div className="text-xs font-bold text-brand-800 mb-1 flex items-center justify-between">
+              <span>المنتجات المنشورة</span>
+              <Package className="w-3.5 h-3.5 text-brand-600 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xl font-black text-slate-900">
+              {productsCount} <span className="text-xs text-slate-400 font-normal">منتج</span>
+            </div>
+            <div className="text-[11px] text-brand-700 font-bold mt-2 flex items-center gap-1">
+              <span>إدارة وتعديل المنتجات</span>
               <span>&larr;</span>
             </div>
           </Link>
@@ -228,7 +245,7 @@ export default function AdminDashboardPage() {
               <Layers className="w-3.5 h-3.5 text-sky-600 group-hover:scale-110 transition-transform" />
             </div>
             <div className="text-xl font-black text-slate-900">
-              {categoriesCount} <span className="text-xs text-slate-400 font-normal">قسم</span> / {subcategoriesCount} <span className="text-xs text-slate-400 font-normal">فرع</span>
+              {categoriesCount} <span className="text-xs text-slate-400 font-normal">قسم</span>
             </div>
             <div className="text-[11px] text-sky-600 font-bold mt-2 flex items-center gap-1">
               <span>تعديل وإضافة أفرع</span>
