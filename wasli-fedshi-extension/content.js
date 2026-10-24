@@ -520,6 +520,13 @@
 
   // بناء واجهة الإضافة الذكية
   function initWasliUI() {
+    // تشغيل واجهة المنتج الفردي فقط في صفحات المنتجات الفعلية
+    if (!window.location.pathname.startsWith('/products/')) {
+      const old = document.getElementById('wasli-importer-container');
+      if (old) old.remove();
+      return;
+    }
+
     // التأكد من عدم تكرار الزر في نفس الصفحة
     if (document.getElementById('wasli-importer-container')) {
       return;
@@ -555,7 +562,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.2.8</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.2.9</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -1220,24 +1227,50 @@
   }
 
   // ========================================================
-  // 1. حقن زر "سحب" فوق كل بطاقة منتج
+  // 1. حقن زر "سحب" فوق كل بطاقة منتج (معالجة فائقة الخفة وبدون أي تكرار)
   // ========================================================
   function injectProductCardButtons() {
-    // إذا كانت الصفحة الحالية صفحة منتج فردي فقط، لا نحقن أزرار البطاقات
+    // إذا كانت الصفحة صفحة منتج فردي، لا نحقن أزرار البطاقات
     if (window.location.pathname.startsWith('/products/')) {
       return;
     }
 
-    const cards = findVisibleProductCards();
-    cards.forEach(({ code, url, cardEl }) => {
-      if (!cardEl) return;
+    // فحص فقط الروابط التي لم تتم معالجتها من قبل لمنع أي استهلاك غير مبرر للـ CPU
+    const newLinks = Array.from(document.querySelectorAll('a[href*="/products/"]:not([data-wasli-handled="true"])'));
+    if (newLinks.length === 0) {
+      return;
+    }
 
-      // التأكد من عدم تكرار الزر على نفس الكارت
-      if (cardEl.querySelector(`.wasli-card-quick-btn`)) {
-        return;
+    newLinks.forEach(link => {
+      // وضع علامة فورية على الرابط بأنه تمت معالجته
+      link.setAttribute('data-wasli-handled', 'true');
+
+      const href = link.getAttribute('href') || link.href || '';
+      const match = href.match(/\/products\/([A-Za-z0-9_-]+)/);
+      if (!match) return;
+      const code = match[1];
+
+      // إيجاد كارت المنتج الأب
+      let cardEl = link;
+      let curr = link;
+      for (let i = 0; i < 6; i++) {
+        if (!curr || curr === document.body) break;
+        if (curr.querySelector && (curr.querySelector('[data-amount="true"]') || curr.textContent.includes('سعر الجملة'))) {
+          cardEl = curr;
+          break;
+        }
+        curr = curr.parentElement;
       }
 
-      // ضبط موضع الكارت ليكون نسبياً حتى يظهر الزر في زاويته
+      if (!cardEl) return;
+
+      // التأكد التام من عدم تكرار الزر على نفس الكارت
+      if (cardEl.getAttribute('data-wasli-card-ready') === 'true' || cardEl.querySelector('.wasli-card-quick-btn')) {
+        return;
+      }
+      cardEl.setAttribute('data-wasli-card-ready', 'true');
+
+      // ضبط موضع الكارت ليكون نسبياً
       const compPos = window.getComputedStyle(cardEl).position;
       if (compPos === 'static') {
         cardEl.style.position = 'relative';
@@ -1266,6 +1299,8 @@
         `;
       }
 
+      const fullUrl = href.startsWith('http') ? href : `https://web.fedshi.com/products/${code}`;
+
       // عند النقر على الزر الفردي
       btn.onclick = async (e) => {
         e.preventDefault();
@@ -1282,10 +1317,6 @@
             <line x1="12" y1="18" x2="12" y2="22"></line>
             <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
             <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
-            <line x1="2" y1="12" x2="6" y2="12"></line>
-            <line x1="18" y1="12" x2="22" y2="12"></line>
-            <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
-            <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
           </svg>
           <span>جاري...</span>
         `;
@@ -1297,7 +1328,7 @@
         });
 
         try {
-          const { result, data } = await importProductByUrl(url, code);
+          const { result, data } = await importProductByUrl(fullUrl, code);
           const prodId = result.product?.id || '';
           const activeTarget = wasliServerUrl.trim().replace(/\/+$/, '');
           const previewUrl = prodId ? `${activeTarget}/p/${prodId}` : activeTarget;
@@ -1526,31 +1557,78 @@
     }
   }
 
-  // تفعيل الواجهة
-  initWasliUI();
-  injectProductCardButtons();
-  injectBatchToolbar();
+  // ========================================================
+  // إدارة التحديثات الآمنة مع Debounce فائق الخفة (Zero CPU Impact)
+  // ========================================================
+  let debounceTimeout = null;
+  function scheduleSafeCatalogUpdate() {
+    if (debounceTimeout) clearTimeout(debounceTimeout);
+    debounceTimeout = setTimeout(() => {
+      injectProductCardButtons();
+      injectBatchToolbar();
+    }, 450);
+  }
 
-  // مراقبة التنقل بين صفحات المنتجات والقوائم في SPA
+  // 1. التشغيل الأولي النظيف
+  if (window.location.pathname.startsWith('/products/')) {
+    initWasliUI();
+  } else {
+    scheduleSafeCatalogUpdate();
+  }
+
+  // 2. مراقبة التنقل بين صفحات المنتجات والقوائم في SPA بحذر شديد
   let lastUrl = location.href;
-  new MutationObserver(() => {
+  new MutationObserver((mutations) => {
     const url = location.href;
     if (url !== lastUrl) {
       lastUrl = url;
-      // إزالة المودال القديم لضمان قراءة الصفحة الجديدة كلياً دون أي بقايا سابقة
-      const old = document.getElementById('wasli-importer-container');
-      if (old) old.remove();
-      initWasliUI();
-    }
-    // فحص وتحديث كروت المنتجات والشريط العلوي في كل تغير DOM
-    injectProductCardButtons();
-    injectBatchToolbar();
-  }).observe(document, { subtree: true, childList: true });
+      const oldModal = document.getElementById('wasli-importer-container');
+      if (oldModal) oldModal.remove();
 
-  setInterval(() => {
-    initWasliUI();
-    injectProductCardButtons();
-    injectBatchToolbar();
-  }, 1800);
+      if (window.location.pathname.startsWith('/products/')) {
+        const oldToolbar = document.getElementById('wasli-batch-toolbar');
+        if (oldToolbar) oldToolbar.remove();
+        initWasliUI();
+      } else {
+        scheduleSafeCatalogUpdate();
+      }
+      return;
+    }
+
+    // إذا كنا في صفحة منتج فردي، لا داعي لمراقبة كروت القوائم
+    if (window.location.pathname.startsWith('/products/')) {
+      return;
+    }
+
+    // فحص ذكي: هل التغيير من فدشي أم من إضافتنا؟ إذا كان من إضافتنا نتجاهله تماماً!
+    let hasForeignChange = false;
+    for (const m of mutations) {
+      for (const node of m.addedNodes) {
+        if (node.nodeType === 1) {
+          const className = String(node.className || '');
+          const id = String(node.id || '');
+          if (!className.includes('wasli-') && !id.includes('wasli-')) {
+            hasForeignChange = true;
+            break;
+          }
+        }
+      }
+      if (hasForeignChange) break;
+    }
+
+    if (hasForeignChange) {
+      scheduleSafeCatalogUpdate();
+    }
+  }).observe(document.body || document.documentElement, { subtree: true, childList: true });
+
+  // 3. مراقبة التمرير اللانهائي (Infinite Scroll) عند نزول المستخدم لأسفل الصفحة
+  let scrollTimeout = null;
+  window.addEventListener('scroll', () => {
+    if (window.location.pathname.startsWith('/products/')) return;
+    if (scrollTimeout) clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+      scheduleSafeCatalogUpdate();
+    }, 600);
+  }, { passive: true });
 
 })();
