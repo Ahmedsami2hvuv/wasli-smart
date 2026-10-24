@@ -1007,7 +1007,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.5</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.6</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -1727,14 +1727,14 @@
       if (seenCodes.has(code)) return;
       seenCodes.add(code);
 
-      // العثور الدقيق على كارت المنتج المنفصل
+      // العثور الدقيق على كارت المنتج المنفصل بسرعة فائقة وبدون إبطاء الصفحة
       let cardEl = link;
       let curr = link;
       while (curr && curr !== document.body) {
         const parent = curr.parentElement;
         if (parent) {
-          const display = window.getComputedStyle(parent).display;
-          if (display === 'grid' || parent.className.includes('grid')) {
+          const parentClass = String(parent.className || '');
+          if (parentClass.includes('grid')) {
             cardEl = curr;
             break;
           }
@@ -1902,16 +1902,27 @@
     }, 450);
   }
 
+  // مؤقت خفيف لمنع تكرار حقن الواجهة واستهلاك المعالج عند فتح المنتج (Zero CPU Delay)
+  let productUiTimeout = null;
+  function scheduleProductUiUpdate() {
+    if (productUiTimeout) return;
+    productUiTimeout = setTimeout(() => {
+      productUiTimeout = null;
+      if (isProductPage()) {
+        const existing = document.getElementById('wasli-importer-container');
+        if (!existing || !document.contains(existing)) {
+          initWasliUI();
+        }
+      }
+    }, 60);
+  }
+
   // دالة موحدة لمزامنة واجهة وصلي مع حالة ومسار الصفحة الحالية
   function syncWasliState() {
     if (isProductPage()) {
       const existingToolbar = document.getElementById('wasli-batch-toolbar');
       if (existingToolbar) existingToolbar.remove();
-
-      const existingContainer = document.getElementById('wasli-importer-container');
-      if (!existingContainer || !document.contains(existingContainer)) {
-        initWasliUI();
-      }
+      scheduleProductUiUpdate();
     } else {
       const oldModal = document.getElementById('wasli-importer-container');
       if (oldModal) oldModal.remove();
@@ -1922,7 +1933,7 @@
   // 1. التشغيل الأولي الفوري
   syncWasliState();
 
-  // 2. مراقبة التنقل وتغيرات الـ DOM في SPA لمنع اختفاء الزر نهائياً أثناء اكتمال التحميل والـ Hydration
+  // 2. مراقبة التنقل وتغيرات الـ DOM في SPA بخفة تامة لمنع أي تأخير في فتح المنتجات
   let lastUrl = location.href;
   new MutationObserver((mutations) => {
     const url = location.href;
@@ -1932,12 +1943,9 @@
       return;
     }
 
-    // إذا كنا في صفحة منتج فردي، نتأكد أن الزر لم يقم موقع فدشي بحذفه أثناء اكتمال التحميل
+    // إذا كنا في صفحة منتج فردي، نستخدم الجدولة الخفيفة (Debounce) لمنع تعليق المتصفح
     if (isProductPage()) {
-      const existing = document.getElementById('wasli-importer-container');
-      if (!existing || !document.contains(existing)) {
-        initWasliUI();
-      }
+      scheduleProductUiUpdate();
       return;
     }
 
@@ -1962,17 +1970,7 @@
     }
   }).observe(document.body || document.documentElement, { subtree: true, childList: true });
 
-  // 3. حارس دوري خفيف (Watchdog Guard) يضمن بقاء الزر مستقراً وظاهراً حتى بعد اكتمال الـ Hydration
-  setInterval(() => {
-    if (isProductPage()) {
-      const existing = document.getElementById('wasli-importer-container');
-      if (!existing || !document.contains(existing)) {
-        initWasliUI();
-      }
-    }
-  }, 400);
-
-  // 4. مراقبة التمرير اللانهائي (Infinite Scroll) عند نزول المستخدم لأسفل صفحة الكتالوج
+  // 3. مراقبة التمرير اللانهائي (Infinite Scroll) عند نزول المستخدم لأسفل صفحة الكتالوج
   let scrollTimeout = null;
   window.addEventListener('scroll', () => {
     if (isProductPage()) return;
