@@ -28,6 +28,41 @@ import {
 import Link from 'next/link';
 import { Store, Product } from '@/types';
 
+// مكون الصورة الذكية التدريجية المتوافقة مع كاش المتصفح
+function ProgressiveProductImage({
+  src,
+  alt,
+  priority = false,
+}: {
+  src: string;
+  alt: string;
+  priority?: boolean;
+}) {
+  const [loaded, setLoaded] = useState(false);
+
+  return (
+    <div className="relative w-full h-full bg-slate-100 overflow-hidden">
+      {!loaded && (
+        <div className="absolute inset-0 bg-slate-200/60 animate-pulse flex items-center justify-center">
+          <div className="w-5 h-5 border-2 border-slate-300 border-t-brand-600 rounded-full animate-spin opacity-40" />
+        </div>
+      )}
+      <img
+        src={src}
+        alt={alt}
+        loading={priority ? 'eager' : 'lazy'}
+        decoding="async"
+        // @ts-ignore
+        fetchPriority={priority ? 'high' : 'low'}
+        onLoad={() => setLoaded(true)}
+        className={`w-full h-full object-cover group-hover:scale-105 transition-all duration-300 ${
+          loaded ? 'opacity-100' : 'opacity-0'
+        }`}
+      />
+    </div>
+  );
+}
+
 function StorePageContent() {
   const params = useParams();
   const router = useRouter();
@@ -325,7 +360,15 @@ function StorePageContent() {
     }
   };
 
-  // 6. فلترة المنتجات
+  // عدد المنتجات المعروضة لتحميل تدريجي سريع يريح المتصفح
+  const [visibleCount, setVisibleCount] = useState<number>(24);
+
+  // إعادة ضبط عدد المعروض عند تغيير البحث أو التصنيف
+  useEffect(() => {
+    setVisibleCount(24);
+  }, [searchQuery, selectedCategory, selectedSubcategory]);
+
+  // حساب المنتجات المفلترة
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       const matchesSearch = searchQuery.trim() === '' || 
@@ -337,6 +380,17 @@ function StorePageContent() {
       return matchesSearch && matchesCat && matchesSub;
     });
   }, [products, searchQuery, selectedCategory, selectedSubcategory]);
+
+  // المنتجات المعروضة تدريجياً (الدفعة الأولى ثم التي تليها)
+  const visibleProducts = useMemo(() => {
+    return filteredProducts.slice(0, visibleCount);
+  }, [filteredProducts, visibleCount]);
+
+  const hasMoreProducts = visibleCount < filteredProducts.length;
+
+  const loadMoreProducts = () => {
+    setVisibleCount(prev => Math.min(prev + 20, filteredProducts.length));
+  };
 
   // المنتجات المفضلة للزبون
   const favoriteProducts = useMemo(() => {
@@ -356,11 +410,43 @@ function StorePageContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-brand-200 border-t-brand-700 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-slate-600 font-medium">جاري فتح المتجر وتجهيز المنتجات...</p>
-        </div>
+      <div className="min-h-screen bg-slate-50 pb-24 select-none">
+        {/* هيدر هيكلي ناعم يظهر فوراً */}
+        <header className="bg-white border-b border-slate-200/80 sticky top-0 z-30 shadow-xs">
+          <div className="max-w-4xl mx-auto px-4 py-3 sm:py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-slate-200 animate-pulse shrink-0" />
+                <div className="space-y-1.5">
+                  <div className="w-28 h-5 bg-slate-200 animate-pulse rounded-md" />
+                </div>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <div className="h-10 bg-slate-100 rounded-xl flex-1 animate-pulse" />
+              <div className="h-10 w-20 bg-slate-100 rounded-xl animate-pulse" />
+            </div>
+          </div>
+        </header>
+
+        {/* بطاقات هيكلية نبضية ناعمة لتجهيز المتجر في أقل من ثانية */}
+        <main className="max-w-4xl mx-auto px-4 py-4 sm:py-6">
+          <div className="flex justify-between items-center mb-4">
+            <div className="w-24 h-5 bg-slate-200 animate-pulse rounded-md" />
+            <div className="w-16 h-4 bg-slate-100 animate-pulse rounded-md" />
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden p-2 space-y-2.5">
+                <div className="aspect-square bg-slate-200/70 rounded-xl animate-pulse" />
+                <div className="h-4 bg-slate-200/70 rounded-md w-3/4 animate-pulse" />
+                <div className="h-4 bg-slate-100 rounded-md w-1/2 animate-pulse" />
+                <div className="h-8 bg-slate-200/60 rounded-xl animate-pulse mt-2" />
+              </div>
+            ))}
+          </div>
+        </main>
       </div>
     );
   }
@@ -529,84 +615,103 @@ function StorePageContent() {
                 </button>
               </div>
             ) : (
-              /* شبكة المنتجات بتصميم نظيف، أسعار كبيرة، وبدون أي وصف خارجي */
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
-                {filteredProducts.map((product) => {
-                  const isFav = favorites.includes(product.id);
-                  return (
-                    <div 
-                      key={product.id}
-                      className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs hover:shadow-md transition-all flex flex-col justify-between group"
-                    >
-                      {/* صورة المنتج */}
-                      <Link 
-                        href={`/p/${product.id}?ref=${code}`}
-                        className="relative aspect-square overflow-hidden bg-slate-50 block"
+              /* شبكة المنتجات بالتحميل التدريجي السريع، كاش المتصفح، وأسعار كبيرة */
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+                  {visibleProducts.map((product, idx) => {
+                    const isFav = favorites.includes(product.id);
+                    return (
+                      <div 
+                        key={product.id}
+                        className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs hover:shadow-md transition-all flex flex-col justify-between group"
                       >
-                        <img 
-                          src={product.image} 
-                          alt={product.name} 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          loading="lazy"
-                        />
-                        {/* تصنيف المنتج فوق الصورة */}
-                        {product.category && (
-                          <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-xs text-slate-800 text-[10px] font-bold px-2 py-0.5 rounded-md shadow-2xs">
-                            {product.category}
-                          </div>
-                        )}
-                      </Link>
+                        {/* صورة المنتج الذكية ذات التحميل التدريجي المتوافقة مع كاش المتصفح */}
+                        <Link 
+                          href={`/p/${product.id}?ref=${code}`}
+                          className="relative aspect-square overflow-hidden bg-slate-50 block"
+                        >
+                          <ProgressiveProductImage 
+                            src={product.image} 
+                            alt={product.name} 
+                            priority={idx < 6}
+                          />
+                          {/* تصنيف المنتج فوق الصورة */}
+                          {product.category && (
+                            <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-xs text-slate-800 text-[10px] font-bold px-2 py-0.5 rounded-md shadow-2xs z-10">
+                              {product.category}
+                            </div>
+                          )}
+                        </Link>
 
-                      {/* تفاصيل المنتج: اسم المنتج فقط بدون أي جزء من الوصف */}
-                      <div className="p-3 sm:p-3.5 flex-1 flex flex-col justify-between">
-                        <div>
-                          <Link 
-                            href={`/p/${product.id}?ref=${code}`}
-                            className="block font-bold text-slate-900 text-sm leading-snug line-clamp-2 hover:text-brand-700 transition-colors mb-2"
-                            title={product.name}
-                          >
-                            {product.name}
-                          </Link>
-                        </div>
-
-                        <div>
-                          {/* السعر بحجم كبير وبارز جداً */}
-                          <div className="flex items-baseline gap-1 mb-2.5">
-                            <span className="text-lg sm:text-xl font-black text-brand-700 tracking-tight">
-                              {product.priceIqd.toLocaleString('ar-IQ')}
-                            </span>
-                            <span className="text-xs font-bold text-slate-500">د.ع</span>
+                        {/* تفاصيل المنتج: اسم المنتج فقط بدون أي جزء من الوصف */}
+                        <div className="p-3 sm:p-3.5 flex-1 flex flex-col justify-between">
+                          <div>
+                            <Link 
+                              href={`/p/${product.id}?ref=${code}`}
+                              className="block font-bold text-slate-900 text-sm leading-snug line-clamp-2 hover:text-brand-700 transition-colors mb-2"
+                              title={product.name}
+                            >
+                              {product.name}
+                            </Link>
                           </div>
 
-                          {/* أزرار الإجراء: أضف للسلة + زر القلب للمفضلة */}
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => addToCart(product)}
-                              className="flex-1 py-2 px-2.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              <span>أضف للسلة</span>
-                            </button>
-                            
-                            {/* زر القلب للمفضلة بدلاً من السهم */}
-                            <button
-                              onClick={() => toggleFavorite(product.id)}
-                              className={`p-2 rounded-xl border transition-all cursor-pointer ${
-                                isFav 
-                                  ? 'bg-rose-50 border-rose-200 text-rose-500 shadow-2xs' 
-                                  : 'border-slate-200 text-slate-400 hover:text-rose-500 hover:bg-rose-50/50'
-                              }`}
-                              title={isFav ? 'إزالة من المفضلة' : 'إضافة للمفضلة'}
-                            >
-                              <Heart className={`w-4 h-4 ${isFav ? 'fill-rose-500' : ''}`} />
-                            </button>
+                          <div>
+                            {/* السعر بحجم كبير وبارز جداً */}
+                            <div className="flex items-baseline gap-1 mb-2.5">
+                              <span className="text-lg sm:text-xl font-black text-brand-700 tracking-tight">
+                                {product.priceIqd.toLocaleString('ar-IQ')}
+                              </span>
+                              <span className="text-xs font-bold text-slate-500">د.ع</span>
+                            </div>
+
+                            {/* أزرار الإجراء: أضف للسلة + زر القلب للمفضلة */}
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => addToCart(product)}
+                                className="flex-1 py-2 px-2.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>أضف للسلة</span>
+                              </button>
+                              
+                              {/* زر القلب للمفضلة بدلاً من السهم */}
+                              <button
+                                onClick={() => toggleFavorite(product.id)}
+                                className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                                  isFav 
+                                    ? 'bg-rose-50 border-rose-200 text-rose-500 shadow-2xs' 
+                                    : 'border-slate-200 text-slate-400 hover:text-rose-500 hover:bg-rose-50/50'
+                                }`}
+                                title={isFav ? 'إزالة من المفضلة' : 'إضافة للمفضلة'}
+                              >
+                                <Heart className={`w-4 h-4 ${isFav ? 'fill-rose-500' : ''}`} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+
+                {/* زر وخيار التحميل التدريجي للمزيد من المنتجات بسلاسة ودون تعليق المتصفح */}
+                {hasMoreProducts && (
+                  <div className="mt-8 text-center">
+                    <button
+                      onClick={loadMoreProducts}
+                      className="px-6 py-3 bg-white border border-slate-200 hover:border-brand-600 text-slate-800 hover:text-brand-700 text-xs font-bold rounded-2xl shadow-xs transition-all inline-flex items-center gap-2 cursor-pointer"
+                    >
+                      <span>عرض المزيد من المعروضات</span>
+                      <span className="bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full text-[11px] font-black">
+                        +{Math.min(20, filteredProducts.length - visibleCount)} منتج إضافي
+                      </span>
+                    </button>
+                    <p className="text-[11px] text-slate-400 mt-2">
+                      تم عرض {visibleCount} من أصل {filteredProducts.length} منتج
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

@@ -34,23 +34,42 @@ function ProductDetailContent() {
   const [copied, setCopied] = useState(false);
   const [activeImage, setActiveImage] = useState<string>('');
   const [selectedColor, setSelectedColor] = useState<any>(null);
+  const [mainImageLoaded, setMainImageLoaded] = useState(false);
 
   useEffect(() => {
     async function loadData() {
       if (!productId) return;
       try {
         setLoading(true);
-        // جلب تفاصيل المنتج
-        const res = await fetch('/api/products');
-        const data = await res.json();
-        if (data.success && data.products) {
-          const found = data.products.find((p: any) => p.id === productId || p.slug === productId);
-          if (found) {
-            setProduct(found);
-            setActiveImage(found.image || '');
-            if (found.colors && found.colors.length > 0) {
-              setSelectedColor(found.colors[0]);
+        // 1. محاولة جلب المنتج الفردي مباشرة بسرعة فائقة
+        let foundProduct: Product | null = null;
+        try {
+          const directRes = await fetch(`/api/products/${productId}`);
+          if (directRes.ok) {
+            const directData = await directRes.json();
+            if (directData.success && directData.product) {
+              foundProduct = directData.product;
             }
+          }
+        } catch (e) {}
+
+        // إذا لم يعثر عليه مباشرة يتم البحث في القائمة كاحتياط
+        if (!foundProduct) {
+          const res = await fetch('/api/products');
+          const data = await res.json();
+          if (data.success && data.products) {
+            const found = data.products.find((p: any) => p.id === productId || p.slug === productId);
+            if (found) {
+              foundProduct = found;
+            }
+          }
+        }
+
+        if (foundProduct) {
+          setProduct(foundProduct);
+          setActiveImage(foundProduct.image || '');
+          if (foundProduct.colors && foundProduct.colors.length > 0) {
+            setSelectedColor(foundProduct.colors[0]);
           }
         }
 
@@ -252,20 +271,33 @@ function ProductDetailContent() {
 
         {/* بطاقة تفاصيل المنتج الرئيسية */}
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-md overflow-hidden grid grid-cols-1 md:grid-cols-2 gap-8 p-6 sm:p-8">
-          {/* معرض صور المنتج */}
+          {/* معرض صور المنتج: تحميل فوري للصورة الأولى وتحميل تدريجي لباقي الصور */}
           <div className="flex flex-col gap-3">
             <div className="aspect-square rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 relative group shadow-xs">
+              {/* هيكل التحميل الناعم للصورة الرئيسية */}
+              {!mainImageLoaded && (
+                <div className="absolute inset-0 bg-slate-200 animate-pulse flex items-center justify-center">
+                  <div className="w-10 h-10 border-2 border-brand-200 border-t-brand-700 rounded-full animate-spin" />
+                </div>
+              )}
               <img 
                 src={activeImage || product.image} 
                 alt={product.name} 
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                // @ts-ignore
+                fetchPriority="high"
+                loading="eager"
+                decoding="async"
+                onLoad={() => setMainImageLoaded(true)}
+                className={`w-full h-full object-cover group-hover:scale-105 transition-all duration-300 ${
+                  mainImageLoaded ? 'opacity-100' : 'opacity-0'
+                }`}
               />
               <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm px-3 py-1 rounded-lg text-xs font-bold text-slate-800 shadow-xs">
                 {product.category}
               </div>
             </div>
 
-            {/* شريط مصغرات الصور لعرض كافة صور المنتج */}
+            {/* شريط مصغرات الصور لعرض كافة صور المنتج بتحميل تدريجي كسول في الخلفية */}
             {allImages.length > 1 && (
               <div className="flex items-center gap-2.5 overflow-x-auto pb-1 pt-1">
                 {allImages.map((imgUrl, idx) => {
@@ -274,14 +306,23 @@ function ProductDetailContent() {
                     <button
                       key={idx}
                       type="button"
-                      onClick={() => setActiveImage(imgUrl)}
-                      className={`relative w-16 h-16 rounded-xl overflow-hidden shrink-0 border transition-all cursor-pointer ${
+                      onClick={() => {
+                        setMainImageLoaded(false);
+                        setActiveImage(imgUrl);
+                      }}
+                      className={`relative w-16 h-16 rounded-xl overflow-hidden shrink-0 border transition-all cursor-pointer bg-slate-100 ${
                         isCurrent 
                           ? 'border-brand-700 ring-2 ring-brand-700 ring-offset-2 scale-105 shadow-xs' 
-                          : 'border-slate-200 hover:border-slate-400 opacity-70 hover:opacity-100'
+                          : 'border-slate-200 hover:border-slate-400 opacity-80 hover:opacity-100'
                       }`}
                     >
-                      <img src={imgUrl} alt={`صورة ${idx + 1}`} className="w-full h-full object-cover" />
+                      <img 
+                        src={imgUrl} 
+                        alt={`صورة ${idx + 1}`} 
+                        loading="lazy" 
+                        decoding="async"
+                        className="w-full h-full object-cover" 
+                      />
                     </button>
                   );
                 })}
