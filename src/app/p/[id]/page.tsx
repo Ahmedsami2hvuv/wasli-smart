@@ -87,6 +87,15 @@ function ProductDetailContent() {
     loadData();
   }, [productId, storeRef]);
 
+  // تحديث عنوان الصفحة في المتصفح ليكون محايداً ولا يذكر كلمة وصلي نهائياً
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      if (product) {
+        document.title = store?.name ? `${product.name} - ${store.name}` : product.name;
+      }
+    }
+  }, [product, store]);
+
   // قائمة جميع صور المنتج للمعرض
   const allImages = useMemo(() => {
     if (!product) return [];

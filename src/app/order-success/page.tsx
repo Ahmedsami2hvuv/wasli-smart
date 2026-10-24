@@ -11,6 +11,12 @@ function OrderSuccessContent() {
   const storeCode = searchParams.get('store');
   const [copied, setCopied] = useState(false);
 
+  React.useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.title = 'تم استلام طلبك بنجاح';
+    }
+  }, []);
+
   const handleCopy = () => {
     if (navigator.clipboard) {
       navigator.clipboard.writeText(orderNumber);

@@ -58,6 +58,14 @@ function CheckoutContent() {
     }
   }, []);
 
+  // تحديث عنوان الصفحة ليكون محايداً تماماً وباسم متجر التاجر إن وجد
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      const storeName = cartData?.storeName;
+      document.title = storeName ? `إتمام الطلب - ${storeName}` : 'إتمام الطلب وتأكيد التوصيل';
+    }
+  }, [cartData]);
+
   const items = cartData?.items || [];
   const subtotal = items.reduce((sum: number, item: any) => sum + (item.priceIqd * item.quantity), 0);
   const deliveryFee = 5000;

@@ -239,6 +239,13 @@ function StorePageContent() {
   const activeStoreName = store?.name || queryName || 'متجر التاجر';
   const storeLogo = store?.image || store?.logoUrl || 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=300&q=80';
 
+  // تحديث عنوان المتصفح فوراً ليكون اسم المتجر فقط دون أي كلمة وصلي
+  useEffect(() => {
+    if (typeof document !== 'undefined' && activeStoreName) {
+      document.title = activeStoreName;
+    }
+  }, [activeStoreName]);
+
   // 3. استخراج الأقسام والأفرع المتوفرة ديناميكياً
   const categoriesStructure = useMemo(() => {
     const map = new Map<string, Set<string>>();
