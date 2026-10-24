@@ -4,15 +4,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const testBtn = document.getElementById('testBtn');
   const statusAlert = document.getElementById('statusAlert');
 
-  // استرجاع الرابط المحفوظ
+  // استرجاع الرابط وتطهيره تلقائياً من localhost
+  const defaultLiveUrl = 'https://wasli-smart.vercel.app';
   if (chrome.storage && chrome.storage.sync) {
     chrome.storage.sync.get(['wasliCustomUrl'], (res) => {
-      if (res.wasliCustomUrl) {
+      if (res.wasliCustomUrl && !res.wasliCustomUrl.includes('localhost') && !res.wasliCustomUrl.includes('127.0.0.1')) {
         serverUrlInput.value = res.wasliCustomUrl;
       } else {
-        serverUrlInput.value = 'https://wasli-smart.vercel.app';
+        serverUrlInput.value = defaultLiveUrl;
+        chrome.storage.sync.set({ wasliCustomUrl: defaultLiveUrl });
       }
     });
+  } else {
+    serverUrlInput.value = defaultLiveUrl;
   }
 
   function showAlert(msg, isSuccess) {

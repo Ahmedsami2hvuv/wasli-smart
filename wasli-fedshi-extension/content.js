@@ -6,11 +6,14 @@
   // الرابط الافتراضي الدائم لموقع وصلي الحي على فيرسل
   let wasliServerUrl = 'https://wasli-smart.vercel.app';
 
-  // استرجاع الرابط المخصص إن وجد في ذاكرة الإضافة
+  // استرجاع الرابط المخصص مع التطهير التلقائي لأي localhost قديم
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
     chrome.storage.sync.get(['wasliCustomUrl'], (result) => {
-      if (result.wasliCustomUrl) {
+      if (result.wasliCustomUrl && !result.wasliCustomUrl.includes('localhost') && !result.wasliCustomUrl.includes('127.0.0.1')) {
         wasliServerUrl = result.wasliCustomUrl.replace(/\/+$/, '');
+      } else {
+        wasliServerUrl = 'https://wasli-smart.vercel.app';
+        chrome.storage.sync.set({ wasliCustomUrl: 'https://wasli-smart.vercel.app' });
       }
     });
   }
@@ -533,7 +536,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.2.4</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.2.5</span>
           </div>
           <button type="button" class="wasli-close-btn" id="wasli-modal-close" title="إغلاق">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -797,15 +800,37 @@
       const statusBox = overlay.querySelector('#wasli-status-message');
 
       try {
-        const response = await fetch(`${targetUrl}/api/products/import-fedshi`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
+        let response = null;
+        let result = null;
+        let activeTarget = targetUrl;
 
-        const result = await response.json();
+        // محاولة الإرسال الأولى
+        try {
+          response = await fetch(`${activeTarget}/api/products/import-fedshi`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          result = await response.json();
+        } catch (fetchErr) {
+          // إذا فشل الاتصال برابط محلي أو غير متوفر، نحول تلقائياً إلى سيرفر وصلي الحي على فيرسل
+          if (activeTarget !== 'https://wasli-smart.vercel.app') {
+            console.warn('جاري التحويل التلقائي للاتصال المباشر بمنصة وصلي على فيرسل...');
+            activeTarget = 'https://wasli-smart.vercel.app';
+            wasliServerUrl = activeTarget;
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+              chrome.storage.sync.set({ wasliCustomUrl: activeTarget });
+            }
+            response = await fetch(`${activeTarget}/api/products/import-fedshi`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            result = await response.json();
+          } else {
+            throw fetchErr;
+          }
+        }
 
         if (response.ok && result.success) {
           const prodId = result.product?.id || '';
