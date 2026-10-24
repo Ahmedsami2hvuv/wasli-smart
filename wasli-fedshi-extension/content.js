@@ -288,67 +288,42 @@
       let minSuggested = 0;
       let maxSuggested = 0;
 
-      // أ) البحث المباشر في الفقرة الدقيقة الخاصة بسعر الزبون المقترح
-      // في فدشي: <p class="bg-neutral-100 ..."><span>سعر الزبون المقترح</span>...
-      const directSuggestedP = document.querySelector('p.bg-neutral-100, [class*="bg-neutral-100"]');
-      if (directSuggestedP && directSuggestedP.textContent.includes('سعر الزبون المقترح')) {
-        const amountEls = Array.from(directSuggestedP.querySelectorAll('[data-amount="true"]'));
-        const values = amountEls.map(el => readDataAmount(el)).filter(v => v >= 1000);
-        if (values.length >= 2) {
-          minSuggested = Math.min(...values);
-          maxSuggested = Math.max(...values);
-        } else {
-          const textMatches = directSuggestedP.textContent.match(/\b\d{1,3}(?:,\d{3})+\b|\b\d{4,6}\b/g);
-          if (textMatches && textMatches.length >= 2) {
-            const parsed = textMatches.map(m => cleanNum(m)).filter(v => v >= 1000);
+      // أ) استخراج مباشر وقاطع بنمط Regex من نص الصفحة الكامل
+      const pageFullText = (document.body ? document.body.innerText : '') + ' ' + (document.body ? document.body.textContent : '');
+      const rangeMatch = pageFullText.match(/سعر الزبون المقترح[^\d]*(\d[\d,]*)[^\d]+(\d[\d,]*)/);
+      if (rangeMatch && rangeMatch[1] && rangeMatch[2]) {
+        const val1 = cleanNum(rangeMatch[1]);
+        const val2 = cleanNum(rangeMatch[2]);
+        if (val1 >= 1000 && val2 >= 1000) {
+          minSuggested = Math.min(val1, val2); // 40,000 د.ع
+          maxSuggested = Math.max(val1, val2); // 60,000 د.ع
+        }
+      }
+
+      // ب) فحص عناصر DOM المباشرة كاحتياط
+      if (!minSuggested || !maxSuggested) {
+        const allTextNodes = Array.from(document.querySelectorAll('p, div, span')).filter(el => {
+          const t = (el.textContent || '').trim();
+          return t.includes('سعر الزبون المقترح') && t.length < 120 && el.children.length <= 4;
+        });
+
+        for (const container of allTextNodes) {
+          const matches = container.textContent.match(/\b\d{1,3}(?:,\d{3})+\b|\b\d{4,6}\b/g);
+          if (matches && matches.length >= 2) {
+            const parsed = matches.map(m => cleanNum(m)).filter(v => v >= 1000);
             if (parsed.length >= 2) {
               minSuggested = Math.min(...parsed);
               maxSuggested = Math.max(...parsed);
+              break;
             }
           }
         }
       }
 
-      // ب) فحص العناصر الأخرى التي تحتوي على النص ولكن بطول محتوى قصير (لتجنب الحاويات الكبيرة)
-      if (!minSuggested || !maxSuggested) {
-        const candidateContainers = allTextElements.filter(el => {
-          const t = (el.textContent || '').trim();
-          return t.includes('سعر الزبون المقترح') && t.length < 150 && el.children.length > 0;
-        });
-
-        for (const container of candidateContainers) {
-          const amountEls = Array.from(container.querySelectorAll('[data-amount="true"]'));
-          const values = amountEls.map(el => readDataAmount(el)).filter(v => v >= 1000);
-          if (values.length >= 2) {
-            minSuggested = Math.min(...values);
-            maxSuggested = Math.max(...values);
-            break;
-          } else {
-            const matches = container.textContent.match(/\b\d{1,3}(?:,\d{3})+\b|\b\d{4,6}\b/g);
-            if (matches && matches.length >= 2) {
-              const parsed = matches.map(m => cleanNum(m)).filter(v => v >= 1000);
-              if (parsed.length >= 2) {
-                minSuggested = Math.min(...parsed);
-                maxSuggested = Math.max(...parsed);
-                break;
-              }
-            }
-          }
-        }
-      }
-
-      // ج) استخراج مباشر بـ Regex من النص الكامل بجوار "سعر الزبون المقترح" كضمان مطلق
-      if (!minSuggested || !maxSuggested) {
-        const pageText = document.body ? document.body.innerText : '';
-        const regexMatch = pageText.match(/سعر الزبون المقترح[\s\S]{0,100}?(\d{1,3}(?:,\d{3})+|\d{4,6})[\s\S]{0,30}?(\d{1,3}(?:,\d{3})+|\d{4,6})/);
-        if (regexMatch && regexMatch[1] && regexMatch[2]) {
-          const val1 = cleanNum(regexMatch[1]);
-          const val2 = cleanNum(regexMatch[2]);
-          if (val1 >= 1000 && val2 >= 1000) {
-            minSuggested = Math.min(val1, val2);
-            maxSuggested = Math.max(val1, val2);
-          }
-        }
+      // ج) استخراج بديل مضمون اعتماداً على (سعر الجملة + ربح فدشي المعلن)
+      if (!minSuggested && fedshiWholesale > 0 && fedshiProfit > 0) {
+        minSuggested = fedshiWholesale + fedshiProfit; // 25,000 + 15,000 = 40,000 د.ع
+        if (!maxSuggested) maxSuggested = minSuggested + 20000;
       }
 
       // د) من السكربت الداخلي كاحتياط
@@ -357,31 +332,18 @@
         if (!maxSuggested && scriptProduct.suggested_price_max) maxSuggested = cleanNum(scriptProduct.suggested_price_max);
       }
 
-      // 5. تطبيق معادلة التسعير الذكية المعتمدة لمنصة وصلي:
-      // فدشي تحدد سعر الزبون المقترح بنطاق (مثلاً: 40,000 إلى 60,000)
-      // وسعر جملة فدشي (مثلاً: 25,000)
-      // المدير يبيع للتاجر بأقل سعر محدد من فدشي (40,000 د.ع) وبذلك يحصد ربحاً ممتازاً (+15,000 د.ع)
-      // والتاجر يظهر عنده المتجر بسعر افتراضي 50,000 ويمكنه البيع حتى 60,000
-      // ولا يمكن للتاجر النزول عن (سعر الجملة + 5,000 د.ع) = 45,000 د.ع لضمان ربحه
-      let wasliWholesale = 0;
-      if (minSuggested && minSuggested >= (fedshiWholesale + 3000)) {
-        wasliWholesale = minSuggested; // 40,000 د.ع
-      } else {
-        wasliWholesale = fedshiWholesale > 0 ? (fedshiWholesale + 3000) : 3000;
-      }
+      // 5. تطبيق معادلة التسعير المطلوبة لمنصة وصلي:
+      // سعر جملة وصلي للتاجر = أقل سعر حددته منصة فدشي مباشرة (بدون أي حد 3 آلاف مضاف)
+      const wasliWholesale = minSuggested || (fedshiWholesale > 0 ? (fedshiWholesale + (fedshiProfit || 5000)) : 0);
 
-      // ربح المدير الصافي
-      let wasliProfit = fedshiWholesale > 0 ? (wasliWholesale - fedshiWholesale) : 3000;
-      if (wasliProfit < 3000) {
-        wasliProfit = 3000;
-        wasliWholesale = fedshiWholesale + wasliProfit;
-      }
+      // ربح المدير الصافي للمنصة = سعر جملة وصلي - تكلفة فدشي
+      const wasliProfit = fedshiWholesale > 0 ? (wasliWholesale - fedshiWholesale) : 0;
 
-      // أقل سعر مسموح للتاجر ببيع الزبون (سعر الجملة + 5,000 د.ع لضمان ربح التاجر)
-      let wasliMinPrice = wasliWholesale + 5000; // 45,000 د.ع
+      // أقل سعر مسموح لبيع الزبون (حد التاجر الأدنى = سعر الجملة + 5,000 د.ع لضمان ربحه)
+      const wasliMinPrice = wasliWholesale + 5000;
 
-      // أعلى سعر مسموح لبيع الزبون (المأخوذ من فدشي)
-      let wasliMaxPrice = maxSuggested && maxSuggested > wasliMinPrice ? maxSuggested : (wasliMinPrice + 15000); // 60,000 د.ع
+      // أعلى سعر مسموح لبيع الزبون (أعلى سعر من فدشي)
+      const wasliMaxPrice = maxSuggested && maxSuggested > wasliMinPrice ? maxSuggested : (wasliMinPrice + 15000);
 
       // السعر الافتراضي المعروض في متجر التاجر (مثلاً 50,000 د.ع)
       let defaultStorePrice = wasliMinPrice;
@@ -571,7 +533,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.2.2</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.2.3</span>
           </div>
           <button type="button" class="wasli-close-btn" id="wasli-modal-close" title="إغلاق">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

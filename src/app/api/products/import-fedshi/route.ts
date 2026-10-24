@@ -55,20 +55,17 @@ export async function POST(request: NextRequest) {
 
     const supplierCost = Number(fedshiPrice || 0);
 
-    // تطبيق المعادلة المالية الذكية لمنصة وصلي:
-    // 1. سعر جملة وصلي للتاجر = أقل سعر بيع محدد من فدشي (minSuggestedPrice)
-    // لكي يحصد المدير ربحاً ممتازاً بالكامل (مثال: فدشي 25,000 والبيع 40,000، سعر الجملة = 40,000 وربح المدير = 15,000)
-    // بشرط ألا يقل ربح المدير عن 3,000 د.ع أبداً
-    let calculatedWholesale = supplierCost > 0 ? (supplierCost + 3000) : 3000;
-    if (minSuggestedPrice && Number(minSuggestedPrice) >= (supplierCost + 3000)) {
-      calculatedWholesale = Number(minSuggestedPrice);
-    }
-    const wholesalePrice = customWholesale ? Number(customWholesale) : calculatedWholesale;
+    // تطبيق المعادلة المالية المعتمدة لمنصة وصلي:
+    // 1. سعر جملة وصلي للتاجر = أقل سعر بيع حددته منصة فدشي (minSuggestedPrice)
+    // وبذلك يكون ربح المدير = (سعر جملة وصلي - تكلفة فدشي)
+    const wholesalePrice = customWholesale 
+      ? Number(customWholesale) 
+      : (minSuggestedPrice ? Number(minSuggestedPrice) : (supplierCost > 0 ? supplierCost : 0));
 
     // 2. سعر المنصة الأساسي يطابق سعر جملة وصلي
     const platformPrice = customPlatform ? Number(customPlatform) : wholesalePrice;
 
-    // 3. أقل سعر مسموح لبيع الزبون (حد التاجر الأدنى = سعر الجملة + 5,000 لضمان ربحه)
+    // 3. أقل سعر مسموح لبيع الزبون (حد التاجر الأدنى = سعر الجملة + 5,000 د.ع لضمان ربحه)
     const minPrice = customMin 
       ? Number(customMin) 
       : (wholesalePrice + 5000);
