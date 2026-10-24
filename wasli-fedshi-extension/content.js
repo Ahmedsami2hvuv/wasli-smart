@@ -706,7 +706,15 @@
     } catch (e) {}
 
     if (!hasSavedPos) {
-      if (defaultPos === 'center') {
+      if (typeof defaultPos === 'function') {
+        try {
+          const calc = defaultPos(currentWidth, currentHeight);
+          if (calc && calc.left !== undefined) {
+            currentLeft = calc.left;
+            currentTop = calc.top;
+          }
+        } catch (e) {}
+      } else if (defaultPos === 'center') {
         currentLeft = Math.max(10, Math.round((window.innerWidth - currentWidth) / 2));
         currentTop = Math.max(10, Math.round((window.innerHeight - currentHeight) / 2));
       } else if (defaultPos && defaultPos.left !== undefined) {
@@ -977,7 +985,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.7</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.8</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -1044,11 +1052,49 @@
     draggableConfirmBtn.style.display = 'none';
     modalOverlay.appendChild(draggableConfirmBtn);
 
-    // تفعيل السحب والتكبير وحفظ الموقع والحجم لزر التأكيد داخل المودال
+    // دالة محاذاة زر تأكيد السحب ليكون مباشرة فوق زر استيراد المنتج الأول
+    function alignConfirmBtnAboveFloatingBtn() {
+      if (!floatingBtn || !draggableConfirmBtn) return;
+      const floatRect = floatingBtn.getBoundingClientRect();
+      const confirmW = draggableConfirmBtn.offsetWidth || 130;
+      const confirmH = draggableConfirmBtn.offsetHeight || 130;
+
+      // محاذاة أفقية متطابقة مع منتصف زر الاستيراد
+      let targetLeft = floatRect.left + (floatRect.width - confirmW) / 2;
+      // موضع فوق زر الاستيراد مباشرة مع مسافة 14 بكسل
+      let targetTop = floatRect.top - confirmH - 14;
+
+      // إذا كان الموضع خارج الشاشة من الأعلى، نضعه أسفل زر الاستيراد
+      if (targetTop < 15) {
+        targetTop = floatRect.bottom + 14;
+      }
+
+      const maxL = Math.max(10, window.innerWidth - confirmW - 10);
+      const maxT = Math.max(10, window.innerHeight - confirmH - 10);
+
+      targetLeft = Math.max(10, Math.min(targetLeft, maxL));
+      targetTop = Math.max(10, Math.min(targetTop, maxT));
+
+      draggableConfirmBtn.style.left = `${Math.round(targetLeft)}px`;
+      draggableConfirmBtn.style.top = `${Math.round(targetTop)}px`;
+      draggableConfirmBtn.style.right = 'auto';
+      draggableConfirmBtn.style.bottom = 'auto';
+    }
+
+    // تفعيل السحب والتكبير وحفظ الموقع والحجم لزر التأكيد داخل المودال (فوق زر الاستيراد الأول)
     makeElementDraggableAndResizable(draggableConfirmBtn, {
       posKey: 'wasli_confirm_btn_pos',
       sizeKey: 'wasli_confirm_btn_size',
-      defaultPos: { left: 32, top: 120 },
+      defaultPos: (w, h) => {
+        const floatRect = floatingBtn.getBoundingClientRect();
+        let left = floatRect.left + (floatRect.width - (w || 130)) / 2;
+        let top = floatRect.top - (h || 130) - 14;
+        if (top < 15) top = floatRect.bottom + 14;
+        return {
+          left: Math.max(10, Math.min(left, window.innerWidth - (w || 130) - 10)),
+          top: Math.max(10, Math.min(top, window.innerHeight - (h || 130) - 10))
+        };
+      },
       defaultSize: { width: 130, height: 130 },
       minWidth: 90,
       minHeight: 90,
@@ -1083,6 +1129,7 @@
         }
         renderModalData(data, modalOverlay);
         draggableConfirmBtn.style.display = 'flex';
+        alignConfirmBtnAboveFloatingBtn();
         modalOverlay.classList.add('wasli-active');
       } finally {
         const pathCode = (window.location.pathname.split('/').pop() || '').trim();
