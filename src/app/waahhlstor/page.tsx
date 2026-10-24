@@ -18,13 +18,18 @@ import {
   RefreshCw,
   Plus,
   Layers,
-  GitBranch
+  GitBranch,
+  Users,
+  Eye,
+  ExternalLink,
+  Phone
 } from 'lucide-react';
 import Link from 'next/link';
-import { Order, OrderStatus } from '@/types';
+import { Order, OrderStatus, Store as StoreType } from '@/types';
 
 export default function AdminDashboardPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [stores, setStores] = useState<StoreType[]>([]);
   const [storesCount, setStoresCount] = useState(0);
   const [productsCount, setProductsCount] = useState(0);
   const [categoriesCount, setCategoriesCount] = useState(0);
@@ -47,6 +52,7 @@ export default function AdminDashboardPage() {
       const storesRes = await fetch('/api/stores');
       const storesData = await storesRes.json();
       if (storesData.success && storesData.stores) {
+        setStores(storesData.stores);
         setStoresCount(storesData.stores.length);
       }
 
@@ -119,6 +125,13 @@ export default function AdminDashboardPage() {
 
           <div className="flex flex-wrap items-center gap-3">
             <Link
+              href="/waahhlstor/merchants"
+              className="py-2.5 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
+            >
+              <Users className="w-4 h-4 text-emerald-200" />
+              <span>حسابات التجار والتفاصيل</span>
+            </Link>
+            <Link
               href="/waahhlstor/telegram"
               className="py-2.5 px-4 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
             >
@@ -189,13 +202,22 @@ export default function AdminDashboardPage() {
             <div className="text-[11px] text-slate-400 mt-2">جميع الحالات</div>
           </div>
 
-          <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-            <div className="text-xs font-bold text-slate-500 mb-1">متاجر التجار والمنتجات</div>
-            <div className="text-xl font-black text-slate-900">
-              {storesCount} <span className="text-xs text-slate-400 font-normal">متجر</span> / {productsCount} <span className="text-xs text-slate-400 font-normal">منتج</span>
+          <Link 
+            href="/waahhlstor/merchants"
+            className="bg-white hover:bg-emerald-50/50 transition-colors rounded-2xl p-5 border border-slate-200/80 shadow-xs group block"
+          >
+            <div className="text-xs font-bold text-emerald-800 mb-1 flex items-center justify-between">
+              <span>حسابات التجار</span>
+              <Users className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
             </div>
-            <div className="text-[11px] text-slate-400 mt-2">المسجلة في النظام</div>
-          </div>
+            <div className="text-xl font-black text-slate-900">
+              {storesCount} <span className="text-xs text-slate-400 font-normal">تاجر</span> / {productsCount} <span className="text-xs text-slate-400 font-normal">منتج</span>
+            </div>
+            <div className="text-[11px] text-emerald-700 font-bold mt-2 flex items-center gap-1">
+              <span>عرض التفاصيل المملة</span>
+              <span>&larr;</span>
+            </div>
+          </Link>
 
           <Link 
             href="/waahhlstor/categories"
@@ -343,6 +365,129 @@ export default function AdminDashboardPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+
+        {/* خانة حسابات التجار والتفاصيل السريعة */}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-slate-100 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                <Users className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-black text-slate-900">حسابات التجار المسجلين في المنصة</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  معاينة سريعة لكافة التجار، هواتفهم، كود متاجرهم، وأرباحهم المستحقة
+                </p>
+              </div>
+            </div>
+
+            <Link
+              href="/waahhlstor/merchants"
+              className="py-2 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 self-start sm:self-auto"
+            >
+              <Eye className="w-4 h-4 text-emerald-200" />
+              <span>فتح صفحة حسابات التجار والتفاصيل المملة</span>
+            </Link>
+          </div>
+
+          {loading ? (
+            <div className="text-center py-8">
+              <RefreshCw className="w-6 h-6 text-emerald-600 animate-spin mx-auto mb-2" />
+              <p className="text-xs text-slate-500">جاري تحميل حسابات التجار...</p>
+            </div>
+          ) : stores.length === 0 ? (
+            <div className="text-center py-8 text-slate-400 text-xs">
+              لم يتم تسجيل أي حساب تاجر في المنصة بعد.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {stores.slice(0, 6).map((store) => {
+                const isSuspended = store.status === 'suspended';
+                const availableBalance = Math.max(0, (store.balanceEarned || 0) - (store.balanceWithdrawn || 0));
+
+                return (
+                  <div
+                    key={store.id}
+                    className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 hover:bg-slate-50 transition-colors flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div>
+                          <div className="font-black text-slate-900 text-xs">
+                            {store.ownerName || 'بدون اسم محدد'}
+                          </div>
+                          <div className="text-[11px] font-bold text-brand-700 flex items-center gap-1 mt-0.5">
+                            <Store className="w-3 h-3" />
+                            <span>{store.name}</span>
+                          </div>
+                        </div>
+
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                          isSuspended ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {isSuspended ? 'معلق' : 'نشط'}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1 text-[11px] text-slate-600 my-2 pt-2 border-t border-slate-200/60">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400">الهاتف:</span>
+                          <span className="font-mono font-bold" dir="ltr">{store.phone || 'غير مسجل'}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400">المحافظة:</span>
+                          <span className="font-semibold">{store.city || 'العراق'}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400">كود المتجر:</span>
+                          <span className="font-mono font-bold text-slate-800 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                            {store.code}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-slate-400">الرصيد المتاح للسحب:</span>
+                          <span className="font-black text-amber-800">
+                            {availableBalance.toLocaleString('ar-IQ')} د.ع
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-2">
+                      <Link
+                        href={`/s/${store.code}`}
+                        target="_blank"
+                        className="text-[11px] font-bold text-slate-500 hover:text-brand-700 flex items-center gap-1"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>معاينة المتجر</span>
+                      </Link>
+
+                      <Link
+                        href="/waahhlstor/merchants"
+                        className="py-1 px-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1"
+                      >
+                        <Eye className="w-3 h-3 text-emerald-600" />
+                        <span>التفاصيل المملة</span>
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {stores.length > 6 && (
+            <div className="text-center pt-4 border-t border-slate-100 mt-4">
+              <Link
+                href="/waahhlstor/merchants"
+                className="text-xs font-black text-emerald-700 hover:underline"
+              >
+                عرض كافة التجار ({stores.length} تاجر) في الصفحة المخصصة &larr;
+              </Link>
             </div>
           )}
         </div>

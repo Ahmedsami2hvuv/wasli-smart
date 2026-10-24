@@ -282,6 +282,14 @@ export async function updateStore(
     deliveryTimeMinutes?: string;
     deliveryFeeIqd?: number;
     isOpen?: boolean;
+    status?: 'pending' | 'active' | 'suspended';
+    balanceWithdrawn?: number;
+    balanceEarned?: number;
+    totalSales?: number;
+    totalOrders?: number;
+    adminNotes?: string;
+    telegramUsername?: string;
+    telegramChatId?: string;
   }
 ): Promise<Store | null> {
   const stores = await getAllStores();
@@ -319,6 +327,14 @@ export async function updateStore(
     deliveryTimeMinutes: updates.deliveryTimeMinutes !== undefined ? updates.deliveryTimeMinutes : targetStore.deliveryTimeMinutes,
     deliveryFeeIqd: updates.deliveryFeeIqd !== undefined ? Number(updates.deliveryFeeIqd) : targetStore.deliveryFeeIqd,
     isOpen: updates.isOpen !== undefined ? Boolean(updates.isOpen) : targetStore.isOpen,
+    status: updates.status !== undefined ? updates.status : targetStore.status,
+    balanceWithdrawn: updates.balanceWithdrawn !== undefined ? Number(updates.balanceWithdrawn) : targetStore.balanceWithdrawn,
+    balanceEarned: updates.balanceEarned !== undefined ? Number(updates.balanceEarned) : targetStore.balanceEarned,
+    totalSales: updates.totalSales !== undefined ? Number(updates.totalSales) : targetStore.totalSales,
+    totalOrders: updates.totalOrders !== undefined ? Number(updates.totalOrders) : targetStore.totalOrders,
+    adminNotes: updates.adminNotes !== undefined ? updates.adminNotes : targetStore.adminNotes,
+    telegramUsername: updates.telegramUsername !== undefined ? updates.telegramUsername : targetStore.telegramUsername,
+    telegramChatId: updates.telegramChatId !== undefined ? updates.telegramChatId : targetStore.telegramChatId,
   };
 
   if (foundIndex >= 0) {
@@ -326,6 +342,8 @@ export async function updateStore(
   } else {
     localStores.unshift(updatedStore);
   }
+
+  saveStoreToCache(updatedStore);
 
   // التحديث في Supabase إن كان متاحاً
   const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
@@ -338,6 +356,11 @@ export async function updateStore(
         city: updatedStore.city,
         logo_url: updatedStore.logoUrl,
         banner_url: updatedStore.bannerUrl,
+        status: updatedStore.status || 'active',
+        total_sales: updatedStore.totalSales || 0,
+        total_orders: updatedStore.totalOrders || 0,
+        balance_earned: updatedStore.balanceEarned || 0,
+        balance_withdrawn: updatedStore.balanceWithdrawn || 0,
         updated_at: new Date().toISOString(),
       };
 
@@ -348,6 +371,9 @@ export async function updateStore(
         delivery_time_minutes: updatedStore.deliveryTimeMinutes,
         delivery_fee_iqd: updatedStore.deliveryFeeIqd,
         is_open: updatedStore.isOpen,
+        admin_notes: updatedStore.adminNotes,
+        telegram_username: updatedStore.telegramUsername,
+        telegram_chat_id: updatedStore.telegramChatId,
       };
 
       dbPayload.settings = settingsPayload;

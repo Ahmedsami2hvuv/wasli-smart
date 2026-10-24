@@ -69,6 +69,7 @@ export interface Store {
   balanceWithdrawn?: number;
   telegramChatId?: string; // أيدي محادثة تيليجرام لصاحب المتجر لتلقي إشعارات الطلبات
   telegramUsername?: string; // معرف يوزر تيليجرام لصاحب المتجر
+  adminNotes?: string; // ملاحظات المدير الإدارية عن حساب التاجر
   tags?: string[];
   createdAt?: string;
 }
