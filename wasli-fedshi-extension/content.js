@@ -1007,7 +1007,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.6</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.7</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -1056,8 +1056,26 @@
       checkIfProductImported(pageCode).then((checkRes) => {
         if (checkRes && checkRes.exists) {
           updateFloatingButtonToImported(floatingBtn, checkRes.product);
+        } else {
+          // المنتج جديد وغير مسحوب: تشغيل الاستيراد التلقائي الفوري والخروج السلس تلقائياً!
+          scheduleAutoImportOnOpen();
         }
       });
+    }
+
+    // دالة الاستيراد التلقائي الفوري بمجرد فتح صفحة المنتج الجديد دون الحاجة لأي نقر!
+    let autoImportTriggered = false;
+    function scheduleAutoImportOnOpen() {
+      if (autoImportTriggered || isImportingInProgress) return;
+      if (pageCode && importedCodesSet.has(pageCode)) return;
+
+      autoImportTriggered = true;
+      // انتظار بسيط (280ms) لضمان اكتمال قراءة بيانات وسعر المنتج من الصفحة
+      setTimeout(() => {
+        if (isProductPage() && !isImportingInProgress) {
+          handleDirectImportAction({ isAuto: true });
+        }
+      }, 280);
     }
 
     // متغير لمنع الضغط المتكرر أثناء عملية السحب الفوري
@@ -1072,9 +1090,10 @@
     };
 
     // معالج النقر المباشر: استيراد فوري في الخلفية وخروج سريع بدون أي انتظار وبدون ريفريش!
-    const handleDirectImportAction = async () => {
+    const handleDirectImportAction = async (options = {}) => {
       if (isImportingInProgress) return;
 
+      const isAuto = Boolean(options && options.isAuto);
       const mainTextEl = floatingBtn.querySelector('.wasli-btn-main-text');
       const subTextEl = floatingBtn.querySelector('.wasli-btn-sub-text');
       const originalMainText = mainTextEl ? mainTextEl.textContent : 'استيراد المنتج إلى وصلي';
@@ -1109,7 +1128,7 @@
 
         // 2. إشعار فوري صغير بالركن الأيمن يؤكد بدء السحب
         const toast = showWasliToast({
-          title: 'جاري السحب بالخلفية...',
+          title: isAuto ? 'سحب تلقائي ذكي...' : 'جاري السحب بالخلفية...',
           message: `يتم الآن سحب ونشر <strong>${productTitle}</strong> إلى منصتك في الخلفية.`,
           type: 'loading'
         });
@@ -1169,21 +1188,23 @@
         });
 
         // 6. تحديث نص ومظهر الزر فورياً وإشعار المستخدم بالخروج المباشر
-        if (mainTextEl) mainTextEl.textContent = 'تم بدء السحب بنجاح!';
+        if (mainTextEl) mainTextEl.textContent = isAuto ? 'تم السحب تلقائياً ⚡' : 'تم بدء السحب بنجاح!';
         if (subTextEl) subTextEl.textContent = 'جاري العودة لقائمة المنتجات...';
 
-        // 7. الخروج والرجوع الفوري بعد لحظة سريعة جداً (120ms) بدون أي ريفريش وبدون انتظار ثوانٍ معدودة!
+        // 7. الخروج والرجوع الفوري بعد لحظة سريعة جداً (150ms) بدون أي ريفريش وبدون انتظار ثوانٍ معدودة!
         setTimeout(() => {
           navigateBackSmoothly();
-        }, 120);
+        }, 150);
 
       } catch (err) {
         console.error('فشل بدء الاستيراد:', err);
-        showWasliToast({
-          type: 'error',
-          title: 'تعذر السحب',
-          message: err.message || 'حدث خطأ غير متوقع',
-        });
+        if (!isAuto) {
+          showWasliToast({
+            type: 'error',
+            title: 'تعذر السحب',
+            message: err.message || 'حدث خطأ غير متوقع',
+          });
+        }
 
         if (mainTextEl) mainTextEl.textContent = originalMainText;
         if (subTextEl) subTextEl.textContent = originalSubText;
