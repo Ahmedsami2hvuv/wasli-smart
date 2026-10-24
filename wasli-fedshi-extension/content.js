@@ -755,7 +755,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.4</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.5</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -924,7 +924,7 @@
 
     // استخراج وعرض البيانات الحية عند النقر
     floatingBtn.addEventListener('click', async () => {
-      const originalHtml = floatingBtn.innerHTML;
+      const isAlready = floatingBtn.classList.contains('wasli-already-imported');
       floatingBtn.innerHTML = '<span>جاري فحص واستخراج بيانات الصفحة...</span>';
       try {
         const data = await extractFedshiProductDetails();
@@ -937,7 +937,20 @@
         draggableConfirmBtn.style.display = 'flex';
         modalOverlay.classList.add('wasli-active');
       } finally {
-        floatingBtn.innerHTML = originalHtml;
+        const pathCode = (window.location.pathname.split('/').pop() || '').trim();
+        if (isAlready || (pathCode && importedCodesSet.has(pathCode))) {
+          updateFloatingButtonToImported(floatingBtn);
+        } else {
+          floatingBtn.classList.remove('wasli-already-imported');
+          floatingBtn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>استيراد المنتج إلى وصلي</span>
+          `;
+        }
       }
     });
   }
@@ -1128,8 +1141,29 @@
     costInp.addEventListener('input', () => updateLiveProfits('cost'));
     wholesaleInp.addEventListener('input', () => updateLiveProfits('wholesale'));
 
-    // تنفيذ عملية السحب في الخلفية وإغلاق المودال فوراً
-    const executeBackgroundImport = () => {
+    // تنفيذ عملية السحب في الخلفية وإغلاق المودال فوراً مع تأكيد بصري فوري
+    const executeBackgroundImport = (clickedBtn) => {
+      // 1. تفاعل بصري فوري على زر التأكيد الذي نقر عليه المستخدم
+      if (clickedBtn && clickedBtn.querySelector) {
+        clickedBtn.classList.add('wasli-update-btn');
+        const span = clickedBtn.querySelector('span') || clickedBtn.querySelector('.wasli-draggable-title');
+        if (span) span.textContent = '✓ تم التأكيد!';
+      }
+
+      // 2. تحويل زر استيراد المنتج إلى وصلي (الزر العائم) فوراً للون الأخضر وعلامة صح
+      const floatingBtn = document.querySelector('.wasli-floating-btn');
+      if (floatingBtn) {
+        updateFloatingButtonToImported(floatingBtn);
+        floatingBtn.style.transition = 'transform 0.25s ease';
+        floatingBtn.style.transform = 'scale(1.08)';
+        setTimeout(() => { if (floatingBtn) floatingBtn.style.transform = ''; }, 350);
+      }
+
+      // 3. حفظ كود المنتج فورياً في قائمة المنتجات المسحوبة لمنع التكرار
+      if (data.productCode) {
+        markProductAsImported(data.productCode);
+      }
+
       const targetUrl = wasliServerUrl.trim().replace(/\/+$/, '');
       const productTitle = (overlay.querySelector('#wasli-inp-title').value || '').trim() || data.title;
       const costPrice = parseInt(costInp.value, 10) || data.fedshiWholesale;
@@ -1166,19 +1200,21 @@
         stockQuantity: stock,
       };
 
-      // 1. إغلاق المودال فوراً لتمكين المستخدم من متابعة التصفح فوراً دون أي انتظار
-      overlay.classList.remove('wasli-active');
-      const draggableBtn = overlay.querySelector('#wasli-btn-confirm-draggable');
-      if (draggableBtn) draggableBtn.style.display = 'none';
+      // 4. إغلاق المودال بعد 120ms ليرى المستخدم تأكيد النقر بوضوح
+      setTimeout(() => {
+        overlay.classList.remove('wasli-active');
+        const draggableBtn = overlay.querySelector('#wasli-btn-confirm-draggable');
+        if (draggableBtn) draggableBtn.style.display = 'none';
+      }, 120);
 
-      // 2. إظهار إشعار عائم في الزاوية يفيد ببدء السحب في الخلفية
+      // 5. إظهار الإشعار المربع الصغير على اليمين
       const toast = showWasliToast({
-        title: 'جاري السحب في الخلفية...',
-        message: `يتم الآن استيراد <strong>${productTitle}</strong> إلى منصتك ونشره. يمكنك تصفح أي منتج آخر بحرية!`,
+        title: 'جاري السحب...',
+        message: `يتم الآن استيراد <strong>${productTitle}</strong> إلى منصتك ونشره.`,
         type: 'loading'
       });
 
-      // 3. تشغيل الطلب في الخلفية باستخدام الدالة المركزية
+      // 6. تشغيل الطلب في الخلفية باستخدام الدالة المركزية
       (async () => {
         try {
           const result = await sendProductPayloadToWasli(payload);
@@ -1190,7 +1226,7 @@
 
           toast.update({
             type: 'success',
-            title: 'تم استيراد المنتج بنجاح!',
+            title: 'تم السحب!',
             message: `تم حفظ <strong>${productTitle}</strong> بنجاح! ربحك الصافي: <strong>+${profitVal.toLocaleString()} د.ع</strong>`,
             previewUrl,
             adminUrl,
@@ -1201,7 +1237,7 @@
           console.error('فشل الاستيراد في الخلفية:', err);
           toast.update({
             type: 'error',
-            title: 'تعذر استيراد المنتج',
+            title: 'تعذر السحب',
             message: `فشل نقل <strong>${productTitle}</strong>: ${err.message}`,
           });
         }
@@ -1245,15 +1281,15 @@
       }
     }
 
-    if (confirmBtnTop) confirmBtnTop.onclick = executeBackgroundImport;
-    if (confirmBtn) confirmBtn.onclick = executeBackgroundImport;
+    if (confirmBtnTop) confirmBtnTop.onclick = () => executeBackgroundImport(confirmBtnTop);
+    if (confirmBtn) confirmBtn.onclick = () => executeBackgroundImport(confirmBtn);
     if (confirmBtnDraggable) {
       confirmBtnDraggable.onclick = () => {
         if (confirmBtnDraggable.getAttribute('data-has-moved') === 'true') {
           confirmBtnDraggable.removeAttribute('data-has-moved');
           return;
         }
-        executeBackgroundImport();
+        executeBackgroundImport(confirmBtnDraggable);
       };
     }
   }
