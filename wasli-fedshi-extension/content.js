@@ -562,7 +562,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.0</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.1</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -1141,117 +1141,112 @@
   }
 
   // ========================================================
-  // سحب منتج كامل من رابطه مباشرة بالخلفية مع احتياط فوري وسريع
+  // استخراج فوري فائق السرعة لبيانات المنتج مباشرة من الكارت
   // ========================================================
-  async function importProductByUrl(productUrl, productCode, onProgress = null) {
-    if (onProgress) onProgress('جاري القراءة...');
-
-    let data = null;
-
-    // 1. محاولة جلب الصفحة الكاملة مع مؤقت أمان سريع (8 ثوانٍ كحد أقصى)
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-      const res = await fetch(productUrl, { signal: controller.signal });
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const html = await res.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        data = await extractFedshiProductDetails(doc, productUrl);
+  function extractDataFromCard(cardEl, code) {
+    let title = '';
+    const textNodes = Array.from(cardEl.querySelectorAll('p, div, span, h2, h3, h4'));
+    for (const el of textNodes) {
+      if (el.children.length === 0) {
+        const t = (el.textContent || '').trim();
+        if (t.length >= 6 && t.length <= 120 &&
+            !t.includes('سعر الجملة') &&
+            !t.includes('اربح') &&
+            !t.includes('قطعة متبقية') &&
+            !t.includes('اللون') &&
+            !t.includes('جديد') &&
+            !t.includes('الأكثر مبيعاً') &&
+            !t.includes('د.ع')) {
+          title = t;
+          break;
+        }
       }
-    } catch (fetchErr) {
-      console.warn(`تعثر جلب صفحة المنتج الخارجية (${productCode})، جاري الاستخراج المباشر من الكارت:`, fetchErr);
+    }
+    if (!title) title = `منتج فدشي ${code}`;
+
+    let image = '';
+    const imgEl = cardEl.querySelector('img');
+    if (imgEl) {
+      let src = imgEl.getAttribute('src') || imgEl.src || '';
+      if (src.includes('_next/image') && src.includes('url=')) {
+        try {
+          const raw = src.split('url=')[1].split('&')[0];
+          const dec = decodeURIComponent(raw);
+          if (dec && dec.startsWith('http')) src = dec;
+        } catch (e) {}
+      }
+      image = src;
     }
 
-    // 2. إذا تعثر جلب الصفحة، نستخرج بيانات المنتج فوراً من الكارت الظاهر على الشاشة
-    if (!data || !data.title) {
-      const cardEl = document.querySelector(`[data-wasli-code="${productCode}"]`)?.closest('div, article, a') || null;
-      let cardTitle = '';
-      let cardPrice = 0;
-      let cardProfit = 0;
-      let cardImg = '';
+    let colorName = '';
+    const cardText = cardEl.textContent || '';
+    const colorMatch = cardText.match(/اللون\s*:\s*([^\s\n\r]+)/);
+    if (colorMatch && colorMatch[1]) colorName = colorMatch[1].trim();
 
-      if (cardEl) {
-        const tEl = cardEl.querySelector('h1, h2, h3, h4, [class*="title"], [class*="name"]') || cardEl.querySelector('p');
-        if (tEl) cardTitle = (tEl.textContent || '').trim();
-
-        const amountEl = cardEl.querySelector('[data-amount="true"]');
-        if (amountEl) cardPrice = readDataAmount(amountEl);
-
-        const imgEl = cardEl.querySelector('img[src]');
-        if (imgEl) cardImg = imgEl.getAttribute('src') || imgEl.src || '';
-
-        const profitMatch = (cardEl.textContent || '').match(/اربح[^\d]*(\d[\d,]*)/);
-        if (profitMatch && profitMatch[1]) cardProfit = cleanNum(profitMatch[1]);
-      }
-
-      if (!cardTitle) cardTitle = `منتج فدشي ${productCode}`;
-      if (!cardPrice) cardPrice = 15000;
-
-      const wasliWholesale = cardPrice + (cardProfit > 0 ? cardProfit : 5000);
-      const wasliProfit = wasliWholesale - cardPrice;
-      const wasliMinPrice = wasliWholesale + 5000;
-      const wasliMaxPrice = wasliWholesale + 20000;
-      const defaultStorePrice = wasliWholesale + 10000;
-
-      data = {
-        title: cardTitle,
-        productCode: productCode,
-        skuCode: '',
-        category: 'عام',
-        subcategory: '',
-        fedshiWholesale: cardPrice,
-        fedshiProfit: cardProfit,
-        minSuggested: wasliWholesale,
-        maxSuggested: wasliMaxPrice,
-        wasliWholesale: wasliWholesale,
-        wasliProfit: wasliProfit,
-        wasliMinPrice: wasliMinPrice,
-        wasliMaxPrice: wasliMaxPrice,
-        defaultStorePrice: defaultStorePrice,
-        promoDescription: cardTitle,
-        specifications: cardTitle,
-        colors: [],
-        images: cardImg ? [cardImg] : [],
-        videoUrl: '',
-        stock: 50
-      };
+    let wholesalePrice = 0;
+    const amountEl = cardEl.querySelector('[data-amount="true"]');
+    if (amountEl) wholesalePrice = readDataAmount(amountEl);
+    if (!wholesalePrice) {
+      const wsMatch = cardText.match(/سعر الجملة[^\d]*(\d[\d,]*)/);
+      if (wsMatch && wsMatch[1]) wholesalePrice = cleanNum(wsMatch[1]);
     }
+    if (!wholesalePrice) wholesalePrice = 15000;
 
-    if (onProgress) onProgress('جاري الحفظ والنشر...');
+    let fedshiProfit = 0;
+    const pMatch = cardText.match(/اربح[^\d]*(\d[\d,]*)/);
+    if (pMatch && pMatch[1]) fedshiProfit = cleanNum(pMatch[1]);
+    if (!fedshiProfit) fedshiProfit = 5000;
 
+    const wasliWholesale = wholesalePrice + fedshiProfit;
+    const wasliProfit = fedshiProfit;
+    const wasliMinPrice = wasliWholesale + 5000;
+    const wasliMaxPrice = wasliWholesale + Math.max(fedshiProfit * 2, 15000);
+    const defaultStorePrice = wasliWholesale + 10000;
+
+    return {
+      title,
+      code,
+      image,
+      colorName,
+      wholesalePrice,
+      fedshiProfit,
+      wasliWholesale,
+      wasliProfit,
+      wasliMinPrice,
+      wasliMaxPrice,
+      defaultStorePrice
+    };
+  }
+
+  // سحب سريع فوري للمنتج وإرساله مباشرة لمنصة وصلي
+  async function importProductInstant(cardData) {
     const payload = {
-      name: data.title,
-      fedshiCode: data.productCode || productCode,
-      fedshiSku: data.skuCode,
-      fedshiPrice: data.fedshiWholesale,
-      fedshiProfit: data.fedshiProfit,
-      minSuggestedPrice: data.minSuggested || data.wasliMinPrice,
-      maxSuggestedPrice: data.maxSuggested || data.wasliMaxPrice,
-      wholesalePriceIqd: data.wasliWholesale,
-      platformPriceIqd: data.wasliWholesale,
-      defaultPriceIqd: data.defaultStorePrice,
-      minPriceIqd: data.wasliMinPrice,
-      maxPriceIqd: data.wasliMaxPrice,
-      category: data.category || 'عام',
-      subcategory: data.subcategory || '',
-      description: data.specifications || data.promoDescription || data.title,
-      promoDescription: data.promoDescription || '',
-      specifications: data.specifications || '',
-      colors: data.colors || [],
-      images: (data.images && data.images.length > 0) ? data.images.slice(0, 8) : [],
-      videoUrl: data.videoUrl || '',
-      stockQuantity: data.stock || 50,
+      name: cardData.title,
+      fedshiCode: cardData.code,
+      fedshiSku: '',
+      fedshiPrice: cardData.wholesalePrice,
+      fedshiProfit: cardData.fedshiProfit,
+      minSuggestedPrice: cardData.wasliWholesale,
+      maxSuggestedPrice: cardData.wasliMaxPrice,
+      wholesalePriceIqd: cardData.wasliWholesale,
+      platformPriceIqd: cardData.wasliWholesale,
+      defaultPriceIqd: cardData.defaultStorePrice,
+      minPriceIqd: cardData.wasliMinPrice,
+      maxPriceIqd: cardData.wasliMaxPrice,
+      category: 'عام',
+      subcategory: '',
+      description: cardData.title + (cardData.colorName ? ` - اللون: ${cardData.colorName}` : ''),
+      promoDescription: cardData.title,
+      specifications: cardData.title,
+      colors: cardData.colorName ? [{ name: cardData.colorName, image: cardData.image }] : [],
+      images: cardData.image ? [cardData.image] : [],
+      videoUrl: '',
+      stockQuantity: 50,
     };
 
     const result = await sendProductPayloadToWasli(payload);
-    markProductAsImported(payload.fedshiCode);
-
-    if (onProgress) onProgress('تم بنجاح! ✔');
-    return { result, data };
+    markProductAsImported(cardData.code);
+    return { result, data: cardData };
   }
 
   // ========================================================
@@ -1271,24 +1266,31 @@
       if (seenCodes.has(code)) return;
       seenCodes.add(code);
 
-      // العثور على العنصر الأنسب ليمثل كارت المنتج
+      // العثور الدقيق على كارت المنتج المنفصل
       let cardEl = link;
       let curr = link;
-      for (let i = 0; i < 6; i++) {
-        if (!curr || curr === document.body) break;
-        if (curr.querySelector && (curr.querySelector('[data-amount="true"]') || curr.textContent.includes('سعر الجملة'))) {
+      while (curr && curr !== document.body) {
+        const parent = curr.parentElement;
+        if (parent) {
+          const display = window.getComputedStyle(parent).display;
+          if (display === 'grid' || parent.className.includes('grid')) {
+            cardEl = curr;
+            break;
+          }
+        }
+        if (curr.querySelector('img') && curr.textContent.includes('سعر الجملة')) {
           cardEl = curr;
+          break;
         }
         curr = curr.parentElement;
       }
 
-      const fullUrl = href.startsWith('http') ? href : `https://web.fedshi.com/products/${code}`;
+      const cardData = extractDataFromCard(cardEl, code);
 
       cards.push({
         code,
-        url: fullUrl,
         cardEl,
-        linkEl: link,
+        cardData,
       });
     });
 
@@ -1296,50 +1298,22 @@
   }
 
   // ========================================================
-  // 1. حقن زر "سحب" فوق كل بطاقة منتج (معالجة فائقة الخفة وبدون أي تكرار)
+  // 1. حقن زر "سحب" فوق كل بطاقة منتج
   // ========================================================
   function injectProductCardButtons() {
-    // إذا كانت الصفحة صفحة منتج فردي، لا نحقن أزرار البطاقات
     if (window.location.pathname.startsWith('/products/')) {
       return;
     }
 
-    // فحص فقط الروابط التي لم تتم معالجتها من قبل لمنع أي استهلاك غير مبرر للـ CPU
-    const newLinks = Array.from(document.querySelectorAll('a[href*="/products/"]:not([data-wasli-handled="true"])'));
-    if (newLinks.length === 0) {
-      return;
-    }
-
-    newLinks.forEach(link => {
-      // وضع علامة فورية على الرابط بأنه تمت معالجته
-      link.setAttribute('data-wasli-handled', 'true');
-
-      const href = link.getAttribute('href') || link.href || '';
-      const match = href.match(/\/products\/([A-Za-z0-9_-]+)/);
-      if (!match) return;
-      const code = match[1];
-
-      // إيجاد كارت المنتج الأب
-      let cardEl = link;
-      let curr = link;
-      for (let i = 0; i < 6; i++) {
-        if (!curr || curr === document.body) break;
-        if (curr.querySelector && (curr.querySelector('[data-amount="true"]') || curr.textContent.includes('سعر الجملة'))) {
-          cardEl = curr;
-          break;
-        }
-        curr = curr.parentElement;
-      }
-
+    const cards = findVisibleProductCards();
+    cards.forEach(({ code, cardEl, cardData }) => {
       if (!cardEl) return;
 
-      // التأكد التام من عدم تكرار الزر على نفس الكارت
       if (cardEl.getAttribute('data-wasli-card-ready') === 'true' || cardEl.querySelector('.wasli-card-quick-btn')) {
         return;
       }
       cardEl.setAttribute('data-wasli-card-ready', 'true');
 
-      // ضبط موضع الكارت ليكون نسبياً
       const compPos = window.getComputedStyle(cardEl).position;
       if (compPos === 'static') {
         cardEl.style.position = 'relative';
@@ -1350,7 +1324,7 @@
       btn.type = 'button';
       btn.className = `wasli-card-quick-btn ${isImported ? 'wasli-done' : ''}`;
       btn.setAttribute('data-wasli-code', code);
-      btn.title = isImported ? 'تم استيراد هذا المنتج مسبقاً' : 'سحب هذا المنتج فوراً إلى منصة وصلي بنقرة واحدة';
+      btn.title = isImported ? 'تم استيراد هذا المنتج مسبقاً' : 'سحب هذا المنتج فوراً إلى منصة وصلي';
 
       if (isImported) {
         btn.innerHTML = `
@@ -1368,9 +1342,6 @@
         `;
       }
 
-      const fullUrl = href.startsWith('http') ? href : `https://web.fedshi.com/products/${code}`;
-
-      // منع انتقال الكارت أو تشغيل راوتر Next.js نهائياً
       const stopAllEvents = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -1398,26 +1369,22 @@
             <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
             <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
           </svg>
-          <span id="wasli-stage-${code}">جاري السحب...</span>
+          <span>جاري السحب...</span>
         `;
 
         const toast = showWasliToast({
-          title: 'جاري سحب المنتج في الخلفية...',
-          message: `يتم الآن سحب المنتج <strong>(${code})</strong> وحفظه ونشره في تليغرام.`,
+          title: 'جاري السحب الفوري...',
+          message: `يتم الآن سحب <strong>${cardData.title}</strong> وحفظه في منصتك ونشره.`,
           type: 'loading'
         });
 
         try {
-          const { result, data } = await importProductByUrl(fullUrl, code, (stage) => {
-            const stageSpan = btn.querySelector(`#wasli-stage-${code}`);
-            if (stageSpan) stageSpan.textContent = stage;
-          });
-
+          const { result, data } = await importProductInstant(cardData);
           const prodId = result.product?.id || '';
           const activeTarget = wasliServerUrl.trim().replace(/\/+$/, '');
           const previewUrl = prodId ? `${activeTarget}/p/${prodId}` : activeTarget;
           const adminUrl = `${activeTarget}/waahhlstor/products`;
-          const profitVal = result.financials?.platformProfit?.toLocaleString() || (data.wasliWholesale - data.fedshiWholesale);
+          const profitVal = result.financials?.platformProfit?.toLocaleString() || data.wasliProfit;
 
           btn.className = 'wasli-card-quick-btn wasli-done';
           btn.innerHTML = `
@@ -1455,7 +1422,6 @@
         }
       }, true);
 
-      // حقن الزر في أعلى الكارت
       cardEl.appendChild(btn);
     });
   }
@@ -1467,7 +1433,6 @@
   let shouldStopBatch = false;
 
   function injectBatchToolbar() {
-    // لا يظهر في صفحات المنتجات الفردية
     if (window.location.pathname.startsWith('/products/')) {
       const oldToolbar = document.getElementById('wasli-batch-toolbar');
       if (oldToolbar) oldToolbar.remove();
@@ -1511,14 +1476,12 @@
 
       document.body.appendChild(toolbar);
 
-      // زر إيقاف السحب
       const stopBtn = toolbar.querySelector('#wasli-batch-stop-btn');
       stopBtn.onclick = () => {
         shouldStopBatch = true;
         stopBtn.textContent = 'جاري الإيقاف...';
       };
 
-      // زر سحب جميع منتجات الصفحة
       const batchBtn = toolbar.querySelector('#wasli-batch-btn');
       batchBtn.onclick = async () => {
         if (isBatchRunning) return;
@@ -1547,8 +1510,8 @@
         let failCount = 0;
 
         const batchToast = showWasliToast({
-          title: 'جاري سحب منتجات الصفحة بالكامل...',
-          message: `بدء عملية الاستيراد التتابعي لـ <strong>${total}</strong> منتجاً إلى منصة وصلي ونشرها تلقائياً.`,
+          title: 'جاري السحب الفوري للمنتجات...',
+          message: `بدء عملية السحب التتابعي لـ <strong>${total}</strong> منتجاً إلى منصة وصلي ونشرها في تليغرام.`,
           type: 'loading'
         });
 
@@ -1564,15 +1527,14 @@
 
           const card = pendingCards[i];
           const currentNum = i + 1;
-          btnText.textContent = `⚡ (${currentNum}/${total}) جاري السحب...`;
+          btnText.textContent = `⚡ (${currentNum}/${total}) جاري سحب ${card.cardData.title.slice(0, 15)}...`;
 
           batchToast.update({
             type: 'loading',
             title: `جاري سحب (${currentNum} من ${total})...`,
-            message: `يتم الآن سحب المنتج <strong>${card.code}</strong> وحفظه في منصة وصلي ونشره في تليغرام.`,
+            message: `يتم الآن سحب <strong>${card.cardData.title}</strong> وحفظه في وصلي ونشره.`,
           });
 
-          // تمييز زر الكارت بأنه قيد السحب
           const cardBtn = document.querySelector(`[data-wasli-code="${card.code}"]`);
           if (cardBtn) {
             cardBtn.className = 'wasli-card-quick-btn wasli-loading';
@@ -1588,13 +1550,7 @@
           }
 
           try {
-            await importProductByUrl(card.url, card.code, (stage) => {
-              btnText.textContent = `⚡ (${currentNum}/${total}) ${stage}`;
-              if (cardBtn) {
-                const sp = cardBtn.querySelector('span');
-                if (sp) sp.textContent = stage;
-              }
-            });
+            await importProductInstant(card.cardData);
             successCount++;
 
             if (cardBtn) {
@@ -1615,9 +1571,9 @@
             }
           }
 
-          // فاصل زمني بسيط 600 ميلي ثانية بين كل منتج والآخر
+          // فاصل زمني خفيف 500 ميلي ثانية
           if (i < total - 1 && !shouldStopBatch) {
-            await new Promise(r => setTimeout(r, 600));
+            await new Promise(r => setTimeout(r, 500));
           }
         }
 
@@ -1647,7 +1603,6 @@
         }
       };
     } else {
-      // تحديث العداد إن كان الشريط موجوداً
       const countEl = toolbar.querySelector('#wasli-batch-count-val');
       const btnText = toolbar.querySelector('#wasli-batch-btn-text');
       if (countEl) countEl.textContent = cards.length;
