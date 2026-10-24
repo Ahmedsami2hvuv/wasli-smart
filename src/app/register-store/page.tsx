@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Store, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Share2, User, Phone, MapPin, Copy, Check, Lock } from 'lucide-react';
+import { Store, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Share2, User, Phone, MapPin, Copy, Check, Lock, CreditCard, Wallet, Smartphone } from 'lucide-react';
 import Link from 'next/link';
 import { IRAQ_GOVERNORATES } from '@/data/iraqCities';
 
@@ -17,6 +17,15 @@ export default function RegisterStorePage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [copiedInfo, setCopiedInfo] = useState(false);
 
+  // حالات طريقة استلام الأرباح
+  const [payoutMethod, setPayoutMethod] = useState<'mastercard' | 'zain_cash' | 'mobile_credit'>('mastercard');
+  const [mastercardNumber, setMastercardNumber] = useState('');
+  const [mastercardHolderName, setMastercardHolderName] = useState('');
+  const [zainCashPhone, setZainCashPhone] = useState('');
+  const [zainCashHolderName, setZainCashHolderName] = useState('');
+  const [creditProvider, setCreditProvider] = useState<'asia' | 'atheer'>('asia');
+  const [creditPhone, setCreditPhone] = useState('');
+
   const handleCopyStoreInfo = async () => {
     if (!createdStore) return;
 
@@ -24,12 +33,25 @@ export default function RegisterStorePage() {
     const storeUrl = `${origin}/s/${createdStore.code}?name=${encodeURIComponent(createdStore.name)}`;
     const dashboardUrl = `${origin}/merchant?storeCode=${createdStore.code}&name=${encodeURIComponent(createdStore.name)}&owner=${encodeURIComponent(createdStore.ownerName || "")}&city=${encodeURIComponent(createdStore.city || "")}&phone=${encodeURIComponent(createdStore.phone || "")}`;
 
+    let payoutSummary = '';
+    const curMethod = createdStore.payoutMethod || createdStore.payoutDetails?.method || payoutMethod;
+    const curDetails = createdStore.payoutDetails || {};
+    if (curMethod === 'mastercard') {
+      payoutSummary = `ماستر كارت (رقم: ${curDetails.mastercardNumber || mastercardNumber || 'غير محدد'} - باسم: ${curDetails.mastercardHolderName || mastercardHolderName || 'غير محدد'})`;
+    } else if (curMethod === 'zain_cash') {
+      payoutSummary = `زين كاش (رقم المحفظة: ${curDetails.zainCashPhone || zainCashPhone || 'غير محدد'} - باسم: ${curDetails.zainCashHolderName || zainCashHolderName || 'غير محدد'})`;
+    } else if (curMethod === 'mobile_credit') {
+      const provName = (curDetails.creditProvider || creditProvider) === 'asia' ? 'آسيا سيل' : 'أثير زين';
+      payoutSummary = `رصيد اتصال (${provName} - رقم التحويل: ${curDetails.creditPhone || creditPhone || 'غير محدد'})`;
+    }
+
     const textToCopy = `معلومات متجر التاجر:
 - اسم التاجر: ${createdStore.ownerName || 'غير محدد'}
 - اسم المتجر: ${createdStore.name}
 - المحافظة: ${createdStore.city}
 - رقم الهاتف: ${createdStore.phone}
 - رمز المتجر الفريد: ${createdStore.code}
+- طريقة استلام الأرباح: ${payoutSummary || 'غير محددة'}
 - رابط متجر التاجر المباشر للزبائن: ${storeUrl}
 - رابط صفحة التاجر (لوحة إدارة المتجر): ${dashboardUrl}`;
 
@@ -69,9 +91,45 @@ export default function RegisterStorePage() {
       return;
     }
 
+    // التحقق من طريقة استلام الأرباح
+    if (payoutMethod === 'mastercard') {
+      if (!mastercardNumber.trim()) {
+        setErrorMsg('يرجى إدخال رقم حساب أو بطاقة الماستر كارت');
+        return;
+      }
+      if (!mastercardHolderName.trim()) {
+        setErrorMsg('يرجى كتابة اسم صاحب حساب الماستر كارت (باسم من؟)');
+        return;
+      }
+    } else if (payoutMethod === 'zain_cash') {
+      if (!zainCashPhone.trim()) {
+        setErrorMsg('يرجى إدخال رقم هاتف محفظة زين كاش');
+        return;
+      }
+      if (!zainCashHolderName.trim()) {
+        setErrorMsg('يرجى كتابة اسم صاحب محفظة زين كاش (باسم من؟)');
+        return;
+      }
+    } else if (payoutMethod === 'mobile_credit') {
+      if (!creditPhone.trim()) {
+        setErrorMsg('يرجى إدخال رقم الهاتف الذي ترغب بتحويل الرصيد إليه');
+        return;
+      }
+    }
+
     setIsLoading(true);
 
     try {
+      const payoutDetailsObj = {
+        method: payoutMethod,
+        mastercardNumber: payoutMethod === 'mastercard' ? mastercardNumber.trim() : undefined,
+        mastercardHolderName: payoutMethod === 'mastercard' ? mastercardHolderName.trim() : undefined,
+        zainCashPhone: payoutMethod === 'zain_cash' ? zainCashPhone.trim() : undefined,
+        zainCashHolderName: payoutMethod === 'zain_cash' ? zainCashHolderName.trim() : undefined,
+        creditProvider: payoutMethod === 'mobile_credit' ? creditProvider : undefined,
+        creditPhone: payoutMethod === 'mobile_credit' ? creditPhone.trim() : undefined,
+      };
+
       const res = await fetch('/api/stores', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -80,6 +138,8 @@ export default function RegisterStorePage() {
           name: storeName.trim(),
           phone: phone.trim(),
           city,
+          payoutMethod,
+          payoutDetails: payoutDetailsObj,
         }),
       });
 
@@ -236,6 +296,227 @@ export default function RegisterStorePage() {
                 </p>
               </div>
 
+              {/* قسم طريقة استلام الأرباح */}
+              <div className="pt-4 border-t border-slate-200">
+                <div className="mb-3">
+                  <label className="block text-sm font-bold text-slate-900 mb-1 flex items-center gap-1.5">
+                    <CreditCard className="w-4 h-4 text-brand-700" />
+                    <span>طريقة استلام أرباحك</span>
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    حدد الوسيلة التي ترغب بأن نحول لك أرباحك عليها فور تسليم طلبات متجرك
+                  </p>
+                </div>
+
+                {/* خيارات الطرق الثلاث */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-4">
+                  {/* خيار 1: ماستر كارت */}
+                  <button
+                    type="button"
+                    onClick={() => setPayoutMethod('mastercard')}
+                    className={`p-3.5 rounded-2xl border-2 text-right transition-all flex flex-col justify-between cursor-pointer ${
+                      payoutMethod === 'mastercard'
+                        ? 'border-brand-700 bg-brand-50/70 text-brand-900 shadow-sm'
+                        : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${payoutMethod === 'mastercard' ? 'bg-brand-700 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                        <CreditCard className="w-4 h-4" />
+                      </div>
+                      <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${payoutMethod === 'mastercard' ? 'border-brand-700 bg-brand-700' : 'border-slate-300'}`}>
+                        {payoutMethod === 'mastercard' && <span className="w-1.5 h-1.5 bg-white rounded-full" />}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs">ماستر كارت</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">تحويل بنكي مباشر</div>
+                    </div>
+                  </button>
+
+                  {/* خيار 2: زين كاش */}
+                  <button
+                    type="button"
+                    onClick={() => setPayoutMethod('zain_cash')}
+                    className={`p-3.5 rounded-2xl border-2 text-right transition-all flex flex-col justify-between cursor-pointer ${
+                      payoutMethod === 'zain_cash'
+                        ? 'border-brand-700 bg-brand-50/70 text-brand-900 shadow-sm'
+                        : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${payoutMethod === 'zain_cash' ? 'bg-brand-700 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                        <Wallet className="w-4 h-4" />
+                      </div>
+                      <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${payoutMethod === 'zain_cash' ? 'border-brand-700 bg-brand-700' : 'border-slate-300'}`}>
+                        {payoutMethod === 'zain_cash' && <span className="w-1.5 h-1.5 bg-white rounded-full" />}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs">زين كاش</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">محفظة إلكترونية فورية</div>
+                    </div>
+                  </button>
+
+                  {/* خيار 3: ليس لدي بطاقة - رصيد اتصال */}
+                  <button
+                    type="button"
+                    onClick={() => setPayoutMethod('mobile_credit')}
+                    className={`p-3.5 rounded-2xl border-2 text-right transition-all flex flex-col justify-between cursor-pointer ${
+                      payoutMethod === 'mobile_credit'
+                        ? 'border-amber-600 bg-amber-50/80 text-amber-950 shadow-sm'
+                        : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${payoutMethod === 'mobile_credit' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                        <Smartphone className="w-4 h-4" />
+                      </div>
+                      <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${payoutMethod === 'mobile_credit' ? 'border-amber-600 bg-amber-600' : 'border-slate-300'}`}>
+                        {payoutMethod === 'mobile_credit' && <span className="w-1.5 h-1.5 bg-white rounded-full" />}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs">ليس لدي بطاقة</div>
+                      <div className="text-[10px] text-amber-800 font-medium mt-0.5">رصيد آسيا أو أثير</div>
+                    </div>
+                  </button>
+                </div>
+
+                {/* الحقول التابعة للماستر كارت */}
+                {payoutMethod === 'mastercard' && (
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3 animate-in fade-in duration-200">
+                    <div className="text-xs font-bold text-brand-900 mb-1">
+                      بيانات حساب الماستر كارت لتحويل أرباحك:
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        رقم حساب / بطاقة الماستر كارت *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        dir="ltr"
+                        placeholder="مثال: 5310 0000 0000 0000 أو رقم الحساب"
+                        value={mastercardNumber}
+                        onChange={(e) => setMastercardNumber(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 text-slate-900 text-xs text-right outline-none bg-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        اسم صاحب الحساب / البطاقة (باسم من؟) *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="الاسم الكامل كما هو مسجل على البطاقة أو الحساب"
+                        value={mastercardHolderName}
+                        onChange={(e) => setMastercardHolderName(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 text-slate-900 text-xs outline-none bg-white"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* الحقول التابعة للزين كاش */}
+                {payoutMethod === 'zain_cash' && (
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3 animate-in fade-in duration-200">
+                    <div className="text-xs font-bold text-brand-900 mb-1">
+                      بيانات محفظة زين كاش لتحويل أرباحك:
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        رقم هاتف محفظة زين كاش *
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        dir="ltr"
+                        placeholder="07800000000"
+                        value={zainCashPhone}
+                        onChange={(e) => setZainCashPhone(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 text-slate-900 text-xs text-right outline-none bg-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        اسم صاحب المحفظة (باسم من؟) *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="الاسم الثلاثي لصاحب محفظة زين كاش"
+                        value={zainCashHolderName}
+                        onChange={(e) => setZainCashHolderName(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 text-slate-900 text-xs outline-none bg-white"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* الحقول التابعة للرصيد (ليس لدي بطاقة) */}
+                {payoutMethod === 'mobile_credit' && (
+                  <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-200 space-y-3 animate-in fade-in duration-200">
+                    <div className="text-xs font-bold text-amber-950 flex items-center justify-between">
+                      <span>تحويل الأرباح كرصيد هاتف:</span>
+                      <span className="text-[10px] bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-md font-bold">
+                        رصيد مباشر
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-900 leading-relaxed font-medium">
+                      إذا لم تكن تملك ماستر كارت أو محفظة زين كاش، سنقوم بتحويل أرباحك مباشرة كرصيد اتصال (كارت شحن أو تحويل رصيد) للرقم الذي تحدده.
+                    </p>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-800 mb-1.5">
+                        نوع شبكة الرصيد المطلوب *
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCreditProvider('asia')}
+                          className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer ${
+                            creditProvider === 'asia'
+                              ? 'bg-red-600 border-red-600 text-white shadow-xs'
+                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          رصيد آسيا سيل (Asiacell)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCreditProvider('atheer')}
+                          className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer ${
+                            creditProvider === 'atheer'
+                              ? 'bg-sky-600 border-sky-600 text-white shadow-xs'
+                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          رصيد أثير (Zain / أثير)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-800 mb-1">
+                        رقم الهاتف الذي نحول له الرصيد *
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        dir="ltr"
+                        placeholder="07700000000 أو 07800000000"
+                        value={creditPhone}
+                        onChange={(e) => setCreditPhone(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20 text-slate-900 text-xs text-right outline-none bg-white font-mono"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <button
                 type="submit"
                 disabled={isLoading}
@@ -288,6 +569,23 @@ export default function RegisterStorePage() {
               <div className="flex justify-between items-center text-sm border-b border-slate-200/80 pb-2">
                 <span className="text-slate-500">رمز المتجر الفريد:</span>
                 <span className="font-mono font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded">{createdStore.code}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm border-b border-slate-200/80 pb-2">
+                <span className="text-slate-500">طريقة استلام الأرباح:</span>
+                <span className="font-semibold text-slate-800 text-xs text-left max-w-[240px]">
+                  {createdStore.payoutMethod === 'mastercard' && (
+                    <span>ماستر كارت ({createdStore.payoutDetails?.mastercardNumber} - باسم: {createdStore.payoutDetails?.mastercardHolderName})</span>
+                  )}
+                  {createdStore.payoutMethod === 'zain_cash' && (
+                    <span>زين كاش ({createdStore.payoutDetails?.zainCashPhone} - باسم: {createdStore.payoutDetails?.zainCashHolderName})</span>
+                  )}
+                  {createdStore.payoutMethod === 'mobile_credit' && (
+                    <span>رصيد {createdStore.payoutDetails?.creditProvider === 'asia' ? 'آسيا سيل' : 'أثير زين'} للرقم ({createdStore.payoutDetails?.creditPhone})</span>
+                  )}
+                  {!createdStore.payoutMethod && (
+                    <span>ماستر كارت / زين كاش</span>
+                  )}
+                </span>
               </div>
               {/* الرابط الأول: رابط صفحة التاجر */}
               <div className="flex flex-col gap-1.5 text-sm pt-3 border-t border-slate-200/80">

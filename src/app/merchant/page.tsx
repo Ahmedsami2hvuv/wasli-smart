@@ -4,6 +4,9 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { 
   Store, 
+  CreditCard, 
+  Wallet, 
+  Smartphone, 
   Share2, 
   Copy, 
   Check, 
@@ -96,7 +99,28 @@ function MerchantDashboardContent() {
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
 
-  const [editForm, setEditForm] = useState({
+interface MerchantEditFormState {
+  name: string;
+  ownerName: string;
+  phone: string;
+  city: string;
+  district: string;
+  description: string;
+  logoUrl: string;
+  bannerUrl: string;
+  deliveryTimeMinutes: string;
+  deliveryFeeIqd: number;
+  isOpen: boolean;
+  payoutMethod: 'mastercard' | 'zain_cash' | 'mobile_credit';
+  mastercardNumber: string;
+  mastercardHolderName: string;
+  zainCashPhone: string;
+  zainCashHolderName: string;
+  creditProvider: 'asia' | 'atheer';
+  creditPhone: string;
+}
+
+  const [editForm, setEditForm] = useState<MerchantEditFormState>({
     name: '',
     ownerName: '',
     phone: '',
@@ -106,8 +130,15 @@ function MerchantDashboardContent() {
     logoUrl: '',
     bannerUrl: '',
     deliveryTimeMinutes: '30-45 دقيقة',
-    deliveryFeeIqd: 4000,
+    deliveryFeeIqd: 5000,
     isOpen: true,
+    payoutMethod: 'mastercard',
+    mastercardNumber: '',
+    mastercardHolderName: '',
+    zainCashPhone: '',
+    zainCashHolderName: '',
+    creditProvider: 'asia',
+    creditPhone: '',
   });
 
   useEffect(() => {
@@ -182,7 +213,7 @@ function MerchantDashboardContent() {
             balanceWithdrawn: 0,
             rating: 5.0,
             reviewsCount: 1,
-            deliveryFeeIqd: 4000,
+            deliveryFeeIqd: 5000,
             deliveryTimeMinutes: 'خلال يوم أو يومين',
             isOpen: true,
             isAbiAlkhaseeb: false,
@@ -203,6 +234,13 @@ function MerchantDashboardContent() {
             phone: found.phone || prev.phone,
             city: found.city || prev.city,
             description: found.description || prev.description,
+            payoutMethod: found.payoutMethod || found.payoutDetails?.method || prev.payoutMethod,
+            mastercardNumber: found.payoutDetails?.mastercardNumber || prev.mastercardNumber,
+            mastercardHolderName: found.payoutDetails?.mastercardHolderName || prev.mastercardHolderName,
+            zainCashPhone: found.payoutDetails?.zainCashPhone || prev.zainCashPhone,
+            zainCashHolderName: found.payoutDetails?.zainCashHolderName || prev.zainCashHolderName,
+            creditProvider: found.payoutDetails?.creditProvider || prev.creditProvider,
+            creditPhone: found.payoutDetails?.creditPhone || prev.creditPhone,
           }));
           if (typeof window !== 'undefined') {
             localStorage.setItem('wasli_current_store', JSON.stringify(found));
@@ -358,7 +396,7 @@ function MerchantDashboardContent() {
           balanceWithdrawn: 0,
           rating: 5.0,
           reviewsCount: 1,
-          deliveryFeeIqd: 4000,
+          deliveryFeeIqd: 5000,
           deliveryTimeMinutes: 'خلال يوم أو يومين',
           isOpen: true,
           isAbiAlkhaseeb: false,
@@ -462,8 +500,15 @@ function MerchantDashboardContent() {
       logoUrl: currentStore.logoUrl || currentStore.image || '',
       bannerUrl: currentStore.bannerUrl || '',
       deliveryTimeMinutes: currentStore.deliveryTimeMinutes || '30-45 دقيقة',
-      deliveryFeeIqd: currentStore.deliveryFeeIqd ?? 4000,
+      deliveryFeeIqd: currentStore.deliveryFeeIqd ?? 5000,
       isOpen: currentStore.isOpen !== false,
+      payoutMethod: (currentStore.payoutMethod || currentStore.payoutDetails?.method || 'mastercard') as 'mastercard' | 'zain_cash' | 'mobile_credit',
+      mastercardNumber: currentStore.payoutDetails?.mastercardNumber || '',
+      mastercardHolderName: currentStore.payoutDetails?.mastercardHolderName || '',
+      zainCashPhone: currentStore.payoutDetails?.zainCashPhone || '',
+      zainCashHolderName: currentStore.payoutDetails?.zainCashHolderName || '',
+      creditProvider: (currentStore.payoutDetails?.creditProvider || 'asia') as 'asia' | 'atheer',
+      creditPhone: currentStore.payoutDetails?.creditPhone || '',
     });
     setEditSuccessMsg('');
     setEditErrorMsg('');
@@ -521,6 +566,16 @@ function MerchantDashboardContent() {
     setEditSuccessMsg('');
 
     try {
+      const payoutDetailsObj = {
+        method: editForm.payoutMethod,
+        mastercardNumber: editForm.payoutMethod === 'mastercard' ? editForm.mastercardNumber.trim() : undefined,
+        mastercardHolderName: editForm.payoutMethod === 'mastercard' ? editForm.mastercardHolderName.trim() : undefined,
+        zainCashPhone: editForm.payoutMethod === 'zain_cash' ? editForm.zainCashPhone.trim() : undefined,
+        zainCashHolderName: editForm.payoutMethod === 'zain_cash' ? editForm.zainCashHolderName.trim() : undefined,
+        creditProvider: editForm.payoutMethod === 'mobile_credit' ? editForm.creditProvider : undefined,
+        creditPhone: editForm.payoutMethod === 'mobile_credit' ? editForm.creditPhone.trim() : undefined,
+      };
+
       const res = await fetch('/api/stores', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -528,6 +583,8 @@ function MerchantDashboardContent() {
           id: currentStore.id,
           code: currentStore.code,
           ...editForm,
+          payoutMethod: editForm.payoutMethod,
+          payoutDetails: payoutDetailsObj,
         }),
       });
 
@@ -914,6 +971,42 @@ function MerchantDashboardContent() {
               <span>تظهر تلقائياً في متجرك للزبائن</span>
             </div>
           </div>
+        </div>
+
+        {/* شريط معلومات استلام الأرباح المعتمد */}
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center shrink-0">
+              {currentStore?.payoutMethod === 'mastercard' && <CreditCard className="w-5 h-5" />}
+              {currentStore?.payoutMethod === 'zain_cash' && <Wallet className="w-5 h-5" />}
+              {currentStore?.payoutMethod === 'mobile_credit' && <Smartphone className="w-5 h-5" />}
+              {!currentStore?.payoutMethod && <CreditCard className="w-5 h-5" />}
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-500">حساب استلام الأرباح المعتمد:</div>
+              <div className="text-sm font-black text-slate-900 mt-0.5">
+                {currentStore?.payoutMethod === 'mastercard' && (
+                  <span>ماستر كارت: {currentStore.payoutDetails?.mastercardNumber} (باسم: {currentStore.payoutDetails?.mastercardHolderName})</span>
+                )}
+                {currentStore?.payoutMethod === 'zain_cash' && (
+                  <span>محفظة زين كاش: {currentStore.payoutDetails?.zainCashPhone} (باسم: {currentStore.payoutDetails?.zainCashHolderName})</span>
+                )}
+                {currentStore?.payoutMethod === 'mobile_credit' && (
+                  <span>رصيد هاتف {currentStore.payoutDetails?.creditProvider === 'asia' ? 'آسيا سيل' : 'أثير زين'} للرقم: {currentStore.payoutDetails?.creditPhone}</span>
+                )}
+                {!currentStore?.payoutMethod && (
+                  <span className="text-slate-400 font-normal">لم يتم تحديد حساب استلام أرباح بعد</span>
+                )}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsEditModalOpen(true)}
+            className="py-2 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span>تعديل وسيلة الاستلام</span>
+          </button>
         </div>
 
         {/* شريط التبويب الرئيسي: إدارة المنتجات والأسعار / الطلبات الواردة */}
@@ -1465,6 +1558,157 @@ function MerchantDashboardContent() {
                 />
               </div>
 
+              {/* قسم تعديل طريقة استلام الأرباح */}
+              <div className="pt-4 border-t border-slate-200">
+                <label className="block text-xs font-bold text-slate-900 mb-1 flex items-center gap-1.5">
+                  <CreditCard className="w-4 h-4 text-brand-700" />
+                  <span>طريقة استلام الأرباح</span>
+                </label>
+                <p className="text-[11px] text-slate-500 mb-3">
+                  حدد الحساب أو الوسيلة التي ترغب باستلام أرباح مبيعاتك عليها
+                </p>
+
+                {/* أزرار اختيار الوسيلة */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditForm({ ...editForm, payoutMethod: 'mastercard' })}
+                    className={`p-3 rounded-xl border text-right transition-all cursor-pointer flex flex-col justify-between ${
+                      editForm.payoutMethod === 'mastercard'
+                        ? 'border-brand-700 bg-brand-50 text-brand-900 font-bold'
+                        : 'border-slate-200 bg-white text-slate-700'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">ماستر كارت</div>
+                    <div className="text-[10px] text-slate-500">حساب بنكي مباشر</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditForm({ ...editForm, payoutMethod: 'zain_cash' })}
+                    className={`p-3 rounded-xl border text-right transition-all cursor-pointer flex flex-col justify-between ${
+                      editForm.payoutMethod === 'zain_cash'
+                        ? 'border-brand-700 bg-brand-50 text-brand-900 font-bold'
+                        : 'border-slate-200 bg-white text-slate-700'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">زين كاش</div>
+                    <div className="text-[10px] text-slate-500">محفظة إلكترونية</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditForm({ ...editForm, payoutMethod: 'mobile_credit' })}
+                    className={`p-3 rounded-xl border text-right transition-all cursor-pointer flex flex-col justify-between ${
+                      editForm.payoutMethod === 'mobile_credit'
+                        ? 'border-amber-600 bg-amber-50 text-amber-950 font-bold'
+                        : 'border-slate-200 bg-white text-slate-700'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">ليس لدي بطاقة</div>
+                    <div className="text-[10px] text-amber-800 font-medium">رصيد آسيا أو أثير</div>
+                  </button>
+                </div>
+
+                {/* حقول الماستر كارت */}
+                {editForm.payoutMethod === 'mastercard' && (
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2.5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">رقم حساب أو بطاقة الماستر كارت</label>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        placeholder="5310 0000 0000 0000 أو رقم الحساب"
+                        value={editForm.mastercardNumber}
+                        onChange={(e) => setEditForm({ ...editForm, mastercardNumber: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs text-right outline-none bg-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">اسم صاحب الحساب / البطاقة (باسم من؟)</label>
+                      <input
+                        type="text"
+                        placeholder="الاسم الكامل كما هو مسجل على البطاقة"
+                        value={editForm.mastercardHolderName}
+                        onChange={(e) => setEditForm({ ...editForm, mastercardHolderName: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none bg-white"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* حقول زين كاش */}
+                {editForm.payoutMethod === 'zain_cash' && (
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2.5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">رقم هاتف محفظة زين كاش</label>
+                      <input
+                        type="tel"
+                        dir="ltr"
+                        placeholder="07800000000"
+                        value={editForm.zainCashPhone}
+                        onChange={(e) => setEditForm({ ...editForm, zainCashPhone: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs text-right outline-none bg-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">اسم صاحب المحفظة (باسم من؟)</label>
+                      <input
+                        type="text"
+                        placeholder="الاسم الثلاثي لصاحب محفظة زين كاش"
+                        value={editForm.zainCashHolderName}
+                        onChange={(e) => setEditForm({ ...editForm, zainCashHolderName: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none bg-white"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* حقول الرصيد */}
+                {editForm.payoutMethod === 'mobile_credit' && (
+                  <div className="bg-amber-50/70 p-3.5 rounded-xl border border-amber-200 space-y-2.5">
+                    <p className="text-[11px] text-amber-900 leading-relaxed font-medium">
+                      سيتم تحويل الأرباح كرصيد اتصال لرقم الهاتف المحدد أدناه.
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditForm({ ...editForm, creditProvider: 'asia' })}
+                        className={`py-1.5 px-2.5 rounded-lg border text-xs font-bold transition-all text-center cursor-pointer ${
+                          editForm.creditProvider === 'asia'
+                            ? 'bg-red-600 border-red-600 text-white'
+                            : 'bg-white border-slate-200 text-slate-700'
+                        }`}
+                      >
+                        رصيد آسيا سيل
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditForm({ ...editForm, creditProvider: 'atheer' })}
+                        className={`py-1.5 px-2.5 rounded-lg border text-xs font-bold transition-all text-center cursor-pointer ${
+                          editForm.creditProvider === 'atheer'
+                            ? 'bg-sky-600 border-sky-600 text-white'
+                            : 'bg-white border-slate-200 text-slate-700'
+                        }`}
+                      >
+                        رصيد أثير (Zain)
+                      </button>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">رقم الهاتف الذي نحول له الرصيد</label>
+                      <input
+                        type="tel"
+                        dir="ltr"
+                        placeholder="07700000000 أو 07800000000"
+                        value={editForm.creditPhone}
+                        onChange={(e) => setEditForm({ ...editForm, creditPhone: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs text-right outline-none bg-white font-mono"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* الصف الخامس: إعدادات التوصيل وحالة المتجر */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
                 <div>
@@ -1490,7 +1734,7 @@ function MerchantDashboardContent() {
                     step="500"
                     value={editForm.deliveryFeeIqd}
                     onChange={(e) => setEditForm({ ...editForm, deliveryFeeIqd: Number(e.target.value) })}
-                    placeholder="4000"
+                    placeholder="5000"
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 text-xs outline-none bg-white font-mono"
                   />
                 </div>

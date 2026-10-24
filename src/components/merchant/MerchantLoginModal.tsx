@@ -122,7 +122,7 @@ export default function MerchantLoginModal({ isOpen, onClose }: MerchantLoginMod
           balanceWithdrawn: 0,
           rating: 5.0,
           reviewsCount: 1,
-          deliveryFeeIqd: 4000,
+          deliveryFeeIqd: 5000,
           deliveryTimeMinutes: 'خلال يوم أو يومين',
           isOpen: true,
           isAbiAlkhaseeb: false,

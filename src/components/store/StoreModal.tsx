@@ -92,7 +92,7 @@ export const StoreModal: React.FC<StoreModalProps> = ({
               </div>
               <div className="flex items-center gap-1.5 text-slate-600">
                 <Truck className="w-4 h-4 text-brand-600" />
-                <span>أجور التوصيل: {formatIqd(store.deliveryFeeIqd || 4000)}</span>
+                <span>أجور التوصيل: {formatIqd(store.deliveryFeeIqd || 5000)}</span>
               </div>
             </div>
 

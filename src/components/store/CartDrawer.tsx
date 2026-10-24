@@ -53,7 +53,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   if (!isOpen) return null;
 
   const subtotal = items.reduce((sum, item) => sum + (item.product.priceIqd * item.quantity), 0);
-  const deliveryFee = items.length > 0 ? 4000 : 0;
+  const deliveryFee = items.length > 0 ? 5000 : 0;
   const total = subtotal + deliveryFee;
 
   const handleCheckout = async (e: React.FormEvent) => {

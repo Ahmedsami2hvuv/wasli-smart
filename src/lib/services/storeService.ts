@@ -1,4 +1,4 @@
-import { Store, StoreProduct, Product } from '@/types';
+import { Store, StoreProduct, Product, PayoutMethod, PayoutDetails } from '@/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase/admin';
 import { mockStores } from '@/data/mockData';
@@ -34,35 +34,11 @@ function saveStoreToCache(store: Store) {
 }
 
 
-// مخزن محلي متفاعل ودائم للمتاجر النشطة
-const defaultRegisteredStores: Store[] = [
-  {
-    id: 'store-w-arjad8q',
-    name: 'متجر ارجد',
-    ownerName: 'ارجد',
-    slug: 'arjad-store',
-    code: 'w-arjad8q',
-    description: 'متجر إلكتروني معتمد للتجارة المباشرة والتوصيل السريع لكافة المحافظات مع دفع عند الاستلام',
-    city: 'البصرة',
-    phone: '07800000000',
-    status: 'active',
-    totalSales: 0,
-    totalOrders: 0,
-    balanceEarned: 0,
-    balanceWithdrawn: 0,
-    rating: 5.0,
-    reviewsCount: 1,
-    deliveryFeeIqd: 4000,
-    deliveryTimeMinutes: 'خلال يوم أو يومين',
-    isOpen: true,
-    isAbiAlkhaseeb: false,
-    image: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80',
-    logoUrl: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80',
-    location: 'العراق',
-    district: 'العراق',
-    createdAt: new Date().toISOString(),
-  }
-];
+// مخزن محلي متفاعل للمتاجر المسجلة (خالي من أي بيانات وهمية)
+const defaultRegisteredStores: Store[] = [];
+
+// معرف النظام المعتمد في سوبابيس لربط المتاجر بدون الحاجة لكلمة سر
+export const SYSTEM_MERCHANT_OWNER_ID = 'cff11021-f245-4fe0-8882-42f1e4b5b41e';
 
 let localStores: Store[] = [...defaultRegisteredStores, ...mockStores];
 let localStoreProducts: StoreProduct[] = [];
@@ -88,7 +64,6 @@ export async function getAllStores(): Promise<Store[]> {
       const { data, error } = await activeSupabase
         .from('stores')
         .select('*')
-        .eq('status', 'active')
         .order('created_at', { ascending: false });
 
       if (!error && data && data.length > 0) {
@@ -108,15 +83,21 @@ export async function getAllStores(): Promise<Store[]> {
           totalOrders: Number(item.total_orders || 0),
           balanceEarned: Number(item.balance_earned || 0),
           balanceWithdrawn: Number(item.balance_withdrawn || 0),
+          payoutMethod: item.settings?.payout_method,
+          payoutDetails: item.settings?.payout_details,
+          adminNotes: item.settings?.admin_notes,
+          telegramUsername: item.settings?.telegram_username,
+          telegramChatId: item.settings?.telegram_chat_id,
           rating: item.settings?.rating || 4.9,
           reviewsCount: item.settings?.reviews_count || 38,
-          deliveryFeeIqd: item.settings?.delivery_fee_iqd !== undefined ? Number(item.settings.delivery_fee_iqd) : 4000,
+          deliveryFeeIqd: item.settings?.delivery_fee_iqd !== undefined ? Number(item.settings.delivery_fee_iqd) : 5000,
           deliveryTimeMinutes: item.settings?.delivery_time_minutes || 'خلال يوم أو يومين',
           isOpen: item.settings?.is_open !== undefined ? item.settings.is_open : true,
           isAbiAlkhaseeb: item.settings?.is_abi_alkhaseeb ?? false,
           image: item.logo_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80',
           location: item.settings?.location || item.city || 'العراق',
           district: item.settings?.district || item.city || 'العراق',
+          createdAt: item.created_at,
         }));
       }
     } catch (e) {
@@ -164,7 +145,7 @@ export async function getStoreBySlugOrCode(identifier: string): Promise<Store | 
       balanceWithdrawn: 0,
       rating: 5.0,
       reviewsCount: 1,
-      deliveryFeeIqd: 4000,
+      deliveryFeeIqd: 5000,
       deliveryTimeMinutes: 'خلال يوم أو يومين',
       isOpen: true,
       isAbiAlkhaseeb: false,
@@ -191,6 +172,8 @@ export async function createNewStore(params: {
   description?: string;
   ownerId?: string;
   ownerName?: string;
+  payoutMethod?: PayoutMethod;
+  payoutDetails?: PayoutDetails;
 }): Promise<Store> {
   const code = generateStoreCode();
   const baseSlug = params.name
@@ -209,6 +192,8 @@ export async function createNewStore(params: {
     description: params.description || `متجر ${params.name} الإلكتروني للتسوق المباشر والتوصيل السريع والدفع عند الاستلام`,
     city: params.city || 'العراق',
     phone: params.phone,
+    payoutMethod: params.payoutMethod,
+    payoutDetails: params.payoutDetails,
     status: 'active',
     totalSales: 0,
     totalOrders: 0,
@@ -216,7 +201,7 @@ export async function createNewStore(params: {
     balanceWithdrawn: 0,
     rating: 5.0,
     reviewsCount: 1,
-    deliveryFeeIqd: 4000,
+    deliveryFeeIqd: 5000,
     deliveryTimeMinutes: 'خلال يوم أو يومين',
     isOpen: true,
     isAbiAlkhaseeb: false,
@@ -234,7 +219,7 @@ export async function createNewStore(params: {
       const { data, error } = await activeSupabase
         .from('stores')
         .insert({
-          owner_id: params.ownerId || '00000000-0000-0000-0000-000000000000',
+          owner_id: params.ownerId || SYSTEM_MERCHANT_OWNER_ID,
           name: newStore.name,
           slug: newStore.slug,
           code: newStore.code,
@@ -245,6 +230,8 @@ export async function createNewStore(params: {
           logo_url: newStore.logoUrl,
           settings: {
             owner_name: params.ownerName || '',
+            payout_method: params.payoutMethod,
+            payout_details: params.payoutDetails,
             delivery_time_minutes: 'خلال يوم أو يومين',
           },
         })
@@ -253,6 +240,8 @@ export async function createNewStore(params: {
 
       if (!error && data) {
         newStore.id = data.id;
+      } else if (error) {
+        console.warn('تنبيه سوبابيس عند إنشاء متجر:', error.message);
       }
     } catch (e) {
       console.warn('تم حفظ المتجر في الذاكرة الحالية:', e);
@@ -290,6 +279,8 @@ export async function updateStore(
     adminNotes?: string;
     telegramUsername?: string;
     telegramChatId?: string;
+    payoutMethod?: PayoutMethod;
+    payoutDetails?: PayoutDetails;
   }
 ): Promise<Store | null> {
   const stores = await getAllStores();
@@ -335,6 +326,8 @@ export async function updateStore(
     adminNotes: updates.adminNotes !== undefined ? updates.adminNotes : targetStore.adminNotes,
     telegramUsername: updates.telegramUsername !== undefined ? updates.telegramUsername : targetStore.telegramUsername,
     telegramChatId: updates.telegramChatId !== undefined ? updates.telegramChatId : targetStore.telegramChatId,
+    payoutMethod: updates.payoutMethod !== undefined ? updates.payoutMethod : targetStore.payoutMethod,
+    payoutDetails: updates.payoutDetails !== undefined ? updates.payoutDetails : targetStore.payoutDetails,
   };
 
   if (foundIndex >= 0) {
@@ -384,10 +377,31 @@ export async function updateStore(
           .update(dbPayload)
           .eq('id', targetStore.id);
       } else if (targetStore.code) {
-        await activeSupabase
+        const { data: existing } = await activeSupabase
           .from('stores')
-          .update(dbPayload)
-          .eq('code', targetStore.code);
+          .select('id')
+          .eq('code', targetStore.code)
+          .maybeSingle();
+
+        if (existing) {
+          await activeSupabase
+            .from('stores')
+            .update(dbPayload)
+            .eq('code', targetStore.code);
+          updatedStore.id = existing.id;
+        } else {
+          dbPayload.owner_id = SYSTEM_MERCHANT_OWNER_ID;
+          dbPayload.code = targetStore.code;
+          dbPayload.slug = targetStore.slug || `store-${targetStore.code}`;
+          const { data: inserted } = await activeSupabase
+            .from('stores')
+            .insert(dbPayload)
+            .select()
+            .single();
+          if (inserted) {
+            updatedStore.id = inserted.id;
+          }
+        }
       }
     } catch (dbErr) {
       console.warn('فشل التحديث في سوبابيس، تم التحديث محلياً:', dbErr);
@@ -467,11 +481,39 @@ export async function addProductToStore(params: {
 }
 
 /**
- * تعطيل أو إخفاء منتج من متجر التاجر
+ * حذف متجر نهائياً من سوبابيس والكاش المحلي
  */
-export async function toggleStoreProductStatus(storeId: string, productId: string, isActive: boolean) {
-  const item = localStoreProducts.find(sp => sp.storeId === storeId && sp.productId === productId);
-  if (item) {
-    item.isActive = isActive;
+export async function deleteStore(identifier: string): Promise<boolean> {
+  const lower = (identifier || '').toLowerCase();
+  const idx = localStores.findIndex(
+    s => s.id === identifier || s.code?.toLowerCase() === lower
+  );
+  if (idx >= 0) {
+    localStores.splice(idx, 1);
   }
+
+  // حذف من الكاش
+  try {
+    const list = loadCachedStores();
+    const filtered = list.filter(s => s.id !== identifier && s.code?.toLowerCase() !== lower);
+    const devPath = path.join(process.cwd(), 'src', 'data', 'registeredStoresCache.json');
+    try {
+      fs.writeFileSync(devPath, JSON.stringify(filtered, null, 2), 'utf8');
+    } catch (e) {}
+  } catch (e) {}
+
+  // حذف من Supabase
+  const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+  if (activeSupabase) {
+    try {
+      await activeSupabase
+        .from('stores')
+        .delete()
+        .or(`id.eq.${identifier},code.eq.${identifier}`);
+    } catch (err) {
+      console.warn('تنبيه أثناء حذف المتجر من سوبابيس:', err);
+    }
+  }
+
+  return true;
 }

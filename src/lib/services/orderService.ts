@@ -2,6 +2,8 @@ import { Order, OrderItem, OrderStatus, ProfitEntry, NotificationItem } from '@/
 import { getProductByIdOrSlug } from './productService';
 import { getStoreBySlugOrCode } from './storeService';
 import { sendAdminOrderNotification, sendStoreOrderNotification } from '@/lib/telegram/vault';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase/admin';
 
 let localOrders: Order[] = [];
 let localProfitEntries: ProfitEntry[] = [];
@@ -108,7 +110,7 @@ export async function createOrder(params: CreateOrderParams): Promise<{
     });
   }
 
-  const deliveryFee = 4000; // أجور التوصيل المعتمدة لعموم العراق
+  const deliveryFee = 5000; // أجور التوصيل المعتمدة لعموم العراق (5,000 د.ع)
   const totalAmount = subtotal + deliveryFee;
 
   // 3. بناء كائن الطلب النهائي
@@ -137,6 +139,42 @@ export async function createOrder(params: CreateOrderParams): Promise<{
   };
 
   localOrders.unshift(newOrder);
+
+  // حفظ الطلب بشكل دائم في سوبابيس (Supabase)
+  const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+  if (activeSupabase) {
+    try {
+      const { data: dbOrder, error: dbErr } = await activeSupabase
+        .from('orders')
+        .insert({
+          order_number: newOrder.orderNumber,
+          store_id: (store && store.id && !store.id.startsWith('store-')) ? store.id : null,
+          customer_name: newOrder.customerName,
+          customer_phone: newOrder.customerPhone,
+          governorate: newOrder.governorate,
+          city: newOrder.city,
+          address: newOrder.address,
+          delivery_notes: newOrder.deliveryNotes,
+          subtotal: newOrder.subtotal,
+          delivery_fee: newOrder.deliveryFee,
+          total_amount: newOrder.totalAmount,
+          total_wholesale_cost: newOrder.totalWholesaleCost,
+          merchant_profit: newOrder.merchantProfit,
+          platform_profit: newOrder.platformProfit,
+          status: newOrder.status,
+        })
+        .select()
+        .single();
+
+      if (dbOrder) {
+        newOrder.id = dbOrder.id;
+      } else if (dbErr) {
+        console.warn('تنبيه حفظ الطلب في سوبابيس:', dbErr.message);
+      }
+    } catch (e) {
+      console.warn('خطأ في إدراج الطلب في سوبابيس:', e);
+    }
+  }
 
   // 4. تسجيل العملية في سجل الأرباح (Profit Ledger) كأرباح متوقعة
   if (store && totalMerchantProfit > 0) {
@@ -206,6 +244,55 @@ export async function createOrder(params: CreateOrderParams): Promise<{
  * الحصول على كافة الطلبات (للوحة الإدارة)
  */
 export async function getAllOrders(): Promise<Order[]> {
+  const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+  if (activeSupabase) {
+    try {
+      const { data, error } = await activeSupabase
+        .from('orders')
+        .select(`
+          *,
+          store:stores(name, code)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        const dbOrders: Order[] = data.map((o: any) => ({
+          id: o.id,
+          orderNumber: o.order_number,
+          storeId: o.store_id || 'direct-store',
+          storeName: o.store?.name || 'متجر إلكتروني',
+          storeCode: o.store?.code || 'store',
+          customerName: o.customer_name,
+          customerPhone: o.customer_phone,
+          governorate: o.governorate,
+          city: o.city,
+          address: o.address,
+          deliveryNotes: o.delivery_notes,
+          subtotal: Number(o.subtotal || 0),
+          deliveryFee: Number(o.delivery_fee || 0),
+          totalAmount: Number(o.total_amount || 0),
+          totalWholesaleCost: Number(o.total_wholesale_cost || 0),
+          merchantProfit: Number(o.merchant_profit || 0),
+          platformProfit: Number(o.platform_profit || 0),
+          status: o.status as OrderStatus,
+          isPaidToMerchant: o.is_paid_to_merchant ?? false,
+          items: [],
+          createdAt: o.created_at,
+        }));
+
+        const map = new Map<string, Order>();
+        dbOrders.forEach(o => map.set(o.orderNumber, o));
+        localOrders.forEach(o => {
+          if (!map.has(o.orderNumber)) {
+            map.set(o.orderNumber, o);
+          }
+        });
+        return Array.from(map.values());
+      }
+    } catch (e) {
+      console.warn('استخدام الذاكرة المحلية للطلبات:', e);
+    }
+  }
   return localOrders;
 }
 

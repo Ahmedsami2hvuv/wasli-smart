@@ -130,7 +130,7 @@ export const AbiAlkhaseebHighlight: React.FC<AbiAlkhaseebHighlightProps> = ({
                   </div>
 
                   <div className="text-slate-500">
-                    توصيل: <span className="font-bold text-slate-900">{formatIqd(store.deliveryFeeIqd || 4000)}</span>
+                    توصيل: <span className="font-bold text-slate-900">{formatIqd(store.deliveryFeeIqd || 5000)}</span>
                   </div>
 
                   <button

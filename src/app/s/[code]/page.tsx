@@ -25,6 +25,9 @@ function StorePageContent() {
   const searchParams = useSearchParams();
   const code = params?.code as string;
   const queryName = searchParams?.get('name') || searchParams?.get('n') || '';
+  const queryOwner = searchParams?.get('owner') || searchParams?.get('o') || '';
+  const queryPhone = searchParams?.get('phone') || searchParams?.get('p') || '';
+  const queryCity = searchParams?.get('city') || searchParams?.get('c') || '';
 
   const [store, setStore] = useState<Store | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -87,39 +90,80 @@ function StorePageContent() {
           }
         }
 
-        // تحديث اسم المتجر إذا كان الكائن المسترجع يحمل اسماً عاماً والرابط يحمل الاسم الحقيقي
-        if (foundStore && queryName && (foundStore.name === 'متجري الإلكتروني' || foundStore.name === 'متجر إلكتروني' || !foundStore.name)) {
-          foundStore.name = queryName;
-          foundStore.description = `أهلاً بكم في ${queryName}! تسوق أفضل المنتجات الأصلية بتوصيل مباشر لباب منزلك ودفع عند الاستلام.`;
+        // تحديث اسم المتجر واسم المالك إذا كان الكائن المسترجع يحمل اسماً عاماً والرابط يحمل الاسم الحقيقي
+        if (foundStore) {
+          let needsSync = false;
+          if (queryName && (foundStore.name === 'متجري الإلكتروني' || foundStore.name === 'متجر إلكتروني' || !foundStore.name)) {
+            foundStore.name = queryName;
+            foundStore.description = `أهلاً بكم في ${queryName}! تسوق أفضل المنتجات الأصلية بتوصيل مباشر لباب منزلك ودفع عند الاستلام.`;
+            needsSync = true;
+          }
+          if (queryOwner && !foundStore.ownerName) {
+            foundStore.ownerName = queryOwner;
+            needsSync = true;
+          }
+          if (queryPhone && !foundStore.phone) {
+            foundStore.phone = queryPhone;
+            needsSync = true;
+          }
+
+          if (needsSync) {
+            fetch('/api/stores', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                code: code,
+                id: foundStore.id,
+                name: foundStore.name,
+                ownerName: foundStore.ownerName,
+                phone: foundStore.phone,
+                city: foundStore.city,
+              }),
+            }).catch(() => {});
+          }
         }
 
-        // 3. إذا لم نجد كائن متجر مكتمل ننشئه فوراً بالاسم الحقيقي
+        // 3. إذا لم نجد كائن متجر ننشئه فوراً بالاسم الحقيقي ونثبته في السيرفر
         if (!foundStore) {
-          const actualName = queryName || (code === 'w-arjad8q' ? 'متجر ارجد' : `متجر ${code}`);
+          const actualName = queryName || `متجر التاجر (${code})`;
           foundStore = {
             id: `store-${code}`,
             name: actualName,
+            ownerName: queryOwner || '',
             code: code,
             slug: code,
             description: `أهلاً بكم في ${actualName}! تسوق أفضل المنتجات الأصلية بتوصيل مباشر لباب منزلك ودفع عند الاستلام.`,
-            city: searchParams?.get('city') || searchParams?.get('c') || 'العراق',
-            phone: searchParams?.get('phone') || searchParams?.get('p') || '',
+            city: queryCity || 'العراق',
+            phone: queryPhone || '',
             status: 'active',
             rating: 5.0,
             reviewsCount: 1,
-            deliveryFeeIqd: 4000,
+            deliveryFeeIqd: 5000,
             deliveryTimeMinutes: 'خلال يوم أو يومين',
             isOpen: true,
             isAbiAlkhaseeb: false,
             image: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=300&q=80',
             logoUrl: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=300&q=80',
-            location: 'العراق',
-            district: 'العراق',
+            location: queryCity || 'العراق',
+            district: queryCity || 'العراق',
             totalSales: 0,
             totalOrders: 0,
             balanceEarned: 0,
             balanceWithdrawn: 0,
           } as Store;
+
+          // تثبيته في السيرفر
+          fetch('/api/stores', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              code: code,
+              name: actualName,
+              ownerName: queryOwner || '',
+              phone: queryPhone || '',
+              city: queryCity || 'العراق',
+            }),
+          }).catch(() => {});
         }
 
         if (foundStore) {
@@ -531,7 +575,7 @@ function StorePageContent() {
                   </div>
                   <div className="flex justify-between items-center text-xs text-slate-500">
                     <span>أجور التوصيل المعتمدة:</span>
-                    <span>4,000 د.ع</span>
+                    <span>5,000 د.ع</span>
                   </div>
                   <button
                     onClick={proceedToCheckout}

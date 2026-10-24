@@ -35,6 +35,21 @@ export interface Category {
   subcategories?: Subcategory[];
 }
 
+export type PayoutMethod = 'mastercard' | 'zain_cash' | 'mobile_credit';
+
+export interface PayoutDetails {
+  method: PayoutMethod;
+  // ماستر كارت
+  mastercardNumber?: string;
+  mastercardHolderName?: string;
+  // زين كاش
+  zainCashPhone?: string;
+  zainCashHolderName?: string;
+  // رصيد هاتف (آسيا أو أثير)
+  creditProvider?: 'asia' | 'atheer';
+  creditPhone?: string;
+}
+
 export interface Store {
   id: string;
   name: string;
@@ -50,6 +65,8 @@ export interface Store {
   district?: string; // مثل "المنصور"، "الكرادة"، "العشار"
   city?: string;
   phone?: string;
+  payoutMethod?: PayoutMethod; // طريقة استلام الأرباح
+  payoutDetails?: PayoutDetails; // تفاصيل حساب تحويل الأرباح
   isAbiAlkhaseeb?: boolean;
   rating?: number;
   reviewsCount?: number;

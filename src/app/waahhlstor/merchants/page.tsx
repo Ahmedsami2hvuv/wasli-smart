@@ -24,6 +24,8 @@ import {
   Eye, 
   Filter, 
   Wallet, 
+  CreditCard,
+  Smartphone,
   ShoppingBag, 
   Clock, 
   Edit3, 
@@ -31,7 +33,9 @@ import {
   FileText,
   BadgePercent,
   CheckCheck,
-  ChevronDown
+  ChevronDown,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { Store as StoreType, Order } from '@/types';
 
@@ -52,7 +56,20 @@ export default function AdminMerchantsPage() {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // حالات تسجيل دفعة مالية للتاجر
+  // حالات تعديل بيانات التاجر
+  const [editingStore, setEditingStore] = useState<StoreType | null>(null);
+  const [editOwnerName, setEditOwnerName] = useState('');
+  const [editStoreName, setEditStoreName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editCity, setEditCity] = useState('');
+
+  // حالات إضافة تاجر جديد يدوياً
+  const [isAddMerchantOpen, setIsAddMerchantOpen] = useState(false);
+  const [newOwnerName, setNewOwnerName] = useState('');
+  const [newStoreName, setNewStoreName] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [newCity, setNewCity] = useState('البصرة');
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
   const [payoutAmount, setPayoutAmount] = useState<number>(0);
   const [payoutNotes, setPayoutNotes] = useState<string>('');
   const [adminNotesText, setAdminNotesText] = useState<string>('');
@@ -171,6 +188,121 @@ export default function AdminMerchantsPage() {
       showToast('خطأ أثناء الاتصال بالخادم لتعديل الحالة', 'error');
     } finally {
       setUpdatingStoreId(null);
+    }
+  };
+
+  // فتح نافذة تعديل بيانات التاجر
+  const handleOpenEditModal = (store: StoreType) => {
+    setEditingStore(store);
+    setEditOwnerName(store.ownerName || '');
+    setEditStoreName(store.name || '');
+    setEditPhone(store.phone || '');
+    setEditCity(store.city || 'البصرة');
+  };
+
+  // حفظ التعديلات على بيانات التاجر والمتجر
+  const handleSaveEditMerchant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStore) return;
+
+    if (!editOwnerName.trim()) {
+      showToast('يرجى إدخال الاسم الثلاثي للتاجر', 'error');
+      return;
+    }
+
+    setIsSubmittingForm(true);
+    try {
+      const res = await fetch('/api/stores', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingStore.id,
+          code: editingStore.code,
+          ownerName: editOwnerName.trim(),
+          name: editStoreName.trim() || editingStore.name,
+          phone: editPhone.trim(),
+          city: editCity.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.store) {
+        showToast('تم حفظ وتثبيت بيانات التاجر بنجاح في قاعدة البيانات', 'success');
+        setStores(prev => prev.map(s => (s.code === editingStore.code || s.id === editingStore.id) ? data.store : s));
+        if (selectedMerchant && (selectedMerchant.code === editingStore.code || selectedMerchant.id === editingStore.id)) {
+          setSelectedMerchant(data.store);
+        }
+        setEditingStore(null);
+      } else {
+        showToast(data.message || 'فشل حفظ بيانات التاجر', 'error');
+      }
+    } catch (err) {
+      showToast('خطأ في الاتصال بالخادم لحفظ التعديلات', 'error');
+    } finally {
+      setIsSubmittingForm(false);
+    }
+  };
+
+  // إضافة تاجر جديد يدوياً من قبل المدير
+  const handleCreateNewMerchant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newOwnerName.trim() || !newStoreName.trim() || !newPhone.trim()) {
+      showToast('يرجى ملء جميع الحقول المطلوبة', 'error');
+      return;
+    }
+
+    setIsSubmittingForm(true);
+    try {
+      const res = await fetch('/api/stores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ownerName: newOwnerName.trim(),
+          name: newStoreName.trim(),
+          phone: newPhone.trim(),
+          city: newCity.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.store) {
+        showToast(`تم إنشاء وتثبيت حساب التاجر "${newOwnerName}" بنجاح`, 'success');
+        setStores(prev => [data.store, ...prev]);
+        setIsAddMerchantOpen(false);
+        setNewOwnerName('');
+        setNewStoreName('');
+        setNewPhone('');
+      } else {
+        showToast(data.message || 'فشل إنشاء الحساب', 'error');
+      }
+    } catch (err) {
+      showToast('خطأ في الاتصال بالخادم لإنشاء الحساب', 'error');
+    } finally {
+      setIsSubmittingForm(false);
+    }
+  };
+
+  // حذف متجر نهائياً
+  const handleDeleteStore = async (store: StoreType) => {
+    const confirmDelete = window.confirm(`هل أنت متأكد من حذف متجر "${store.name}" والتاجر "${store.ownerName || store.code}" نهائياً؟ لن يمكن التراجع عن هذا الإجراء.`);
+    if (!confirmDelete) return;
+
+    try {
+      const res = await fetch(`/api/stores?code=${store.code}&id=${store.id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('تم حذف المتجر نهائياً بنجاح', 'success');
+        setStores(prev => prev.filter(s => s.id !== store.id && s.code !== store.code));
+        if (selectedMerchant && (selectedMerchant.id === store.id || selectedMerchant.code === store.code)) {
+          setSelectedMerchant(null);
+        }
+      } else {
+        showToast(data.message || 'فشل حذف المتجر', 'error');
+      }
+    } catch (err) {
+      showToast('خطأ أثناء محاولة حذف المتجر', 'error');
     }
   };
 
@@ -335,6 +467,13 @@ export default function AdminMerchantsPage() {
           </Link>
 
           <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setIsAddMerchantOpen(true)}
+              className="py-2.5 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4 h-4 text-accent-400" />
+              <span>إضافة تاجر جديد</span>
+            </button>
             <button
               onClick={fetchData}
               className="py-2.5 px-3.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200/80 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
@@ -541,7 +680,18 @@ export default function AdminMerchantsPage() {
                         {/* التاجر والمتجر */}
                         <td className="py-4 px-4">
                           <div className="font-black text-slate-900 flex items-center gap-2">
-                            <span>{store.ownerName || 'بدون اسم محدد'}</span>
+                            {store.ownerName ? (
+                              <span>{store.ownerName}</span>
+                            ) : (
+                              <button
+                                onClick={() => handleOpenEditModal(store)}
+                                className="text-[11px] font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1 cursor-pointer"
+                                title="اضغط هنا لتعيين الاسم الثلاثي للتاجر"
+                              >
+                                <Edit3 className="w-3 h-3 text-amber-700" />
+                                <span>+ اضغط لتعيين اسم التاجر</span>
+                              </button>
+                            )}
                           </div>
                           <div className="text-[11px] font-bold text-brand-700 mt-0.5 flex items-center gap-1">
                             <Store className="w-3 h-3" />
@@ -631,18 +781,37 @@ export default function AdminMerchantsPage() {
 
                         {/* زر التفاصيل المملة والإجراءات */}
                         <td className="py-4 px-4 text-center">
-                          <button
-                            onClick={() => {
-                              setSelectedMerchant(store);
-                              setAdminNotesText(store.adminNotes || '');
-                              setPayoutAmount(0);
-                              setPayoutNotes('');
-                            }}
-                            className="py-1.5 px-3 bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all inline-flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <Eye className="w-3.5 h-3.5 text-accent-400" />
-                            <span>التفاصيل المملة</span>
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => {
+                                setSelectedMerchant(store);
+                                setAdminNotesText(store.adminNotes || '');
+                                setPayoutAmount(0);
+                                setPayoutNotes('');
+                              }}
+                              className="py-1.5 px-2.5 bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all inline-flex items-center gap-1 cursor-pointer"
+                              title="عرض كافة التفاصيل المحاسبية والتشغيلية"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-accent-400" />
+                              <span>التفاصيل المملة</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleOpenEditModal(store)}
+                              className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-colors cursor-pointer"
+                              title="تعديل بيانات التاجر والمتجر"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteStore(store)}
+                              className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-colors cursor-pointer"
+                              title="حذف هذا المتجر نهائياً"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -805,7 +974,7 @@ export default function AdminMerchantsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200">
                     <div>
                       <span className="text-[11px] text-slate-400 block">رسوم التوصيل:</span>
-                      <span className="font-bold text-slate-800">{selectedMerchant.deliveryFeeIqd || 4000} د.ع</span>
+                      <span className="font-bold text-slate-800">{selectedMerchant.deliveryFeeIqd || 5000} د.ع</span>
                     </div>
                     <div>
                       <span className="text-[11px] text-slate-400 block">وقت التوصيل:</span>
@@ -834,6 +1003,45 @@ export default function AdminMerchantsPage() {
                 <p className="text-[11px] text-emerald-800 mb-3">
                   عند تسليم الأرباح للتاجر نقداً أو عبر زين كاش / مصرف، أدخل المبلغ هنا لتحديث رصيده المسحوب فورياً.
                 </p>
+
+                {/* طريقة استلام الأرباح المعتمدة للتاجر */}
+                <div className="p-3 bg-white rounded-xl border border-emerald-300 text-xs mb-3 space-y-1">
+                  <div className="font-bold text-slate-900 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-emerald-800">
+                      <CreditCard className="w-3.5 h-3.5" />
+                      <span>حساب استلام أرباح التاجر:</span>
+                    </span>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-full font-bold">
+                      {selectedMerchant.payoutMethod === 'mastercard' && 'ماستر كارت'}
+                      {selectedMerchant.payoutMethod === 'zain_cash' && 'زين كاش'}
+                      {selectedMerchant.payoutMethod === 'mobile_credit' && 'رصيد هاتف'}
+                      {!selectedMerchant.payoutMethod && 'غير محدد'}
+                    </span>
+                  </div>
+                  <div className="text-slate-800 font-semibold pt-1">
+                    {selectedMerchant.payoutMethod === 'mastercard' && (
+                      <div className="space-y-0.5">
+                        <div>رقم البطاقة/الحساب: <span className="font-mono text-brand-700 font-bold select-all">{selectedMerchant.payoutDetails?.mastercardNumber}</span></div>
+                        <div>باسم: <span className="font-bold text-slate-900">{selectedMerchant.payoutDetails?.mastercardHolderName}</span></div>
+                      </div>
+                    )}
+                    {selectedMerchant.payoutMethod === 'zain_cash' && (
+                      <div className="space-y-0.5">
+                        <div>رقم المحفظة: <span className="font-mono text-brand-700 font-bold select-all">{selectedMerchant.payoutDetails?.zainCashPhone}</span></div>
+                        <div>باسم: <span className="font-bold text-slate-900">{selectedMerchant.payoutDetails?.zainCashHolderName}</span></div>
+                      </div>
+                    )}
+                    {selectedMerchant.payoutMethod === 'mobile_credit' && (
+                      <div className="space-y-0.5">
+                        <div>الشبكة: <span className="font-bold text-amber-900">{selectedMerchant.payoutDetails?.creditProvider === 'asia' ? 'آسيا سيل' : 'أثير زين'}</span></div>
+                        <div>رقم تحويل الرصيد: <span className="font-mono text-brand-700 font-bold select-all">{selectedMerchant.payoutDetails?.creditPhone}</span></div>
+                      </div>
+                    )}
+                    {!selectedMerchant.payoutMethod && (
+                      <div className="text-slate-400 font-normal">لم يقم التاجر بتسجيل بيانات حساب الأرباح بعد.</div>
+                    )}
+                  </div>
+                </div>
 
                 <form onSubmit={handleRecordPayout} className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -985,6 +1193,227 @@ export default function AdminMerchantsPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة منبثقة: تعديل بيانات التاجر والمتجر وتثبيتها */}
+      {editingStore && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3.5 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">تعديل وتثبيت بيانات التاجر</h3>
+                  <p className="text-[11px] text-slate-500">كود المتجر: {editingStore.code}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingStore(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditMerchant} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  الاسم الثلاثي للتاجر <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: أحمد محمد علي"
+                  value={editOwnerName}
+                  onChange={(e) => setEditOwnerName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none focus:border-brand-600 bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  اسم المتجر <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: متجر النور للإلكترونيات"
+                  value={editStoreName}
+                  onChange={(e) => setEditStoreName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none focus:border-brand-600 bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">رقم الهاتف</label>
+                  <input
+                    type="text"
+                    placeholder="07XXXXXXXXX"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none focus:border-brand-600 bg-white"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">المحافظة</label>
+                  <input
+                    type="text"
+                    placeholder="مثال: البصرة، بغداد..."
+                    value={editCity}
+                    onChange={(e) => setEditCity(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none focus:border-brand-600 bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-brand-50/70 border border-brand-100 rounded-xl text-[11px] text-brand-900 leading-relaxed">
+                سيتم تحديث هذه البيانات وتثبيتها بشكل دائم في قاعدة بيانات سوبابيس ولن تختفي بعد عمل رفرش.
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingStore(null)}
+                  className="py-2.5 px-4 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingForm}
+                  className="py-2.5 px-5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmittingForm ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>جاري التثبيت...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-accent-400" />
+                      <span>حفظ التعديلات</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة منبثقة: إضافة تاجر جديد يدوياً */}
+      {isAddMerchantOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3.5 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">إضافة تاجر ومتجر جديد</h3>
+                  <p className="text-[11px] text-slate-500">سيتم توليد كود متجر رسمي وتثبيته في قاعدة البيانات فورياً</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAddMerchantOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateNewMerchant} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  الاسم الثلاثي للتاجر <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: حيدر كريم جاسم"
+                  value={newOwnerName}
+                  onChange={(e) => setNewOwnerName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none focus:border-emerald-600 bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  اسم المتجر <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: متجر الأناقة"
+                  value={newStoreName}
+                  onChange={(e) => setNewStoreName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none focus:border-emerald-600 bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    رقم الهاتف <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="07XXXXXXXXX"
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none focus:border-emerald-600 bg-white"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">المحافظة</label>
+                  <input
+                    type="text"
+                    placeholder="مثال: البصرة"
+                    value={newCity}
+                    onChange={(e) => setNewCity(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 outline-none focus:border-emerald-600 bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddMerchantOpen(false)}
+                  className="py-2.5 px-4 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingForm}
+                  className="py-2.5 px-5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmittingForm ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>جاري الإنشاء والتثبيت...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>إنشاء المتجر وتثبيته</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -47,7 +47,7 @@ function CheckoutContent() {
 
   const items = cartData?.items || [];
   const subtotal = items.reduce((sum: number, item: any) => sum + (item.priceIqd * item.quantity), 0);
-  const deliveryFee = 4000;
+  const deliveryFee = 5000;
   const totalAmount = subtotal + deliveryFee;
 
   const currentStoreCode = cartData?.storeCode || storeParam || '';
