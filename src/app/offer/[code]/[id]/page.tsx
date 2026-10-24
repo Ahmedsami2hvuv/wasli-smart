@@ -325,6 +325,16 @@ function OfferPageContent() {
         if (foundProduct) {
           setProduct(foundProduct);
         }
+
+        // تحديث عنوان التاب في المتصفح باسم المتجر والمنتج حصراً بدون اسم وصلي
+        if (typeof document !== 'undefined') {
+          const finalStoreName = foundStore?.name || queryStoreName || 'متجر معتمد';
+          if (foundProduct?.name) {
+            document.title = `${foundProduct.name} - ${finalStoreName}`;
+          } else {
+            document.title = finalStoreName;
+          }
+        }
       } catch (err) {
         console.error('خطأ في تحميل تفاصيل العرض:', err);
       } finally {
@@ -718,10 +728,6 @@ function OfferPageContent() {
                 <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/90 border border-slate-200/70">
                   <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
                   <span>معاينة وفحص قبل الدفع</span>
-                </div>
-                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/90 border border-slate-200/70">
-                  <Clock className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>إمكانية الاستبدال بسهولة</span>
                 </div>
               </div>
 
