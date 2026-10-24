@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Store, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Share2, User, Phone, MapPin, Copy, Check, Lock, CreditCard, Wallet, Smartphone } from 'lucide-react';
+import { Store, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Share2, User, Phone, MapPin, Copy, Check, Lock, CreditCard, Wallet, Smartphone, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { IRAQ_GOVERNORATES } from '@/data/iraqCities';
 
@@ -26,9 +26,9 @@ export default function RegisterStorePage() {
   const [creditProvider, setCreditProvider] = useState<'asia' | 'atheer'>('asia');
   const [creditPhone, setCreditPhone] = useState('');
 
-  const handleCopyStoreInfo = async () => {
-    if (!createdStore) return;
-
+  // توليد النص الكامل الشامل لمعلومات المتجر للحفظ والمشاركة
+  const getFullStoreInfoText = () => {
+    if (!createdStore) return '';
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://wasli-smart.vercel.app';
     const storeUrl = `${origin}/s/${createdStore.code}?name=${encodeURIComponent(createdStore.name)}`;
     const dashboardUrl = `${origin}/merchant?storeCode=${createdStore.code}&name=${encodeURIComponent(createdStore.name)}&owner=${encodeURIComponent(createdStore.ownerName || "")}&city=${encodeURIComponent(createdStore.city || "")}&phone=${encodeURIComponent(createdStore.phone || "")}`;
@@ -45,15 +45,24 @@ export default function RegisterStorePage() {
       payoutSummary = `رصيد اتصال (${provName} - رقم التحويل: ${curDetails.creditPhone || creditPhone || 'غير محدد'})`;
     }
 
-    const textToCopy = `معلومات متجر التاجر:
+    return `معلومات متجر التاجر في منصة وصلي:
 - اسم التاجر: ${createdStore.ownerName || 'غير محدد'}
 - اسم المتجر: ${createdStore.name}
 - المحافظة: ${createdStore.city}
 - رقم الهاتف: ${createdStore.phone}
 - رمز المتجر الفريد: ${createdStore.code}
 - طريقة استلام الأرباح: ${payoutSummary || 'غير محددة'}
-- رابط متجر التاجر المباشر للزبائن: ${storeUrl}
-- رابط صفحة التاجر (لوحة إدارة المتجر): ${dashboardUrl}`;
+
+- رابط متجر التاجر المباشر للزبائن:
+${storeUrl}
+
+- رابط لوحة إدارة متجرك (احفظه في مكان آمن للعودة إليه):
+${dashboardUrl}`;
+  };
+
+  const handleCopyStoreInfo = async () => {
+    const textToCopy = getFullStoreInfoText();
+    if (!textToCopy) return;
 
     try {
       if (navigator?.clipboard?.writeText) {
@@ -70,6 +79,46 @@ export default function RegisterStorePage() {
     } catch (err) {
       console.error('فشل في نسخ المعلومات:', err);
     }
+  };
+
+  // مشاركة المعلومات عبر تطبيقات الهاتف (واتساب / تيليجرام / غيرها)
+  const handleShareStoreInfo = async () => {
+    const fullText = getFullStoreInfoText();
+    if (!fullText) return;
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: `معلومات متجر ${createdStore.name}`,
+          text: fullText,
+        });
+        setCopiedInfo(true);
+        return;
+      } catch (e) {
+        // إذا ألغى المستخدم المشاركة أو لم يدعمها
+      }
+    }
+
+    // بديل تلقائي عند عدم توفر واجهة المشاركة الأصلية في المتصفح: فتح واتساب مباشرة
+    handleShareToWhatsApp();
+  };
+
+  // فتح واتساب مباشرة مع النص مجهزاً بالكامل
+  const handleShareToWhatsApp = () => {
+    const fullText = getFullStoreInfoText();
+    if (!fullText) return;
+    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(fullText)}`;
+    window.open(waUrl, '_blank');
+    setCopiedInfo(true);
+  };
+
+  // فتح تيليجرام مباشرة مع النص مجهزاً بالكامل
+  const handleShareToTelegram = () => {
+    const fullText = getFullStoreInfoText();
+    if (!fullText) return;
+    const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(' ')}&text=${encodeURIComponent(fullText)}`;
+    window.open(tgUrl, '_blank');
+    setCopiedInfo(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -646,48 +695,91 @@ export default function RegisterStorePage() {
               </div>
             )}
 
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* زر الدخول إلى صفحة التاجر */}
-                <Link
-                  href={`/merchant?storeCode=${createdStore.code}&name=${encodeURIComponent(createdStore.name)}&owner=${encodeURIComponent(createdStore.ownerName || "")}&city=${encodeURIComponent(createdStore.city || "")}&phone=${encodeURIComponent(createdStore.phone || "")}`}
-                  className="w-full py-4 px-6 rounded-xl bg-brand-700 hover:bg-brand-800 active:bg-brand-900 text-white font-bold text-sm shadow-md shadow-brand-700/25 transition-all flex items-center justify-center gap-2 cursor-pointer text-center"
-                >
-                  <Store className="w-4 h-4 text-accent-400" />
-                  <span>الدخول إلى صفحة التاجر</span>
-                </Link>
+            <div className="space-y-4">
+              {/* قسم خيارات المشاركة والحفظ السريع المباشر */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                <div className="text-right">
+                  <div className="text-xs font-black text-slate-900">
+                    حفظ ومشاركة بيانات متجرك:
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    أرسل معلومات متجرك لنفسك على واتساب أو تيليجرام لتعود إليها دائماً ولا تنساها
+                  </p>
+                </div>
 
-                {/* زر نسخ معلوماتي */}
+                {/* أزرار المشاركة المباشرة (واتساب وتيليجرام وتطبيقات أخرى) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {/* زر واتساب المباشر */}
+                  <button
+                    type="button"
+                    onClick={handleShareToWhatsApp}
+                    className="py-3 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-emerald-600/20"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    <span>إرسال عبر واتساب</span>
+                  </button>
+
+                  {/* زر تيليجرام المباشر */}
+                  <button
+                    type="button"
+                    onClick={handleShareToTelegram}
+                    className="py-3 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-sky-600/20"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    <span>إرسال عبر تيليجرام</span>
+                  </button>
+
+                  {/* زر مشاركة عبر تطبيقات الهاتف */}
+                  <button
+                    type="button"
+                    onClick={handleShareStoreInfo}
+                    className="py-3 px-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-slate-800/20"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    <span>مشاركة عبر التطبيقات</span>
+                  </button>
+                </div>
+
+                {/* زر نسخ معلوماتي السريع كبديل */}
                 <button
                   type="button"
                   onClick={handleCopyStoreInfo}
-                  className={`w-full py-4 px-6 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm ${
-                    copiedInfo
-                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
-                      : 'bg-slate-900 hover:bg-slate-800 text-white shadow-slate-900/20'
-                  }`}
+                  className="w-full py-2.5 px-4 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   {copiedInfo ? (
                     <>
-                      <Check className="w-4 h-4 text-emerald-200" />
-                      <span>تم نسخ معلوماتي بنجاح</span>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-700">تم نسخ كامل معلوماتك إلى الحافظة</span>
                     </>
                   ) : (
                     <>
-                      <Copy className="w-4 h-4 text-slate-300" />
-                      <span>نسخ معلوماتي</span>
+                      <Copy className="w-3.5 h-3.5 text-slate-500" />
+                      <span>نسخ المعلومات كنص للحافظة</span>
                     </>
                   )}
                 </button>
               </div>
 
-              {/* زر معاينة متجر التاجر */}
-              <Link
-                href={`/s/${createdStore.code}?name=${encodeURIComponent(createdStore.name)}`}
-                className="w-full py-3 px-6 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900 font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 text-center"
-              >
-                <span>معاينة متجر التاجر</span>
-              </Link>
+              {/* أزرار التنقل الرئيسية: الدخول لصفحة التاجر ومعاينة المتجر */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                {/* زر الدخول إلى صفحة التاجر */}
+                <Link
+                  href={`/merchant?storeCode=${createdStore.code}&name=${encodeURIComponent(createdStore.name)}&owner=${encodeURIComponent(createdStore.ownerName || "")}&city=${encodeURIComponent(createdStore.city || "")}&phone=${encodeURIComponent(createdStore.phone || "")}`}
+                  className="w-full py-3.5 px-6 rounded-xl bg-brand-700 hover:bg-brand-800 active:bg-brand-900 text-white font-black text-sm shadow-md shadow-brand-700/25 transition-all flex items-center justify-center gap-2 cursor-pointer text-center"
+                >
+                  <Store className="w-4 h-4 text-accent-400" />
+                  <span>الدخول إلى صفحة التاجر</span>
+                </Link>
+
+                {/* زر معاينة متجر التاجر */}
+                <Link
+                  href={`/s/${createdStore.code}?name=${encodeURIComponent(createdStore.name)}`}
+                  className="w-full py-3.5 px-6 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-sm transition-all flex items-center justify-center gap-1.5 text-center"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>معاينة متجر التاجر</span>
+                </Link>
+              </div>
             </div>
           </div>
         )}

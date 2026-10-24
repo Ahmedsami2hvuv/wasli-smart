@@ -168,6 +168,24 @@ export async function createOrder(params: CreateOrderParams): Promise<{
 
       if (dbOrder) {
         newOrder.id = dbOrder.id;
+        // حفظ عناصر الطلب في جدول order_items
+        try {
+          if (processedItems.length > 0 && !processedItems[0].productId.startsWith('mock-')) {
+            const itemsToInsert = processedItems.map(it => ({
+              order_id: dbOrder.id,
+              product_id: it.productId,
+              quantity: it.quantity,
+              selling_price: it.sellingPrice,
+              wholesale_price: it.wholesalePrice,
+              platform_price: it.platformPrice,
+              merchant_profit_per_unit: it.merchantProfit,
+              platform_profit_per_unit: it.platformProfit,
+            }));
+            await activeSupabase.from('order_items').insert(itemsToInsert);
+          }
+        } catch (itemErr) {
+          console.warn('تنبيه حفظ عناصر الطلب:', itemErr);
+        }
       } else if (dbErr) {
         console.warn('تنبيه حفظ الطلب في سوبابيس:', dbErr.message);
       }
@@ -251,34 +269,63 @@ export async function getAllOrders(): Promise<Order[]> {
         .from('orders')
         .select(`
           *,
-          store:stores(name, code)
+          store:stores(name, code),
+          items:order_items(
+            id,
+            product_id,
+            quantity,
+            selling_price,
+            wholesale_price,
+            platform_price,
+            merchant_profit_per_unit,
+            platform_profit_per_unit,
+            product:products(title, images:product_images(local_url))
+          )
         `)
         .order('created_at', { ascending: false });
 
       if (!error && data && data.length > 0) {
-        const dbOrders: Order[] = data.map((o: any) => ({
-          id: o.id,
-          orderNumber: o.order_number,
-          storeId: o.store_id || 'direct-store',
-          storeName: o.store?.name || 'متجر إلكتروني',
-          storeCode: o.store?.code || 'store',
-          customerName: o.customer_name,
-          customerPhone: o.customer_phone,
-          governorate: o.governorate,
-          city: o.city,
-          address: o.address,
-          deliveryNotes: o.delivery_notes,
-          subtotal: Number(o.subtotal || 0),
-          deliveryFee: Number(o.delivery_fee || 0),
-          totalAmount: Number(o.total_amount || 0),
-          totalWholesaleCost: Number(o.total_wholesale_cost || 0),
-          merchantProfit: Number(o.merchant_profit || 0),
-          platformProfit: Number(o.platform_profit || 0),
-          status: o.status as OrderStatus,
-          isPaidToMerchant: o.is_paid_to_merchant ?? false,
-          items: [],
-          createdAt: o.created_at,
-        }));
+        const dbOrders: Order[] = data.map((o: any) => {
+          const localMatch = localOrders.find(lo => lo.orderNumber === o.order_number || lo.id === o.id);
+          const parsedItems: OrderItem[] = (o.items && o.items.length > 0)
+            ? o.items.map((it: any) => ({
+                id: it.id,
+                productId: it.product_id,
+                productName: it.product?.title || 'منتج',
+                quantity: it.quantity,
+                sellingPrice: Number(it.selling_price),
+                wholesalePrice: Number(it.wholesale_price),
+                platformPrice: Number(it.platform_price),
+                merchantProfit: Number(it.merchant_profit_per_unit || 0),
+                platformProfit: Number(it.platform_profit_per_unit || 0),
+                productImage: it.product?.images?.[0]?.local_url || '',
+              }))
+            : (localMatch?.items || []);
+
+          return {
+            id: o.id,
+            orderNumber: o.order_number,
+            storeId: o.store_id || 'direct-store',
+            storeName: o.store?.name || localMatch?.storeName || 'متجر إلكتروني',
+            storeCode: o.store?.code || localMatch?.storeCode || 'store',
+            customerName: o.customer_name,
+            customerPhone: o.customer_phone,
+            governorate: o.governorate,
+            city: o.city,
+            address: o.address,
+            deliveryNotes: o.delivery_notes,
+            subtotal: Number(o.subtotal || 0),
+            deliveryFee: Number(o.delivery_fee || 0),
+            totalAmount: Number(o.total_amount || 0),
+            totalWholesaleCost: Number(o.total_wholesale_cost || 0),
+            merchantProfit: Number(o.merchant_profit || 0),
+            platformProfit: Number(o.platform_profit || 0),
+            status: o.status as OrderStatus,
+            isPaidToMerchant: o.is_paid_to_merchant ?? false,
+            items: parsedItems,
+            createdAt: o.created_at,
+          };
+        });
 
         const map = new Map<string, Order>();
         dbOrders.forEach(o => map.set(o.orderNumber, o));
@@ -299,26 +346,59 @@ export async function getAllOrders(): Promise<Order[]> {
 /**
  * الحصول على طلبات متجر معين (للوحة صاحب المتجر)
  */
-export async function getStoreOrders(storeId: string): Promise<Order[]> {
-  return localOrders.filter(o => o.storeId === storeId);
+export async function getStoreOrders(storeIdentifier: string): Promise<Order[]> {
+  const allOrders = await getAllOrders();
+  const lower = (storeIdentifier || '').toLowerCase().trim();
+  return allOrders.filter(o => 
+    o.storeId === storeIdentifier || 
+    o.storeId.toLowerCase() === lower ||
+    (o.storeCode && o.storeCode.toLowerCase() === lower)
+  );
 }
 
 /**
  * جلب تفاصيل طلب برقم الطلب أو بالمعرف
  */
 export async function getOrderByIdOrNumber(identifier: string): Promise<Order | null> {
-  return localOrders.find(o => o.id === identifier || o.orderNumber === identifier) || null;
+  const allOrders = await getAllOrders();
+  return allOrders.find(o => o.id === identifier || o.orderNumber === identifier) || null;
 }
 
 /**
- * تحديث حالة الطلب من قبل مدير المنصة وتحديث الأرباح
+ * تحديث حالة الطلب من قبل مدير المنصة أو التاجر وتحديث الأرباح
  */
 export async function updateOrderStatus(orderId: string, newStatus: OrderStatus): Promise<boolean> {
-  const order = localOrders.find(o => o.id === orderId || o.orderNumber === orderId);
+  const allOrders = await getAllOrders();
+  const order = allOrders.find(o => o.id === orderId || o.orderNumber === orderId);
   if (!order) return false;
 
   const previousStatus = order.status;
   order.status = newStatus;
+
+  const localMatch = localOrders.find(o => o.id === orderId || o.orderNumber === orderId);
+  if (localMatch) {
+    localMatch.status = newStatus;
+  }
+
+  // التحديث في Supabase إن كان متاحاً
+  const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+  if (activeSupabase) {
+    try {
+      if (order.id && !order.id.startsWith('ord-') && !order.id.startsWith('item-')) {
+        await activeSupabase
+          .from('orders')
+          .update({ status: newStatus, updated_at: new Date().toISOString() })
+          .eq('id', order.id);
+      } else {
+        await activeSupabase
+          .from('orders')
+          .update({ status: newStatus, updated_at: new Date().toISOString() })
+          .eq('order_number', order.orderNumber);
+      }
+    } catch (dbErr) {
+      console.warn('تعذر تحديث حالة الطلب في سوبابيس:', dbErr);
+    }
+  }
 
   // إذا تغيرت الحالة إلى تم التسليم (delivered) تصبح الأرباح مستحقة (earned)
   if (newStatus === 'delivered' && previousStatus !== 'delivered') {
