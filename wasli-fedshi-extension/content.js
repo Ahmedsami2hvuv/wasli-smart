@@ -227,6 +227,14 @@
         }
       }
 
+      // د) البحث الاحتياطي في عنوان الصفحة وتسمية التبويب
+      if (!title && targetDoc.title) {
+        const cleanDocTitle = targetDoc.title.replace(/\|.*$/g, '').replace(/-.*$/g, '').trim();
+        if (cleanDocTitle && !cleanDocTitle.toLowerCase().includes('fedshi') && cleanDocTitle.length >= 3) {
+          title = cleanDocTitle;
+        }
+      }
+
       // 2. معرّف المنتج (productCode) ومعرّف نوع المنتج (skuCode)
       let productCode = '';
       const urlMatch = targetUrl.match(/\/products\/([A-Za-z0-9_-]+)/);
@@ -284,6 +292,20 @@
       // ج) من بيانات السكربت الداخلي إن لم يُعثر عليه في DOM
       if (!fedshiWholesale && scriptProduct) {
         fedshiWholesale = cleanNum(scriptProduct.wholesale_price || scriptProduct.price);
+      }
+
+      // د) فحص أي عنصر يحمل data-amount="true" أو أرقام الأسعار
+      if (!fedshiWholesale) {
+        const anyAmount = targetDoc.querySelector('[data-amount="true"]');
+        if (anyAmount) {
+          fedshiWholesale = readDataAmount(anyAmount);
+        }
+      }
+
+      // هـ) استخراج احتياطي من وسوم السكربت
+      if (!fedshiWholesale) {
+        const scriptWs = extractFieldFromScripts(/"wholesale_price"\s*:\s*(\d+)/) || extractFieldFromScripts(/"price"\s*:\s*(\d+)/);
+        if (scriptWs) fedshiWholesale = cleanNum(scriptWs);
       }
 
       // د) ربح فدشي الداخلي
@@ -1007,7 +1029,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.7</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.8</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -1063,6 +1085,18 @@
       });
     }
 
+    // دالة ذكية تنتظر اكتمال تحميل بيانات وسعر المنتج في الصفحة وتلتقطها فوراً
+    async function getReadyProductDetails(maxAttempts = 12, interval = 160) {
+      for (let i = 0; i < maxAttempts; i++) {
+        const data = await extractFedshiProductDetails();
+        if (data && (data.title || data.fedshiWholesale > 0)) {
+          return data;
+        }
+        await new Promise(res => setTimeout(res, interval));
+      }
+      return await extractFedshiProductDetails();
+    }
+
     // دالة الاستيراد التلقائي الفوري بمجرد فتح صفحة المنتج الجديد دون الحاجة لأي نقر!
     let autoImportTriggered = false;
     function scheduleAutoImportOnOpen() {
@@ -1070,12 +1104,12 @@
       if (pageCode && importedCodesSet.has(pageCode)) return;
 
       autoImportTriggered = true;
-      // انتظار بسيط (280ms) لضمان اكتمال قراءة بيانات وسعر المنتج من الصفحة
+      // بدء الفحص الذكي بعد 150ms بمجرد استقرار الصفحة
       setTimeout(() => {
         if (isProductPage() && !isImportingInProgress) {
           handleDirectImportAction({ isAuto: true });
         }
-      }, 280);
+      }, 150);
     }
 
     // متغير لمنع الضغط المتكرر أثناء عملية السحب الفوري
@@ -1106,8 +1140,8 @@
       const lockedScrollY = window.scrollY;
 
       try {
-        // 1. استخراج بيانات المنتج من صفحة فدشي الحالية (أجزاء من الثانية فقط وبدون أي تمرير)
-        const data = await extractFedshiProductDetails();
+        // 1. استخراج بيانات المنتج بذكاء مع الانتظار اللحظي حتى اكتمال تحميل اسم وسعر المنتج
+        const data = await getReadyProductDetails();
 
         // إعادة تثبيت الشاشة فوراً لمنع أي تذبذب أثناء استخراج البيانات
         if (window.scrollY !== lockedScrollY) {
@@ -1115,7 +1149,13 @@
         }
 
         if (!data || (!data.title && !data.fedshiWholesale)) {
-          throw new Error('تعذر قراءة بيانات وسعر المنتج. يرجى الانتظار لحين اكتمال تحميل الصفحة.');
+          if (isAuto) {
+            // في السحب التلقائي، إذا لم تكتمل الصفحة بعد لا نطلق خطأ صاخباً
+            isImportingInProgress = false;
+            floatingBtn.style.opacity = '1';
+            return;
+          }
+          throw new Error('تعذر قراءة بيانات وسعر المنتج. يرجى التأكد من اكتمال تحميل الصفحة.');
         }
 
         const productTitle = data.title || 'منتج جديد';
