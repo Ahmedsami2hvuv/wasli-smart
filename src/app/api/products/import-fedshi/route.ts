@@ -55,30 +55,30 @@ export async function POST(request: NextRequest) {
 
     const supplierCost = Number(fedshiPrice || 0);
 
-    // تطبيق المعادلة المالية الدقيقة لمنصة وصلي:
-    // 1. ربح المنصة الثابت = 3,000 د.ع لكل منتج
-    // 2. سعر جملة وصلي للتاجر = تكلفة فدشي + 3,000 د.ع
-    const wholesalePrice = customWholesale 
-      ? Number(customWholesale) 
-      : (supplierCost > 0 ? (supplierCost + 3000) : (minSuggestedPrice ? Number(minSuggestedPrice) : 3000));
+    // تطبيق المعادلة المالية الذكية لمنصة وصلي:
+    // 1. سعر جملة وصلي للتاجر = أقل سعر بيع محدد من فدشي (minSuggestedPrice)
+    // لكي يحصد المدير ربحاً ممتازاً بالكامل (مثال: فدشي 25,000 والبيع 40,000، سعر الجملة = 40,000 وربح المدير = 15,000)
+    // بشرط ألا يقل ربح المدير عن 3,000 د.ع أبداً
+    let calculatedWholesale = supplierCost > 0 ? (supplierCost + 3000) : 3000;
+    if (minSuggestedPrice && Number(minSuggestedPrice) >= (supplierCost + 3000)) {
+      calculatedWholesale = Number(minSuggestedPrice);
+    }
+    const wholesalePrice = customWholesale ? Number(customWholesale) : calculatedWholesale;
 
-    // 3. سعر المنصة الأساسي يطابق سعر الجملة
+    // 2. سعر المنصة الأساسي يطابق سعر جملة وصلي
     const platformPrice = customPlatform ? Number(customPlatform) : wholesalePrice;
 
-    // 4. حدود بيع الزبون للتاجر:
-    // الحد الأدنى المقترح: سعر الجملة + 10,000 د.ع (أو 80,000 د.ع في حال كان أعلى)
+    // 3. أقل سعر مسموح لبيع الزبون (حد التاجر الأدنى = سعر الجملة + 5,000 لضمان ربحه)
     const minPrice = customMin 
       ? Number(customMin) 
-      : (minSuggestedPrice && Number(minSuggestedPrice) > wholesalePrice 
-          ? Number(minSuggestedPrice) 
-          : (wholesalePrice + 10000));
+      : (wholesalePrice + 5000);
 
-    // الحد الأعلى المقترح لبيع الزبون: يأتي مباشرة من فدشي، أو سعر الجملة + 20,000
+    // 4. الحد الأعلى المقترح لبيع الزبون (المأخوذ من فدشي)
     const maxPrice = customMax 
       ? Number(customMax) 
       : (maxSuggestedPrice && Number(maxSuggestedPrice) > minPrice 
           ? Number(maxSuggestedPrice) 
-          : (wholesalePrice + 20000));
+          : (wholesalePrice + 15000));
 
     // إنشاء أو جلب القسم والفرع تلقائياً
     let finalCategoryId = categoryId;

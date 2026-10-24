@@ -357,52 +357,37 @@
         if (!maxSuggested && scriptProduct.suggested_price_max) maxSuggested = cleanNum(scriptProduct.suggested_price_max);
       }
 
-      // 5. تطبيق معادلة التسعير الذكية المرنة لمنصة وصلي:
-      // القاعدة: ربح المدير الصافي لا يقل أبداً عن 3,000 د.ع كحد أدنى.
-      // وإذا كان هناك فارق مالي مريح بين تكلفة فدشي وسعر الزبون المقترح،
-      // يرتفع ربح المدير تلقائياً ليتناسب مع قيمة المنتج مع إعطاء التاجر هامش ربح يبدأ من 5,000 د.ع على الأقل.
-      let wasliProfit = 3000;
-      let wasliWholesale = fedshiWholesale > 0 ? (fedshiWholesale + wasliProfit) : 0;
-      let wasliMinPrice = minSuggested || (wasliWholesale + 5000);
-      let wasliMaxPrice = maxSuggested || (wasliMinPrice + 15000);
-
-      if (fedshiWholesale > 0 && minSuggested > fedshiWholesale) {
-        const totalMargin = minSuggested - fedshiWholesale;
-
-        if (totalMargin >= 8000) {
-          // فارق كبير (مثل صانعة اللبن: التكلفة 25,000 وأقل سعر 40,000 الفارق 15,000):
-          // التاجر يربح 5,000 د.ع عند أقل سعر بيع (40,000 - 5,000 = 35,000 سعر الجملة)
-          // والمدير يربح الباقي وهو 10,000 د.ع صافي!
-          wasliWholesale = minSuggested - 5000;
-          wasliProfit = wasliWholesale - fedshiWholesale;
-          wasliMinPrice = minSuggested;
-        } else if (totalMargin >= 5000) {
-          // فارق متوسط: المدير يأخذ ربحاً تصاعدياً لا يقل عن 3,000
-          wasliProfit = Math.max(3000, Math.floor((totalMargin - 2000) / 1000) * 1000);
-          wasliWholesale = fedshiWholesale + wasliProfit;
-          wasliMinPrice = minSuggested;
-        } else {
-          // فارق ضيق: المدير يأخذ حقه الأدنى 3,000 د.ع
-          wasliProfit = 3000;
-          wasliWholesale = fedshiWholesale + wasliProfit;
-          wasliMinPrice = Math.max(minSuggested, wasliWholesale + 2000);
-        }
+      // 5. تطبيق معادلة التسعير الذكية المعتمدة لمنصة وصلي:
+      // فدشي تحدد سعر الزبون المقترح بنطاق (مثلاً: 40,000 إلى 60,000)
+      // وسعر جملة فدشي (مثلاً: 25,000)
+      // المدير يبيع للتاجر بأقل سعر محدد من فدشي (40,000 د.ع) وبذلك يحصد ربحاً ممتازاً (+15,000 د.ع)
+      // والتاجر يظهر عنده المتجر بسعر افتراضي 50,000 ويمكنه البيع حتى 60,000
+      // ولا يمكن للتاجر النزول عن (سعر الجملة + 5,000 د.ع) = 45,000 د.ع لضمان ربحه
+      let wasliWholesale = 0;
+      if (minSuggested && minSuggested >= (fedshiWholesale + 3000)) {
+        wasliWholesale = minSuggested; // 40,000 د.ع
+      } else {
+        wasliWholesale = fedshiWholesale > 0 ? (fedshiWholesale + 3000) : 3000;
       }
 
-      // التأكد الصارم من أن ربح المدير لا يقل عن 3,000 د.ع في أي حال من الأحوال
+      // ربح المدير الصافي
+      let wasliProfit = fedshiWholesale > 0 ? (wasliWholesale - fedshiWholesale) : 3000;
       if (wasliProfit < 3000) {
         wasliProfit = 3000;
         wasliWholesale = fedshiWholesale + wasliProfit;
       }
 
-      // ضبط أعلى سعر بيع للزبون
-      if (!wasliMaxPrice || wasliMaxPrice <= wasliMinPrice) {
-        wasliMaxPrice = wasliMinPrice + 15000;
-      }
+      // أقل سعر مسموح للتاجر ببيع الزبون (سعر الجملة + 5,000 د.ع لضمان ربح التاجر)
+      let wasliMinPrice = wasliWholesale + 5000; // 45,000 د.ع
 
-      // السعر الافتراضي المقترح لمتجر التاجر
+      // أعلى سعر مسموح لبيع الزبون (المأخوذ من فدشي)
+      let wasliMaxPrice = maxSuggested && maxSuggested > wasliMinPrice ? maxSuggested : (wasliMinPrice + 15000); // 60,000 د.ع
+
+      // السعر الافتراضي المعروض في متجر التاجر (مثلاً 50,000 د.ع)
       let defaultStorePrice = wasliMinPrice;
-      if (wasliMaxPrice > wasliMinPrice) {
+      if (wasliMaxPrice >= wasliWholesale + 10000) {
+        defaultStorePrice = wasliWholesale + 10000; // 50,000 د.ع
+      } else {
         defaultStorePrice = Math.round(((wasliMinPrice + wasliMaxPrice) / 2) / 1000) * 1000;
       }
 
@@ -586,7 +571,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.2.1</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.2.2</span>
           </div>
           <button type="button" class="wasli-close-btn" id="wasli-modal-close" title="إغلاق">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -706,7 +691,7 @@
           <input type="number" class="wasli-input" id="wasli-inp-cost" value="${data.fedshiWholesale}">
         </div>
         <div class="wasli-field-group">
-          <label class="wasli-label">سعر الجملة لتاجر وصلي (د.ع)</label>
+          <label class="wasli-label">سعر جملة وصلي للتاجر (د.ع - ربحك: +${data.wasliProfit.toLocaleString()})</label>
           <input type="number" class="wasli-input" id="wasli-inp-wholesale" value="${data.wasliWholesale}">
         </div>
       </div>
@@ -714,11 +699,11 @@
       <!-- نطاق بيع الزبون المقترح -->
       <div class="wasli-inputs-grid">
         <div class="wasli-field-group">
-          <label class="wasli-label">أقل سعر مقترح لبيع الزبون (د.ع)</label>
+          <label class="wasli-label">أقل سعر مسموح لبيع الزبون (حد التاجر الأدنى: الجملة + 5,000)</label>
           <input type="number" class="wasli-input" id="wasli-inp-min" value="${data.wasliMinPrice}">
         </div>
         <div class="wasli-field-group">
-          <label class="wasli-label">أعلى سعر مقترح لبيع الزبون (د.ع)</label>
+          <label class="wasli-label">أعلى سعر مسموح لبيع الزبون (حد التاجر الأقصى من فدشي)</label>
           <input type="number" class="wasli-input" id="wasli-inp-max" value="${data.wasliMaxPrice}">
         </div>
       </div>
@@ -771,8 +756,9 @@
     const valWholesale = overlay.querySelector('#wasli-val-wholesale');
     const valProfit = overlay.querySelector('#wasli-val-profit');
     const headTitle = overlay.querySelector('#wasli-finance-head-title');
+    const minInp = overlay.querySelector('#wasli-inp-min');
 
-    const updateLiveProfits = () => {
+    const updateLiveProfits = (source) => {
       const c = parseInt(costInp.value, 10) || 0;
       const w = parseInt(wholesaleInp.value, 10) || 0;
       const profit = w - c;
@@ -782,10 +768,17 @@
       if (headTitle) {
         headTitle.textContent = `توزيع الأرباح الذكي (ربحك كمدير: ${profit >= 0 ? '+' : ''}${profit.toLocaleString()} د.ع)`;
       }
+      // عند تعديل سعر الجملة، نعدل أقل سعر بيع للزبون ليكون (الجملة + 5,000) إن كان أقل من ذلك
+      if (source === 'wholesale' && minInp) {
+        const curMin = parseInt(minInp.value, 10) || 0;
+        if (curMin < (w + 5000)) {
+          minInp.value = w + 5000;
+        }
+      }
     };
 
-    costInp.addEventListener('input', updateLiveProfits);
-    wholesaleInp.addEventListener('input', updateLiveProfits);
+    costInp.addEventListener('input', () => updateLiveProfits('cost'));
+    wholesaleInp.addEventListener('input', () => updateLiveProfits('wholesale'));
 
     // ربط زر التأكيد والإرسال إلى منصة وصلي
     const confirmBtn = overlay.querySelector('#wasli-btn-confirm');
