@@ -126,17 +126,17 @@ ${dashboardUrl}`;
     setErrorMsg('');
 
     if (!ownerName.trim()) {
-      setErrorMsg('يرجى كتابة الاسم الثلاثي للتاجر');
+      setErrorMsg('يرجى كتابة اسمك الثلاثي');
       return;
     }
 
     if (!storeName.trim()) {
-      setErrorMsg('يرجى كتابة اسم المتجر');
+      setErrorMsg('يرجى كتابة اسم متجرك');
       return;
     }
 
     if (!phone.trim()) {
-      setErrorMsg('يرجى إدخال رقم الهاتف للتواصل');
+      setErrorMsg('يرجى إدخال رقم هاتفك للتواصل');
       return;
     }
 
@@ -274,7 +274,7 @@ ${dashboardUrl}`;
               <div>
                 <label className="block text-sm font-semibold text-slate-800 mb-1.5 flex items-center gap-1.5">
                   <User className="w-4 h-4 text-brand-700" />
-                  <span>الاسم الثلاثي للتاجر</span>
+                  <span>اسمك الثلاثي</span>
                   <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -291,7 +291,7 @@ ${dashboardUrl}`;
               <div>
                 <label className="block text-sm font-semibold text-slate-800 mb-1.5 flex items-center gap-1.5">
                   <Store className="w-4 h-4 text-brand-700" />
-                  <span>اسم متجر التاجر</span>
+                  <span>اسم متجرك</span>
                   <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -308,7 +308,7 @@ ${dashboardUrl}`;
               <div>
                 <label className="block text-sm font-semibold text-slate-800 mb-1.5 flex items-center gap-1.5">
                   <Phone className="w-4 h-4 text-brand-700" />
-                  <span>رقم هاتف التاجر (واتساب للتواصل)</span>
+                  <span>رقم هاتفك (واتساب للتواصل)</span>
                   <span className="text-red-500">*</span>
                 </label>
                 <input
