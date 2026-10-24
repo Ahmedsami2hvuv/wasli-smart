@@ -77,10 +77,14 @@ export async function GET(request: NextRequest) {
     let mergedProducts = allProducts.map(product => {
       const custom = customPrices[product.id];
       const basePlatformPrice = product.platformPriceIqd || product.priceIqd || 10000;
-      const minPrice = product.minPriceIqd || basePlatformPrice;
-      const maxPrice = product.maxPriceIqd || Math.round(basePlatformPrice * 1.6);
+      const minPrice = product.minPriceIqd || (basePlatformPrice + 5000);
+      const maxPrice = product.maxPriceIqd || (basePlatformPrice + 20000);
       
-      const sellingPrice = custom && custom.sellingPrice ? custom.sellingPrice : basePlatformPrice;
+      // سعر البيع الافتراضي لمتجر التاجر = سعر الجملة + 10,000 د.ع (ليكون ربح التاجر الافتراضي 10,000 د.ع)
+      const defaultSellingPrice = Math.min(maxPrice, Math.max(minPrice, basePlatformPrice + 10000));
+      const rawSelling = custom && custom.sellingPrice ? Number(custom.sellingPrice) : defaultSellingPrice;
+      // التأكد من أن سعر التاجر لا يقل عن الحد الأدنى المسموح (ربح 5,000 د.ع) ولا يزيد عن الحد الأقصى
+      const sellingPrice = Math.max(minPrice, Math.min(maxPrice, rawSelling));
       const isActive = custom && custom.isActive !== undefined ? custom.isActive : true;
       const merchantProfit = Math.max(0, sellingPrice - basePlatformPrice);
 
@@ -88,6 +92,7 @@ export async function GET(request: NextRequest) {
         ...product,
         priceIqd: sellingPrice,
         sellingPrice: sellingPrice,
+        defaultSellingPrice: defaultSellingPrice,
         platformPriceIqd: basePlatformPrice,
         minPriceIqd: minPrice,
         maxPriceIqd: maxPrice,
@@ -132,8 +137,21 @@ export async function POST(request: NextRequest) {
       localStoreProductPrices[storeKey] = {};
     }
 
+    const allProds = await getAllProducts();
+    const targetProduct = allProds.find(p => p.id === productId);
+    const minAllowed = targetProduct?.minPriceIqd || ((targetProduct?.platformPriceIqd || 10000) + 5000);
+    const maxAllowed = targetProduct?.maxPriceIqd || (minAllowed + 25000);
+
     const prevSetting = localStoreProductPrices[storeKey][productId] || { sellingPrice: 0, isActive: true };
-    const newPrice = sellingPrice !== undefined ? Number(sellingPrice) : prevSetting.sellingPrice;
+    let newPrice = sellingPrice !== undefined ? Number(sellingPrice) : prevSetting.sellingPrice;
+    
+    // ضمان عدم نزول سعر التاجر عن الحد الأدنى (ربح 5,000 د.ع على الأقل)
+    if (newPrice > 0 && newPrice < minAllowed) {
+      newPrice = minAllowed;
+    }
+    if (newPrice > maxAllowed) {
+      newPrice = maxAllowed;
+    }
     const newActive = isActive !== undefined ? Boolean(isActive) : prevSetting.isActive;
 
     localStoreProductPrices[storeKey][productId] = {

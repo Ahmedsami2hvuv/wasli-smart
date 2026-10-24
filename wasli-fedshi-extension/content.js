@@ -533,7 +533,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.2.3</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.2.4</span>
           </div>
           <button type="button" class="wasli-close-btn" id="wasli-modal-close" title="إغلاق">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -670,6 +670,17 @@
         </div>
       </div>
 
+      <!-- سعر البيع الافتراضي لمتجر التاجر -->
+      <div class="wasli-field-group" style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 10px 12px; border-radius: 10px; margin-bottom: 12px;">
+        <label class="wasli-label" style="color: #166534; font-weight: 800; font-size: 11.5px;">
+          سعر البيع الافتراضي في متجر التاجر (د.ع - ربح التاجر الأولي: +10,000 د.ع):
+        </label>
+        <input type="number" class="wasli-input" id="wasli-inp-store-price" value="${data.defaultStorePrice || (data.wasliWholesale + 10000)}" style="font-weight: 800; color: #15803d; font-size: 13px;">
+        <div style="font-size: 10.5px; color: #15803d; margin-top: 4px; font-weight: 600;">
+          ملاحظة: يستطيع التاجر تنزيل السعر في متجره بحرية، ولن يتمكن من النزول عن ربح 5,000 د.ع كحد أدنى لحمايته من الخسارة.
+        </div>
+      </div>
+
       <!-- التصنيف والمخزون -->
       <div class="wasli-inputs-grid">
         <div class="wasli-field-group">
@@ -719,6 +730,7 @@
     const valProfit = overlay.querySelector('#wasli-val-profit');
     const headTitle = overlay.querySelector('#wasli-finance-head-title');
     const minInp = overlay.querySelector('#wasli-inp-min');
+    const storePriceInp = overlay.querySelector('#wasli-inp-store-price');
 
     const updateLiveProfits = (source) => {
       const c = parseInt(costInp.value, 10) || 0;
@@ -730,12 +742,10 @@
       if (headTitle) {
         headTitle.textContent = `توزيع الأرباح الذكي (ربحك كمدير: ${profit >= 0 ? '+' : ''}${profit.toLocaleString()} د.ع)`;
       }
-      // عند تعديل سعر الجملة، نعدل أقل سعر بيع للزبون ليكون (الجملة + 5,000) إن كان أقل من ذلك
-      if (source === 'wholesale' && minInp) {
-        const curMin = parseInt(minInp.value, 10) || 0;
-        if (curMin < (w + 5000)) {
-          minInp.value = w + 5000;
-        }
+      // عند تعديل سعر الجملة، نعدل أقل سعر وأفضل سعر لمتجر التاجر تلقائياً
+      if (source === 'wholesale') {
+        if (minInp) minInp.value = w + 5000;
+        if (storePriceInp) storePriceInp.value = w + 10000;
       }
     };
 
@@ -755,6 +765,7 @@
       const categoryVal = (overlay.querySelector('#wasli-inp-category').value || '').trim() || 'عام';
       const minPrice = parseInt(overlay.querySelector('#wasli-inp-min').value, 10) || data.wasliMinPrice;
       const maxPrice = parseInt(overlay.querySelector('#wasli-inp-max').value, 10) || data.wasliMaxPrice;
+      const storePrice = parseInt(overlay.querySelector('#wasli-inp-store-price')?.value, 10) || (wholesale + 10000);
       const stock = parseInt(overlay.querySelector('#wasli-inp-stock').value, 10) || 50;
       const promoText = (overlay.querySelector('#wasli-inp-promo')?.value || '').trim();
       const specsText = (overlay.querySelector('#wasli-inp-specs')?.value || '').trim();
@@ -769,6 +780,7 @@
         maxSuggestedPrice: maxPrice,
         wholesalePriceIqd: wholesale,
         platformPriceIqd: wholesale,
+        defaultPriceIqd: storePrice,
         minPriceIqd: minPrice,
         maxPriceIqd: maxPrice,
         category: categoryVal,
