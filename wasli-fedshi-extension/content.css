@@ -7,6 +7,10 @@
   direction: rtl !important;
   text-align: right !important;
   box-sizing: border-box !important;
+  display: block !important;
+  visibility: visible !important;
+  position: static !important;
+  z-index: 9999999 !important;
 }
 
 .wasli-root *, .wasli-root *::before, .wasli-root *::after {
