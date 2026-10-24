@@ -910,17 +910,17 @@
       sessionStorage.setItem('wasli_imported_codes', JSON.stringify(arr));
     } catch (e) {}
 
-    // تحديث أي زر في بطاقات الصفحة يخص هذا المنتج فوراً
-    const buttons = document.querySelectorAll(`[data-wasli-code="${code}"]`);
-    buttons.forEach(btn => {
-      btn.className = 'wasli-card-quick-btn wasli-done';
-      btn.innerHTML = `
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+    // تحديث أو إظهار شارة "مسحوب مسبقاً ✓" الخضراء فوق بطاقة المنتج في القوائم
+    const badges = document.querySelectorAll(`[data-wasli-code="${code}"]`);
+    badges.forEach(el => {
+      el.className = 'wasli-card-status-badge';
+      el.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
-        <span>تم السحب</span>
+        <span>مسحوب مسبقاً ✓</span>
       `;
-      btn.title = 'تم استيراد هذا المنتج بنجاح إلى منصة وصلي';
+      el.title = 'تم استيراد هذا المنتج مسبقاً في منصة وصلي';
     });
 
     // تحديث الزر العائم في صفحة المنتج الفردي إذا كان يخص هذا الكود
@@ -1029,7 +1029,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.8</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.4.9</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -1820,131 +1820,50 @@
   }
 
   // ========================================================
-  // 1. حقن زر "سحب" فوق كل بطاقة منتج
+  // إظهار شارة الحالة فقط إذا كان المنتج مسحوباً مسبقاً (إلغاء زر سحب القديم تماماً)
   // ========================================================
   function injectProductCardButtons() {
-    if (window.location.pathname.startsWith('/products/')) {
+    if (isProductPage()) {
       return;
     }
 
     const cards = findVisibleProductCards();
-    cards.forEach(({ code, cardEl, cardData }) => {
+    cards.forEach(({ code, cardEl }) => {
       if (!cardEl) return;
-
-      if (cardEl.getAttribute('data-wasli-card-ready') === 'true' || cardEl.querySelector('.wasli-card-quick-btn')) {
-        return;
-      }
-      cardEl.setAttribute('data-wasli-card-ready', 'true');
 
       const compPos = window.getComputedStyle(cardEl).position;
       if (compPos === 'static') {
         cardEl.style.position = 'relative';
       }
 
-      const isImported = importedCodesSet.has(code);
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = `wasli-card-quick-btn ${isImported ? 'wasli-done' : ''}`;
-      btn.setAttribute('data-wasli-code', code);
-      btn.title = isImported ? 'تم استيراد هذا المنتج مسبقاً' : 'سحب هذا المنتج فوراً إلى منصة وصلي';
+      // إزالة أي زر قديم لكلمة "سحب" إن وجد
+      const oldBtn = cardEl.querySelector('.wasli-card-quick-btn');
+      if (oldBtn) oldBtn.remove();
+
+      const isImported = Boolean(code && importedCodesSet.has(code));
+      let badge = cardEl.querySelector('.wasli-card-status-badge');
 
       if (isImported) {
-        btn.innerHTML = `
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-          <span>تم السحب</span>
-        `;
-      } else {
-        btn.innerHTML = `
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-          </svg>
-          <span>سحب</span>
-        `;
-      }
-
-      const stopAllEvents = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-      };
-
-      btn.addEventListener('pointerdown', stopAllEvents, true);
-      btn.addEventListener('mousedown', stopAllEvents, true);
-      btn.addEventListener('touchstart', stopAllEvents, true);
-      btn.addEventListener('mouseup', stopAllEvents, true);
-
-      // عند النقر على الزر الفردي
-      btn.addEventListener('click', async (e) => {
-        stopAllEvents(e);
-
-        if (btn.classList.contains('wasli-loading') || btn.classList.contains('wasli-done')) {
-          return;
-        }
-
-        btn.className = 'wasli-card-quick-btn wasli-loading';
-        btn.innerHTML = `
-          <svg class="wasli-spinner" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="2" x2="12" y2="6"></line>
-            <line x1="12" y1="18" x2="12" y2="22"></line>
-            <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
-            <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
-          </svg>
-          <span>جاري السحب...</span>
-        `;
-
-        const toast = showWasliToast({
-          title: 'جاري السحب الفوري...',
-          message: `يتم الآن سحب <strong>${cardData.title}</strong> وحفظه في منصتك ونشره.`,
-          type: 'loading'
-        });
-
-        try {
-          const { result, data } = await importProductInstant(cardData);
-          const prodId = result.product?.id || '';
-          const activeTarget = wasliServerUrl.trim().replace(/\/+$/, '');
-          const previewUrl = prodId ? `${activeTarget}/p/${prodId}` : activeTarget;
-          const adminUrl = `${activeTarget}/waahhlstor/products`;
-          const profitVal = result.financials?.platformProfit?.toLocaleString() || data.wasliProfit;
-
-          btn.className = 'wasli-card-quick-btn wasli-done';
-          btn.innerHTML = `
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+        // إذا كان المنتج مسحوباً: إظهار الشارة الخضراء الأنيقة
+        if (!badge) {
+          badge = document.createElement('div');
+          badge.className = 'wasli-card-status-badge';
+          badge.setAttribute('data-wasli-code', code);
+          badge.title = 'تم استيراد هذا المنتج مسبقاً في منصة وصلي';
+          badge.innerHTML = `
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
-            <span>تم السحب</span>
+            <span>مسحوب مسبقاً ✓</span>
           `;
-
-          toast.update({
-            type: 'success',
-            title: 'تم استيراد المنتج بنجاح!',
-            message: `تم سحب <strong>${data.title}</strong> بنجاح! ربحك الصافي: <strong>+${profitVal.toLocaleString()} د.ع</strong>`,
-            previewUrl,
-            adminUrl,
-          });
-        } catch (err) {
-          console.error('فشل سحب المنتج الفردي:', err);
-          btn.className = 'wasli-card-quick-btn wasli-error';
-          btn.innerHTML = `<span>إعادة ↺</span>`;
-          toast.update({
-            type: 'error',
-            title: 'فشل استيراد المنتج',
-            message: `تعذر سحب المنتج (${code}): ${err.message}`,
-          });
-          setTimeout(() => {
-            btn.className = 'wasli-card-quick-btn';
-            btn.innerHTML = `
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-              </svg>
-              <span>سحب</span>
-            `;
-          }, 3500);
+          cardEl.appendChild(badge);
         }
-      }, true);
-
-      cardEl.appendChild(btn);
+      } else {
+        // إذا لم يكن مسحوباً: يبقى الكارت نظيفاً بدون أي شارة أو كلمة سحب
+        if (badge) {
+          badge.remove();
+        }
+      }
     });
   }
 
