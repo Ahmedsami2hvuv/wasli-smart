@@ -518,6 +518,108 @@
     }
   }
 
+  // ========================================================
+  // نظام الإشعارات العائمة الخلفية (بلوك صغير ومربع على اليمين)
+  // ========================================================
+  function getToastContainer() {
+    let container = document.getElementById('wasli-toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'wasli-toast-container';
+      container.className = 'wasli-toast-container';
+      document.body.appendChild(container);
+    }
+    return container;
+  }
+
+  function showWasliToast({ title, message, type = 'loading' }) {
+    const container = getToastContainer();
+    const toast = document.createElement('div');
+    toast.className = `wasli-toast ${type}`;
+
+    const getIconSvg = (t) => {
+      if (t === 'loading') {
+        return `<svg class="wasli-spinner" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2.8"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle><path d="M12 2a10 10 0 0 1 10 10"></path></svg>`;
+      }
+      if (t === 'success') {
+        return `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3.2"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+      }
+      return `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.8"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+    };
+
+    const formatTitle = (t, customTitle) => {
+      if (t === 'loading') return 'جاري السحب...';
+      if (t === 'success') return 'تم السحب!';
+      return customTitle || 'تعذر السحب';
+    };
+
+    const formatSub = (t) => {
+      if (t === 'loading') return 'يرجى الانتظار';
+      if (t === 'success') return 'في منصة وصلي';
+      return 'يرجى المحاولة';
+    };
+
+    toast.innerHTML = `
+      <div class="wasli-toast-icon-wrap ${type}">
+        ${getIconSvg(type)}
+      </div>
+      <div class="wasli-toast-title-text">${formatTitle(type, title)}</div>
+      <div class="wasli-toast-sub-text">${formatSub(type)}</div>
+      <button type="button" class="wasli-toast-mini-close" title="إغلاق">&times;</button>
+    `;
+
+    const closeBtn = toast.querySelector('.wasli-toast-mini-close');
+    if (closeBtn) {
+      closeBtn.onclick = (e) => {
+        e.stopPropagation();
+        toast.remove();
+      };
+    }
+
+    container.appendChild(toast);
+
+    // يختفي تلقائياً بعد 3 ثوانٍ
+    let dismissTimer = setTimeout(() => {
+      if (toast.parentElement) {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px) scale(0.9)';
+        setTimeout(() => toast.remove(), 250);
+      }
+    }, 3000);
+
+    return {
+      update({ title: newTitle, message: newMsg, type: newType }) {
+        clearTimeout(dismissTimer);
+        toast.className = `wasli-toast ${newType}`;
+        const iconWrap = toast.querySelector('.wasli-toast-icon-wrap');
+        if (iconWrap) {
+          iconWrap.className = `wasli-toast-icon-wrap ${newType}`;
+          iconWrap.innerHTML = getIconSvg(newType);
+        }
+        const titleEl = toast.querySelector('.wasli-toast-title-text');
+        if (titleEl) {
+          titleEl.textContent = formatTitle(newType, newTitle);
+        }
+        const subEl = toast.querySelector('.wasli-toast-sub-text');
+        if (subEl) {
+          subEl.textContent = formatSub(newType);
+        }
+
+        dismissTimer = setTimeout(() => {
+          if (toast.parentElement) {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(10px) scale(0.9)';
+            setTimeout(() => toast.remove(), 250);
+          }
+        }, 3000);
+      },
+      close() {
+        clearTimeout(dismissTimer);
+        if (toast.parentElement) toast.remove();
+      }
+    };
+  }
+
   // بناء واجهة الإضافة الذكية
   function initWasliUI() {
     // تشغيل واجهة المنتج الفردي فقط في صفحات المنتجات الفعلية
@@ -562,7 +664,7 @@
             </svg>
             <span>منصة وصلي - استيراد منتج ذكي</span>
             <span class="wasli-badge-source">فدشي</span>
-            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.2</span>
+            <span class="wasli-badge-source" style="background: #10b981; color: #ffffff; font-weight: 800;">إصدار 1.3.3</span>
           </div>
           <div class="wasli-header-actions">
             <button type="button" class="wasli-submit-btn-top" id="wasli-btn-confirm-top">
@@ -900,85 +1002,6 @@
 
     costInp.addEventListener('input', () => updateLiveProfits('cost'));
     wholesaleInp.addEventListener('input', () => updateLiveProfits('wholesale'));
-
-    // نظام الإشعارات العائمة الخلفية
-    function getToastContainer() {
-      let container = document.getElementById('wasli-toast-container');
-      if (!container) {
-        container = document.createElement('div');
-        container.id = 'wasli-toast-container';
-        container.className = 'wasli-toast-container';
-        document.body.appendChild(container);
-      }
-      return container;
-    }
-
-    function showWasliToast({ title, message, type = 'loading' }) {
-      const container = getToastContainer();
-      const toast = document.createElement('div');
-      toast.className = `wasli-toast ${type}`;
-
-      const iconHtml = type === 'loading'
-        ? `<svg class="wasli-spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2.5"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle><path d="M12 2a10 10 0 0 1 10 10"></path></svg>`
-        : (type === 'success'
-            ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>`
-            : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`);
-
-      toast.innerHTML = `
-        <div class="wasli-toast-header">
-          <div class="wasli-toast-title">
-            <span class="wasli-toast-icon">${iconHtml}</span>
-            <span>${title}</span>
-          </div>
-          <button type="button" class="wasli-toast-close" title="إغلاق">&times;</button>
-        </div>
-        <div class="wasli-toast-body">${message}</div>
-        <div class="wasli-toast-actions" style="display: none;"></div>
-      `;
-
-      toast.querySelector('.wasli-toast-close').onclick = () => {
-        toast.remove();
-      };
-
-      container.appendChild(toast);
-
-      // مؤقت إخفاء تلقائي بعد 3 ثوانٍ بناءً على طلب المستخدم
-      let dismissTimer = setTimeout(() => {
-        if (toast.parentElement) toast.remove();
-      }, 3000);
-
-      return {
-        update({ title: newTitle, message: newMsg, type: newType, previewUrl, adminUrl }) {
-          clearTimeout(dismissTimer);
-          toast.className = `wasli-toast ${newType}`;
-          const newIcon = newType === 'success'
-            ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>`
-            : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
-
-          toast.querySelector('.wasli-toast-icon').innerHTML = newIcon;
-          if (newTitle) toast.querySelector('.wasli-toast-title span:last-child').textContent = newTitle;
-          if (newMsg) toast.querySelector('.wasli-toast-body').innerHTML = newMsg;
-
-          if (previewUrl && adminUrl) {
-            const actionsBox = toast.querySelector('.wasli-toast-actions');
-            actionsBox.style.display = 'flex';
-            actionsBox.innerHTML = `
-              <a href="${previewUrl}" target="_blank" class="wasli-toast-btn" style="background: #0284c7; color: #fff;">معاينة المنتج</a>
-              <a href="${adminUrl}" target="_blank" class="wasli-toast-btn" style="background: #1e40af; color: #fff;">لوحة الإدارة</a>
-            `;
-          }
-
-          // يختفي بعد 3 ثوانٍ
-          dismissTimer = setTimeout(() => {
-            if (toast.parentElement) toast.remove();
-          }, 3000);
-        },
-        close() {
-          clearTimeout(dismissTimer);
-          if (toast.parentElement) toast.remove();
-        }
-      };
-    }
 
     // تنفيذ عملية السحب في الخلفية وإغلاق المودال فوراً
     const executeBackgroundImport = () => {
