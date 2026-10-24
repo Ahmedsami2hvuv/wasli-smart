@@ -119,8 +119,8 @@ export async function POST(req: NextRequest) {
         );
 
         const statusMsg = alreadyLinkedStore
-          ? `حالة الاتصال: نشط ومتصل بمتجر (${alreadyLinkedStore.name}) - كود: ${alreadyLinkedStore.code}`
-          : 'حالة الاتصال: غير مرتبط بأي متجر بعد. يرجى الضغط على زر (الاتصال ببوت الإشعارات) في صفحة التاجر.';
+          ? `حالة الاتصال: نشط ومتصل بمتجر (${alreadyLinkedStore.name})\nكود المتجر: ${alreadyLinkedStore.code}\nتصلك كافة إشعارات الطلبات فور تسجيلها بنجاح.`
+          : 'حالة الاتصال: غير مرتبط بأي متجر بعد. يرجى الضغط على زر (الاتصال ببوت الإشعارات) من صفحة التاجر لمتجرك ليتم الربط تلقائياً.';
 
         await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           method: 'POST',
@@ -128,6 +128,25 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify({
             chat_id: chatId,
             text: statusMsg,
+          }),
+        });
+      } else if (text === '/help' || text === 'مساعدة') {
+        const helpMsg = [
+          'دليل استخدام بوت إشعارات وصلي:',
+          '==============================',
+          '• /start - بدء واستقبال رسالة الترحيب والربط مع المتجر.',
+          '• /status - التحقق من حالة ربط حسابك بمتجرك وتفعيل الإشعارات.',
+          '• /help - عرض تعليمات المساعدة الحالية.',
+          '------------------------------',
+          'لربط أي متجر جديد: افتح صفحة التاجر واضغط على [الاتصال ببوت الإشعارات].'
+        ].join('\n');
+
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: helpMsg,
           }),
         });
       }
