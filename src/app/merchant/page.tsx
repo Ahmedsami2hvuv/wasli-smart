@@ -973,161 +973,203 @@ interface MerchantEditFormState {
           </div>
         </div>
 
-        {/* بلوك الرابط بتصميم واضح وعالي التباين وألوان صحيحة 100% */}
-        <div className="bg-slate-900 border border-slate-800 text-white rounded-2xl p-4 sm:p-5 shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5 w-full md:w-auto">
-            <div className="w-11 h-11 rounded-xl bg-brand-600/30 border border-brand-500/40 flex items-center justify-center shrink-0">
-              <LinkIcon className="w-5 h-5 text-skybrand-400" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-xs sm:text-sm font-bold text-slate-100">
-                  رابط متجرك الحصري للمشاركة على واتساب ومنصات التواصل:
-                </span>
-                <span className="hidden sm:inline-block bg-skybrand-500/20 text-skybrand-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-skybrand-500/30">
-                  رابط مباشر
+        {/* التخطيط الحديث: القائمة الجانبية + مساحة العمل والمحتوى الرئيسي */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          {/* القائمة الجانبية (Sidebar) - تضم المحفظة والمالية، الإحصائيات، وحساب استلام الأرباح */}
+          <div className="lg:col-span-4 space-y-4">
+            
+            {/* بطاقة ملخص الأرباح والمالية */}
+            <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+                    <Wallet className="w-4 h-4" />
+                  </div>
+                  <h3 className="font-black text-slate-900 text-sm">المحفظة والأرباح</h3>
+                </div>
+                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                  تحديث فوري
                 </span>
               </div>
-              <div className="font-mono text-xs sm:text-sm font-bold text-skybrand-300 break-all select-all bg-black/40 px-3.5 py-2 rounded-xl border border-white/10" dir="ltr">
-                {storeUrl}
-              </div>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2 w-full md:w-auto justify-end shrink-0">
+              {/* الأرباح المستحقة */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200">
+                <div className="text-xs font-bold text-emerald-800 mb-1 flex items-center justify-between">
+                  <span>الأرباح المستحقة:</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                </div>
+                <div className="text-2xl font-black text-emerald-600 font-mono">
+                  {earnedProfits.toLocaleString('ar-IQ')} <span className="text-xs font-normal text-emerald-800">د.ع</span>
+                </div>
+                <div className="text-[11px] text-emerald-700 font-medium mt-1">
+                  جاهزة للسحب بعد تسليم الطلب للزبون
+                </div>
+              </div>
+
+              {/* الأرباح المتوقعة */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+                <div className="text-xs font-bold text-slate-500 mb-1">الأرباح المتوقعة (قيد التوصيل):</div>
+                <div className="text-xl font-black text-brand-800 font-mono">
+                  {totalExpectedProfits.toLocaleString('ar-IQ')} <span className="text-xs font-normal text-slate-500">د.ع</span>
+                </div>
+                <div className="text-[10px] text-slate-400 mt-1">من جميع الطلبات الجارية وغير المسلمة</div>
+              </div>
+            </div>
+
+            {/* بطاقة إحصائيات المتجر (الطلبات والمنتجات) */}
+            <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs space-y-3.5">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                <div className="w-8 h-8 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center font-bold">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+                <h3 className="font-black text-slate-900 text-sm">نشاط وإحصائيات المتجر</h3>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* إجمالي الطلبات */}
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+                  <div className="text-[11px] font-bold text-slate-500 mb-0.5">إجمالي الطلبات</div>
+                  <div className="text-lg font-black text-slate-900 font-mono">
+                    {orders.length} <span className="text-xs font-normal text-slate-500">طلب</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1">عبر متجرك</div>
+                </div>
+
+                {/* المنتجات المعروضة */}
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+                  <div className="text-[11px] font-bold text-slate-500 mb-0.5">المنتجات المعروضة</div>
+                  <div className="text-lg font-black text-slate-900 font-mono">
+                    {totalProductsCount} <span className="text-xs font-normal text-slate-500">منتج</span>
+                  </div>
+                  <div className="text-[10px] text-emerald-600 font-medium mt-1">جاهزة للبيع</div>
+                </div>
+              </div>
+            </div>
+
+            {/* بطاقة حساب استلام الأرباح المعتمد */}
+            <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold">
+                    {currentStore?.payoutMethod === 'mastercard' && <CreditCard className="w-4 h-4" />}
+                    {currentStore?.payoutMethod === 'zain_cash' && <Wallet className="w-4 h-4" />}
+                    {currentStore?.payoutMethod === 'mobile_credit' && <Smartphone className="w-4 h-4" />}
+                    {!currentStore?.payoutMethod && <CreditCard className="w-4 h-4" />}
+                  </div>
+                  <h3 className="font-black text-slate-900 text-sm">حساب استلام الأرباح</h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="text-xs font-bold text-brand-700 hover:text-brand-800 hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  <Sliders className="w-3 h-3" />
+                  <span>تعديل</span>
+                </button>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/90 text-xs">
+                {currentStore?.payoutMethod === 'mastercard' && (
+                  <div className="space-y-1">
+                    <div className="text-slate-500 text-[11px]">بطاقة ماستر كارت:</div>
+                    <div className="font-black font-mono text-slate-900 text-sm" dir="ltr">
+                      {currentStore.payoutDetails?.mastercardNumber}
+                    </div>
+                    <div className="text-slate-600 text-[11px]">
+                      باسم: <strong className="text-slate-900">{currentStore.payoutDetails?.mastercardHolderName}</strong>
+                    </div>
+                  </div>
+                )}
+
+                {currentStore?.payoutMethod === 'zain_cash' && (
+                  <div className="space-y-1">
+                    <div className="text-slate-500 text-[11px]">محفظة زين كاش:</div>
+                    <div className="font-black font-mono text-slate-900 text-sm" dir="ltr">
+                      {currentStore.payoutDetails?.zainCashPhone}
+                    </div>
+                    <div className="text-slate-600 text-[11px]">
+                      باسم: <strong className="text-slate-900">{currentStore.payoutDetails?.zainCashHolderName}</strong>
+                    </div>
+                  </div>
+                )}
+
+                {currentStore?.payoutMethod === 'mobile_credit' && (
+                  <div className="space-y-1">
+                    <div className="text-slate-500 text-[11px]">
+                      تحويل رصيد هاتف ({currentStore.payoutDetails?.creditProvider === 'asia' ? 'آسيا سيل' : 'أثير زين'}):
+                    </div>
+                    <div className="font-black font-mono text-slate-900 text-sm" dir="ltr">
+                      {currentStore.payoutDetails?.creditPhone}
+                    </div>
+                  </div>
+                )}
+
+                {!currentStore?.payoutMethod && (
+                  <div className="text-center py-2 space-y-2">
+                    <div className="text-slate-500 text-xs">لم تحدد طريقة استلام أرباحك بعد</div>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditModalOpen(true)}
+                      className="py-1.5 px-3 bg-brand-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-brand-800 transition-colors inline-block"
+                    >
+                      تحديد وسيلة استلام الأرباح
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* زر تعديل إعدادات المتجر والحساب */}
             <button
-              onClick={handleCopyLink}
-              className={`w-full md:w-auto py-2.5 px-5 font-black text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm ${
-                copiedLink
-                  ? 'bg-emerald-500 text-white'
-                  : 'bg-accent-500 hover:bg-accent-400 active:bg-accent-600 text-slate-950'
-              }`}
+              type="button"
+              onClick={openEditModal}
+              className="w-full py-3.5 px-4 bg-white hover:bg-slate-50 text-slate-800 font-black text-xs sm:text-sm rounded-2xl border border-slate-200/90 shadow-2xs transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
-              {copiedLink ? (
-                <>
-                  <Check className="w-4 h-4 text-white" />
-                  <span>تم نسخ الرابط!</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4" />
-                  <span>نسخ الرابط للنشر</span>
-                </>
-              )}
+              <Sliders className="w-4 h-4 text-brand-700" />
+              <span>إعدادات الحساب وتفاصيل المتجر</span>
             </button>
           </div>
-        </div>
 
-        {/* بطاقات الإحصائيات والأرباح */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-            <div className="text-xs font-bold text-slate-500 mb-1">الأرباح المتوقعة</div>
-            <div className="text-xl sm:text-2xl font-black text-brand-800">
-              {totalExpectedProfits.toLocaleString('ar-IQ')} <span className="text-xs font-normal text-slate-500">د.ع</span>
-            </div>
-            <div className="text-[11px] text-slate-400 mt-2">من جميع الطلبات الجارية</div>
-          </div>
+          {/* مساحة العمل والمحتوى الرئيسي (Main Content) - تأخذ 8 أعمدة في الشاشات الكبيرة */}
+          <div className="lg:col-span-8 space-y-6">
+            {/* شريط التبويب الرئيسي: إدارة المنتجات والأسعار / الطلبات الواردة */}
+            <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 pb-3">
+              <button
+                onClick={() => setActiveTab('products')}
+                className={`py-3 px-5 rounded-2xl font-black text-sm flex items-center gap-2 transition-all cursor-pointer ${
+                  activeTab === 'products'
+                    ? 'bg-brand-700 text-white shadow-md shadow-brand-700/20'
+                    : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <Tag className="w-4 h-4" />
+                <span>منتجات متجري وتعديل الأسعار</span>
+                <span className={`text-xs px-2.5 py-0.5 rounded-full font-mono font-bold ${
+                  activeTab === 'products' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {merchantProducts.length}
+                </span>
+              </button>
 
-          <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-            <div className="text-xs font-bold text-slate-500 mb-1">الأرباح المستحقة</div>
-            <div className="text-xl sm:text-2xl font-black text-emerald-600">
-              {earnedProfits.toLocaleString('ar-IQ')} <span className="text-xs font-normal text-slate-500">د.ع</span>
+              <button
+                onClick={() => setActiveTab('orders')}
+                className={`py-3 px-5 rounded-2xl font-black text-sm flex items-center gap-2 transition-all cursor-pointer ${
+                  activeTab === 'orders'
+                    ? 'bg-brand-700 text-white shadow-md shadow-brand-700/20'
+                    : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <ShoppingBag className="w-4 h-4" />
+                <span>طلبات زبائن متجري</span>
+                <span className={`text-xs px-2.5 py-0.5 rounded-full font-mono font-bold ${
+                  activeTab === 'orders' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {orders.length}
+                </span>
+              </button>
             </div>
-            <div className="text-[11px] text-emerald-600 font-medium mt-2">جاهزة للسحب بعد تسليم الطلب</div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-            <div className="text-xs font-bold text-slate-500 mb-1">إجمالي الطلبات</div>
-            <div className="text-xl sm:text-2xl font-black text-slate-900">
-              {orders.length} <span className="text-xs font-normal text-slate-500">طلب</span>
-            </div>
-            <div className="text-[11px] text-slate-400 mt-2">عبر رابط متجرك الخاص</div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-            <div className="text-xs font-bold text-slate-500 mb-1">المنتجات المعروضة</div>
-            <div className="text-xl sm:text-2xl font-black text-slate-900">
-              {totalProductsCount} <span className="text-xs font-normal text-slate-500">منتج جاهز</span>
-            </div>
-            <div className="text-[11px] text-emerald-600 font-medium mt-2 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-              <span>تظهر تلقائياً في متجرك للزبائن</span>
-            </div>
-          </div>
-        </div>
-
-        {/* شريط معلومات استلام الأرباح المعتمد */}
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center shrink-0">
-              {currentStore?.payoutMethod === 'mastercard' && <CreditCard className="w-5 h-5" />}
-              {currentStore?.payoutMethod === 'zain_cash' && <Wallet className="w-5 h-5" />}
-              {currentStore?.payoutMethod === 'mobile_credit' && <Smartphone className="w-5 h-5" />}
-              {!currentStore?.payoutMethod && <CreditCard className="w-5 h-5" />}
-            </div>
-            <div>
-              <div className="text-xs font-bold text-slate-500">حساب استلام الأرباح المعتمد:</div>
-              <div className="text-sm font-black text-slate-900 mt-0.5">
-                {currentStore?.payoutMethod === 'mastercard' && (
-                  <span>ماستر كارت: {currentStore.payoutDetails?.mastercardNumber} (باسم: {currentStore.payoutDetails?.mastercardHolderName})</span>
-                )}
-                {currentStore?.payoutMethod === 'zain_cash' && (
-                  <span>محفظة زين كاش: {currentStore.payoutDetails?.zainCashPhone} (باسم: {currentStore.payoutDetails?.zainCashHolderName})</span>
-                )}
-                {currentStore?.payoutMethod === 'mobile_credit' && (
-                  <span>رصيد هاتف {currentStore.payoutDetails?.creditProvider === 'asia' ? 'آسيا سيل' : 'أثير زين'} للرقم: {currentStore.payoutDetails?.creditPhone}</span>
-                )}
-                {!currentStore?.payoutMethod && (
-                  <span className="text-slate-400 font-normal">لم يتم تحديد حساب استلام أرباح بعد</span>
-                )}
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={() => setIsEditModalOpen(true)}
-            className="py-2 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
-          >
-            <Sliders className="w-3.5 h-3.5" />
-            <span>تعديل وسيلة الاستلام</span>
-          </button>
-        </div>
-
-        {/* شريط التبويب الرئيسي: إدارة المنتجات والأسعار / الطلبات الواردة */}
-        <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 pb-3">
-          <button
-            onClick={() => setActiveTab('products')}
-            className={`py-3 px-5 rounded-2xl font-black text-sm flex items-center gap-2 transition-all cursor-pointer ${
-              activeTab === 'products'
-                ? 'bg-brand-700 text-white shadow-md shadow-brand-700/20'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <Tag className="w-4 h-4" />
-            <span>منتجات متجري وتعديل الأسعار</span>
-            <span className={`text-xs px-2.5 py-0.5 rounded-full font-mono font-bold ${
-              activeTab === 'products' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
-            }`}>
-              {merchantProducts.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('orders')}
-            className={`py-3 px-5 rounded-2xl font-black text-sm flex items-center gap-2 transition-all cursor-pointer ${
-              activeTab === 'orders'
-                ? 'bg-brand-700 text-white shadow-md shadow-brand-700/20'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <ShoppingBag className="w-4 h-4" />
-            <span>طلبات زبائن متجري</span>
-            <span className={`text-xs px-2.5 py-0.5 rounded-full font-mono font-bold ${
-              activeTab === 'orders' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
-            }`}>
-              {orders.length}
-            </span>
-          </button>
-        </div>
 
         {/* 1. قسم منتجات متجري وتعديل الأسعار */}
         {activeTab === 'products' && (
@@ -1536,6 +1578,8 @@ interface MerchantEditFormState {
           )}
         </div>
         )}
+          </div>
+        </div>
       </div>
 
       {/* نافذة منبثقة فاخرة لتفاصيل الطلب ومراسلة واتساب وتأكيد الطلب */}
