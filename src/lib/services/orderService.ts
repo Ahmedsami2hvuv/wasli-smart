@@ -284,7 +284,7 @@ export async function getAllOrders(): Promise<Order[]> {
             platform_price,
             merchant_profit_per_unit,
             platform_profit_per_unit,
-            product:products(id, title, brand, metadata, wholesale_price, platform_price, images:product_images(local_url))
+            product:products(id, title, brand, wholesale_price, platform_price, images:product_images(local_url))
           )
         `)
         .order('created_at', { ascending: false });
@@ -297,9 +297,9 @@ export async function getAllOrders(): Promise<Order[]> {
                 const p = it.product;
                 const wholesale = Number(it.wholesale_price || p?.wholesale_price || 0);
                 const platform = Number(it.platform_price || p?.platform_price || wholesale);
-                const supplierPrice = p?.metadata?.supplierPrice || (wholesale > 3000 ? wholesale - 3000 : wholesale);
-                const supplierCode = p?.brand || p?.metadata?.supplierCode || p?.metadata?.fedshiCode || it.product_id;
-                const supplierSku = p?.metadata?.supplierSku || p?.metadata?.fedshiSku || '';
+                const supplierPrice = (wholesale > 3000 ? wholesale - 3000 : wholesale);
+                const supplierCode = p?.brand || it.product_id;
+                const supplierSku = '';
 
                 return {
                   id: it.id,
