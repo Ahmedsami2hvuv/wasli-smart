@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, 
   ShoppingBag, 
@@ -28,7 +28,9 @@ import {
   Square,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  AlertTriangle,
+  Filter
 } from 'lucide-react';
 import Link from 'next/link';
 import { Product, Category, Subcategory } from '@/types';
@@ -39,6 +41,41 @@ export default function AdminProductsPage() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  // فلتر ربح المنصة: الكل أو أقل من 3000 د.ع أو 3000 د.ع وأكثر
+  const [profitFilter, setProfitFilter] = useState<'all' | 'low_profit' | 'good_profit'>('all');
+
+  // حساب المنتجات التي ربح المنصة فيها أقل من 3000 د.ع
+  const lowProfitProducts = useMemo(() => {
+    return products.filter(p => {
+      const wholesale = Number(p.wholesalePriceIqd) || 0;
+      const supplier = Number(p.supplierPriceIqd) || 0;
+      const profit = wholesale - supplier;
+      return profit < 3000;
+    });
+  }, [products]);
+
+  // قائمة المنتجات بعد تطبيق الفلترة المزدوجة (البحث + هامش الربح)
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      const wholesale = Number(p.wholesalePriceIqd) || 0;
+      const supplier = Number(p.supplierPriceIqd) || 0;
+      const profit = wholesale - supplier;
+
+      if (profitFilter === 'low_profit' && profit >= 3000) {
+        return false;
+      }
+      if (profitFilter === 'good_profit' && profit < 3000) {
+        return false;
+      }
+
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      return p.name.toLowerCase().includes(q) || 
+             p.category?.toLowerCase().includes(q) || 
+             p.supplierCode?.toLowerCase().includes(q) ||
+             p.id.toLowerCase().includes(q);
+    });
+  }, [products, profitFilter, searchQuery]);
 
   // حالات ودوال الربط المباشر مع API موجود
   const [showMojodModal, setShowMojodModal] = useState(false);
@@ -1295,6 +1332,44 @@ export default function AdminProductsPage() {
           </div>
         )}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md space-y-6">
+          
+          {/* بطاقة تنبيه بارزة للمنتجات ذات الربح الأقل من 3,000 د.ع */}
+          {lowProfitProducts.length > 0 && (
+            <div className="bg-gradient-to-r from-amber-50 via-rose-50 to-amber-50 border-2 border-amber-300/80 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-rose-500/15 border border-rose-300 text-rose-700 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-6 h-6 text-rose-600 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-sm sm:text-base flex items-center gap-2">
+                    <span>تنبيه أرباح المنصة:</span>
+                    <span className="bg-rose-600 text-white px-2.5 py-0.5 rounded-full text-xs font-mono font-black">
+                      {lowProfitProducts.length} منتج
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    هناك <strong>{lowProfitProducts.length} منتج</strong> ربح المنصة الصافي فيها أقل من <strong>3,000 د.ع</strong>. يمكنك تصفيتها وتعديل أسعار جملتها لتحقيق هامش الربح المطلوب.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setProfitFilter(profitFilter === 'low_profit' ? 'all' : 'low_profit')}
+                  className={`py-2 px-4 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                    profitFilter === 'low_profit'
+                      ? 'bg-rose-700 hover:bg-rose-800 text-white ring-2 ring-rose-400'
+                      : 'bg-white hover:bg-rose-50 text-rose-900 border border-rose-300'
+                  }`}
+                >
+                  <Filter className="w-4 h-4" />
+                  <span>{profitFilter === 'low_profit' ? 'إلغاء التصفية (عرض الكل)' : 'عرض المنتجات الأقل من 3,000 د.ع فقط'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
             <div>
               <h2 className="text-lg font-black text-slate-900">قائمة المنتجات الحالية ({products.length})</h2>
@@ -1315,16 +1390,52 @@ export default function AdminProductsPage() {
               </div>
 
               <span className="text-xs bg-slate-100 text-slate-600 font-bold px-3 py-2 rounded-xl shrink-0">
-                {products.filter(p => {
-                  if (!searchQuery.trim()) return true;
-                  const q = searchQuery.toLowerCase();
-                  return p.name.toLowerCase().includes(q) || 
-                         p.category?.toLowerCase().includes(q) || 
-                         p.supplierCode?.toLowerCase().includes(q) ||
-                         p.id.toLowerCase().includes(q);
-                }).length} منتج
+                يعرض: {filteredProducts.length} منتج
               </span>
             </div>
+          </div>
+
+          {/* شريط تبويبات فلترة المنتجات حسب هامش ربح المنصة */}
+          <div className="flex flex-wrap items-center gap-2 pt-1 pb-2 border-b border-slate-100">
+            <span className="text-xs text-slate-400 font-bold ml-1">تصفية الربح:</span>
+            
+            <button
+              type="button"
+              onClick={() => setProfitFilter('all')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                profitFilter === 'all'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
+            >
+              <span>جميع المنتجات ({products.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setProfitFilter('low_profit')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                profitFilter === 'low_profit'
+                  ? 'bg-rose-700 text-white shadow-xs'
+                  : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200'
+              }`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+              <span>⚠️ ربح المنصة أقل من 3,000 د.ع ({lowProfitProducts.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setProfitFilter('good_profit')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                profitFilter === 'good_profit'
+                  ? 'bg-emerald-700 text-white shadow-xs'
+                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
+              }`}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>✅ ربح 3,000 د.ع وأكثر ({products.length - lowProfitProducts.length})</span>
+            </button>
           </div>
 
           {loading ? (
@@ -1332,9 +1443,9 @@ export default function AdminProductsPage() {
               <div className="w-8 h-8 border-3 border-brand-200 border-t-brand-700 rounded-full animate-spin mx-auto mb-2" />
               <p className="text-xs text-slate-500">جاري تحميل المنتجات...</p>
             </div>
-          ) : products.length === 0 ? (
-            <div className="text-center py-12 text-slate-400 text-sm">
-              لا توجد منتجات مضافة بعد.
+          ) : filteredProducts.length === 0 ? (
+            <div className="text-center py-12 bg-slate-50 rounded-2xl border border-slate-200 text-slate-500 text-xs">
+              لا توجد منتجات مطابقة لخيارات البحث أو التصفية الحالية.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -1353,15 +1464,11 @@ export default function AdminProductsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {products.filter(p => {
-                    if (!searchQuery.trim()) return true;
-                    const q = searchQuery.toLowerCase();
-                    return p.name.toLowerCase().includes(q) || 
-                           p.category?.toLowerCase().includes(q) || 
-                           p.supplierCode?.toLowerCase().includes(q) ||
-                           p.id.toLowerCase().includes(q);
-                  }).map((p) => {
-                    const platformProfit = (p.wholesalePriceIqd || 0) - (p.supplierPriceIqd || 0);
+                  {filteredProducts.map((p) => {
+                    const wholesale = Number(p.wholesalePriceIqd) || 0;
+                    const supplier = Number(p.supplierPriceIqd) || 0;
+                    const platformProfit = wholesale - supplier;
+                    const isLowProfit = platformProfit < 3000;
                     const isDeleting = deletingId === p.id;
                     return (
                       <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
@@ -1405,8 +1512,26 @@ export default function AdminProductsPage() {
                         <td className="py-3.5 px-3 font-bold text-brand-800">
                           {p.wholesalePriceIqd?.toLocaleString('ar-IQ')} د.ع
                         </td>
-                        <td className="py-3.5 px-3 font-black text-emerald-700">
-                          {p.supplierPriceIqd ? `+${platformProfit.toLocaleString('ar-IQ')} د.ع` : '-'}
+                        <td className="py-3.5 px-3">
+                          {p.supplierPriceIqd ? (
+                            isLowProfit ? (
+                              <div className="inline-flex flex-col items-start gap-1">
+                                <span className="font-black text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-xl text-xs flex items-center gap-1 shadow-2xs">
+                                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                  <span>+{platformProfit.toLocaleString('ar-IQ')} د.ع</span>
+                                </span>
+                                <span className="text-[10px] text-rose-600 font-black">
+                                  أقل من 3 آلاف د.ع
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="font-black text-emerald-700 bg-emerald-50/80 border border-emerald-200 px-2.5 py-1 rounded-xl text-xs inline-block">
+                                +{platformProfit.toLocaleString('ar-IQ')} د.ع
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-slate-400 font-bold">-</span>
+                          )}
                         </td>
                         <td className="py-3.5 px-3 text-slate-600 font-mono text-[11px]">
                           {p.minPriceIqd?.toLocaleString('ar-IQ')} - {p.maxPriceIqd?.toLocaleString('ar-IQ')} د.ع
