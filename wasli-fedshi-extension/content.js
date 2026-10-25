@@ -74,9 +74,10 @@
       const props = parsed?.props?.pageProps;
       if (!props) return null;
 
-      // البحث عن كائن المنتج داخل الـ props أو dehydratedState
+      // البحث عن كائن المنتج المباشر داخل الـ props
       let product = props.product || props.productData || null;
 
+      // البحث داخل dehydratedState queries
       if (!product && props.dehydratedState?.queries) {
         for (const q of props.dehydratedState.queries) {
           const data = q?.state?.data;
@@ -85,6 +86,24 @@
             break;
           }
         }
+      }
+
+      // بحث تراجعي عميق وشامل إن لم يُعثر عليه
+      if (!product) {
+        function deepFindProduct(obj, depth = 0) {
+          if (!obj || typeof obj !== 'object' || depth > 5) return null;
+          if (obj.wholesale_price !== undefined || (obj.title && (obj.product_code || obj.detailed_description || obj.suggested_price_min))) {
+            return obj;
+          }
+          for (const k of Object.keys(obj)) {
+            if (typeof obj[k] === 'object' && obj[k] !== null) {
+              const res = deepFindProduct(obj[k], depth + 1);
+              if (res) return res;
+            }
+          }
+          return null;
+        }
+        product = deepFindProduct(props);
       }
 
       return product;
@@ -436,12 +455,15 @@
         }
       });
 
-      // إضافة صور السكربت إن وجدت
-      if (scriptProduct?.images && Array.isArray(scriptProduct.images)) {
-        scriptProduct.images.forEach(im => {
-          const u = typeof im === 'string' ? im : (im?.url || im?.src || '');
-          if (u && !images.includes(u)) images.unshift(u);
-        });
+      // إضافة صور السكربت إن وجدت (كافة صور المنتج الأصلية عالية الدقة)
+      if (scriptProduct) {
+        const rawImgs = scriptProduct.images || scriptProduct.product_images || scriptProduct.gallery || scriptProduct.media || [];
+        if (Array.isArray(rawImgs)) {
+          rawImgs.forEach(im => {
+            const u = typeof im === 'string' ? im : (im?.url || im?.src || im?.image || '');
+            if (u && !images.includes(u)) images.unshift(u);
+          });
+        }
       }
 
       // 8. استخراج الألوان والخيارات
@@ -470,25 +492,45 @@
         }
       }
 
-      // 9. استخراج "الوصف الترويجي" و "المواصفات"
+      // 9. استخراج "الوصف الترويجي" و "المواصفات" بأعلى دقة
       let promoDescription = '';
       let specifications = '';
 
-      if (targetDoc === document) {
-        const tabsData = await extractRadixTabsContent();
-        promoDescription = tabsData.promoDescription;
-        specifications = tabsData.specifications;
-      } else {
-        promoDescription = extractFieldFromScripts(/"detailed_description"\s*:\s*"([^"]+)"/, targetDoc);
-        specifications = extractFieldFromScripts(/"description"\s*:\s*"([^"]+)"/, targetDoc);
+      // أ) الأولوية الأولى: استخراج مباشر ونقي وفوري من كائن السكربت إن توفر
+      if (scriptProduct) {
+        promoDescription = String(
+          scriptProduct.detailed_description || 
+          scriptProduct.detailedDescription || 
+          scriptProduct.promo_description || 
+          scriptProduct.postBody || 
+          ''
+        ).trim();
 
-        if (!promoDescription) {
-          const pEl = targetDoc.querySelector('[id*="content-detailed_description"], [role="tabpanel"]');
-          if (pEl) promoDescription = (pEl.innerText || pEl.textContent || '').replace(/نسخ الوصف/g, '').trim();
-        }
-        if (!specifications) {
-          const sEl = targetDoc.querySelector('[id*="content-description"]');
-          if (sEl) specifications = (sEl.innerText || sEl.textContent || '').trim();
+        specifications = String(
+          scriptProduct.description || 
+          scriptProduct.specifications || 
+          scriptProduct.specs || 
+          ''
+        ).trim();
+      }
+
+      // ب) إذا لم يتوفر أي منهما، نلجأ للتبويبات وعناصر الصفحة
+      if (!promoDescription || !specifications) {
+        if (targetDoc === document) {
+          const tabsData = await extractRadixTabsContent();
+          if (!promoDescription) promoDescription = tabsData.promoDescription;
+          if (!specifications) specifications = tabsData.specifications;
+        } else {
+          if (!promoDescription) {
+            promoDescription = extractFieldFromScripts(/"detailed_description"\s*:\s*"([^"]+)"/, targetDoc);
+            const pEl = targetDoc.querySelector('[id*="content-detailed_description"], [role="tabpanel"]');
+            if (pEl && !promoDescription) promoDescription = (pEl.innerText || pEl.textContent || '').replace(/نسخ الوصف/g, '').trim();
+          }
+          if (!specifications) {
+            specifications = extractFieldFromScripts(/"description"\s*:\s*"([^"]+)"/, targetDoc);
+            const sEl = targetDoc.querySelector('[id*="content-description"]');
+            if (sEl && !specifications) specifications = (sEl.innerText || sEl.textContent || '').trim();
+          }
         }
       }
 
@@ -1417,16 +1459,27 @@
     try {
       showFloatingToast('جاري السحب الفوري للبيانات...', 'loading');
 
-      // قراءة فائقة السرعة للبيانات بفاصل 80ms فقط (تكتمل غالباً في أول 100ms)
+      // قراءة ذكية وسريعة للبيانات بفاصل 80ms مع التحقق من النص الترويجي والمواصفات
       let readyData = null;
-      for (let attempt = 0; attempt < 20; attempt++) {
+      for (let attempt = 0; attempt < 25; attempt++) {
         const d = isMojod ? await extractMojodProductDetails() : await extractFedshiProductDetails();
         if (d) {
           const hasTitle = Boolean(d.title && d.title !== '—' && d.title !== '...');
           const hasPrice = Boolean(d.fedshiWholesale > 0);
-          if (hasTitle && hasPrice) {
+          const hasContent = Boolean(d.promoDescription || d.specifications);
+
+          // إذا توفر الاسم والسعر والنص الترويجي/المواصفات، اكتملت البيانات فوراً
+          if (hasTitle && hasPrice && hasContent) {
             readyData = d;
             break;
+          }
+
+          // إذا توفر الاسم والسعر ولكن المحتوى النصي قيد التحميل، نحفظ البيانات وننتظر مهلة بسيطة لالتقاطه
+          if (hasTitle && hasPrice) {
+            readyData = d;
+            if (attempt >= 5) {
+              break;
+            }
           }
         }
         await new Promise(res => setTimeout(res, 80));

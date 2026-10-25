@@ -395,88 +395,79 @@ export async function publishProductToTelegramChannel(product: {
   // استخراج الوصف الترويجي
   const promoText = (product.promoDescription || '').trim();
 
+  // بطاقة المنتج الموجهة للتاجر (توضع كـ Caption للألبوم أو الصورة)
   const headerLines = [
-    `منتج جديد متاح للتجار: ${product.name}`,
+    `📦 منتج جديد متاح للتجار: ${product.name}`,
     '==============================',
-    `القسم: ${product.category || 'عام'}`,
-    product.supplierCode ? `كود المورد: ${product.supplierCode}` : '',
+    `📂 القسم: ${product.category || 'عام'}`,
+    product.supplierCode ? `🔢 كود المورد: ${product.supplierCode}` : '',
     '------------------------------',
-    `سعر الجملة للتاجر: ${product.wholesalePriceIqd.toLocaleString('ar-IQ')} د.ع`,
-    `سعر البيع المقترح للزبون: ${product.minPriceIqd.toLocaleString('ar-IQ')} - ${product.maxPriceIqd.toLocaleString('ar-IQ')} د.ع`,
-    `هامش ربح التاجر المتوقع: ${(product.minPriceIqd - product.wholesalePriceIqd).toLocaleString('ar-IQ')} - ${(product.maxPriceIqd - product.wholesalePriceIqd).toLocaleString('ar-IQ')} د.ع`,
+    `💰 سعر الجملة للتاجر: ${product.wholesalePriceIqd.toLocaleString('ar-IQ')} د.ع`,
+    `🏷️ سعر البيع المقترح: ${product.minPriceIqd.toLocaleString('ar-IQ')} - ${product.maxPriceIqd.toLocaleString('ar-IQ')} د.ع`,
+    `✨ هامش ربحك المتوقع: ${(product.minPriceIqd - product.wholesalePriceIqd).toLocaleString('ar-IQ')} - ${(product.maxPriceIqd - product.wholesalePriceIqd).toLocaleString('ar-IQ')} د.ع`,
     '------------------------------',
   ].filter(Boolean);
 
-  const footerLine = '==============================\nمتوفر الآن للطلب والشحن المباشر لكافة محافظات العراق والدفع عند الاستلام.';
+  const footerLine = '==============================\n🚚 متوفر للشحن الفوري لكافة محافظات العراق والدفع عند الاستلام.\n👇 النص الترويجي الجاهز للإعلان مرفق أدناه مباشرة:';
 
-  let caption = '';
-  let needExtraPromoMessage = false;
-
-  const combinedFullLines = [...headerLines];
+  const captionLines = [...headerLines];
   if (descriptionText) {
-    combinedFullLines.push(`الوصف والمواصفات:\n${descriptionText}`);
+    captionLines.push(`📋 أهم المواصفات:\n${descriptionText.slice(0, 380)}`);
   }
-  if (promoText) {
-    combinedFullLines.push(`الوصف الترويجي (للإعلان والترويج):\n${promoText}`);
-  }
-  combinedFullLines.push(footerLine);
+  captionLines.push(footerLine);
+  const caption = captionLines.join('\n').slice(0, 1024);
 
-  const fullText = combinedFullLines.join('\n');
+  // دالة إرسال رسالة النص الترويجي الجاهز للإعلان والنسخ (تُرسل دائماً لتسهيل عمل التجار)
+  const sendPromotionalPost = async () => {
+    const textToCopy = promoText || descriptionText || product.name;
+    if (!textToCopy) return;
 
-  if (fullText.length <= 1020) {
-    caption = fullText;
-  } else {
-    needExtraPromoMessage = true;
-    const fittedLines = [...headerLines];
-    if (descriptionText) {
-      fittedLines.push(`الوصف والمواصفات:\n${descriptionText.slice(0, 420)}`);
-    }
-    fittedLines.push('الوصف الترويجي الكامل مرفق أدناه مباشرة (جاهز للنسخ والإعلان)');
-    fittedLines.push(footerLine);
-    caption = fittedLines.join('\n').slice(0, 1020);
-  }
+    const promoMessageContent = [
+      '📢 النص الترويجي الجاهز للإعلان والنسخ (Copy & Paste):',
+      '==============================',
+      textToCopy,
+      '==============================',
+      '🚚 التوصيل متاح لكافة محافظات العراق والدفع عند الاستلام 🇮🇶',
+    ].join('\n');
 
-  // دالة مساعدة لإرسال رسالة الوصف الترويجي التكميلية إن دعت الحاجة
-  const sendExtraPromoIfNeeded = async () => {
-    if (needExtraPromoMessage && promoText) {
-      try {
-        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: channelId,
-            text: `الوصف الترويجي (جاهز للنسخ والإعلان):\n\n${promoText}`,
-          }),
-        });
-      } catch (extraErr) {
-        console.warn('تعذر إرسال رسالة الوصف الترويجي الإضافية:', extraErr);
-      }
+    try {
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: channelId,
+          text: promoMessageContent.slice(0, 4000),
+        }),
+      });
+    } catch (promoErr) {
+      console.warn('تعذر إرسال رسالة النص الترويجي المخصصة:', promoErr);
     }
   };
 
   try {
-    // جمع الصور وتصفيتها (بحد أقصى 6 صور للألبوم لضمان سرعة نشر خارقة)
+    // جمع الصور وتصفيتها (حتى 8 صور للألبوم)
     const rawImages = (product.images && product.images.length > 0)
       ? product.images
       : (product.image ? [product.image] : []);
 
-    const validUrls = rawImages
-      .filter(img => typeof img === 'string' && (img.startsWith('http://') || img.startsWith('https://')))
-      .slice(0, 6);
+    const validUrls = Array.from(new Set(
+      rawImages.filter(img => typeof img === 'string' && (img.startsWith('http://') || img.startsWith('https://')))
+    )).slice(0, 8);
 
-    // 1. إذا كان لدينا أكثر من صورة: إرسالها فوراً كألبوم مجمع بروابطها المباشرة فائقة السرعة
+    // 1. إذا كان لدينا أكثر من صورة: محاولة إرسال ألبوم الصور (Media Group)
     if (validUrls.length > 1) {
+      // أ) محاولة الإرسال السريع بالروابط المباشرة
       try {
         const mediaUrls = validUrls.map((url, idx) => ({
           type: 'photo',
           media: url,
-          caption: idx === 0 ? caption.slice(0, 1024) : undefined,
+          caption: idx === 0 ? caption : undefined,
         }));
 
         const groupUrlRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMediaGroup`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          signal: AbortSignal.timeout(25000),
+          signal: AbortSignal.timeout(15000),
           body: JSON.stringify({
             chat_id: channelId,
             media: mediaUrls,
@@ -485,7 +476,7 @@ export async function publishProductToTelegramChannel(product: {
 
         const groupUrlData = await groupUrlRes.json();
         if (groupUrlData.ok) {
-          await sendExtraPromoIfNeeded();
+          await sendPromotionalPost();
           const proxyUrls = extractProxyUrlsFromTelegramResult(groupUrlData.result);
           return {
             success: true,
@@ -494,30 +485,88 @@ export async function publishProductToTelegramChannel(product: {
             primaryProxyUrl: proxyUrls[0],
           };
         } else {
-          console.warn('تعذر إرسال ألبوم الصور بروابطه المباشرة، جاري المحاولة بالبديل:', groupUrlData.description);
+          console.warn('روابط الألبوم المباشرة لم يقبلها تيليجرام، جاري الرفع بالملفات الثنائية (FormData):', groupUrlData.description);
         }
       } catch (groupFallbackErr) {
-        console.warn('خطأ في إرسال ألبوم تليغرام المباشر:', groupFallbackErr);
+        console.warn('خطأ في ألبوم تيليجرام المباشر:', groupFallbackErr);
+      }
+
+      // ب) البديل الموثوق 100%: جلب الصور بالتوازي عبر السيرفر ورفعها كـ Multipart FormData
+      try {
+        const downloadedBuffers = await Promise.all(
+          validUrls.slice(0, 6).map(async (u) => {
+            try {
+              const r = await fetch(u, { signal: AbortSignal.timeout(7000) });
+              if (!r.ok) return null;
+              const ab = await r.arrayBuffer();
+              return { buffer: Buffer.from(ab), contentType: r.headers.get('content-type') || 'image/jpeg' };
+            } catch {
+              return null;
+            }
+          })
+        );
+
+        const validBuffers = downloadedBuffers.filter((b): b is NonNullable<typeof b> => Boolean(b && b.buffer && b.buffer.length > 0));
+
+        if (validBuffers.length > 1) {
+          const form = new FormData();
+          form.append('chat_id', String(channelId));
+
+          const formMedia = validBuffers.map((_, idx) => ({
+            type: 'photo',
+            media: `attach://photo_${idx}`,
+            caption: idx === 0 ? caption : undefined,
+          }));
+          form.append('media', JSON.stringify(formMedia));
+
+          validBuffers.forEach((item, idx) => {
+            const blob = new Blob([new Uint8Array(item.buffer)], { type: item.contentType });
+            form.append(`photo_${idx}`, blob, `photo_${idx}.jpg`);
+          });
+
+          const formRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMediaGroup`, {
+            method: 'POST',
+            body: form,
+            signal: AbortSignal.timeout(25000),
+          });
+
+          const formData = await formRes.json();
+          if (formData.ok) {
+            await sendPromotionalPost();
+            const proxyUrls = extractProxyUrlsFromTelegramResult(formData.result);
+            return {
+              success: true,
+              messageId: Array.isArray(formData.result) ? formData.result[0]?.message_id : undefined,
+              proxyUrls,
+              primaryProxyUrl: proxyUrls[0],
+            };
+          } else {
+            console.warn('فشل رفع الألبوم عبر FormData:', formData.description);
+          }
+        }
+      } catch (formErr) {
+        console.warn('خطأ أثناء رفع الألبوم المزدوج:', formErr);
       }
     }
 
-    // 2. إذا كانت صورة واحدة فقط (أو كبديل سريع): إرسالها برابطها المباشر في أجزاء من الثانية
+    // 2. إذا كانت صورة واحدة فقط أو كبديل أخير عند تعذر الألبوم:
     const singleImageUrl = validUrls[0] || product.image;
     if (singleImageUrl && (singleImageUrl.startsWith('http://') || singleImageUrl.startsWith('https://'))) {
       try {
+        // محاولة إرسال الصورة الفردية بالرابط
         const photoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chat_id: channelId,
             photo: singleImageUrl,
-            caption: caption.slice(0, 1024),
+            caption: caption,
           }),
         });
 
         const photoData = await photoRes.json();
         if (photoData.ok) {
-          await sendExtraPromoIfNeeded();
+          await sendPromotionalPost();
           const proxyUrls = extractProxyUrlsFromTelegramResult(photoData.result);
           return { 
             success: true, 
@@ -525,13 +574,40 @@ export async function publishProductToTelegramChannel(product: {
             proxyUrls,
             primaryProxyUrl: proxyUrls[0],
           };
+        } else {
+          // إذا رفض تيليجرام رابط الصورة، نرفعها كـ Blob
+          const r = await fetch(singleImageUrl, { signal: AbortSignal.timeout(7000) });
+          if (r.ok) {
+            const ab = await r.arrayBuffer();
+            const form = new FormData();
+            form.append('chat_id', String(channelId));
+            form.append('caption', caption);
+            form.append('photo', new Blob([new Uint8Array(ab)], { type: r.headers.get('content-type') || 'image/jpeg' }), 'single.jpg');
+
+            const binaryPhotoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+              method: 'POST',
+              body: form,
+              signal: AbortSignal.timeout(20000),
+            });
+            const binaryPhotoData = await binaryPhotoRes.json();
+            if (binaryPhotoData.ok) {
+              await sendPromotionalPost();
+              const proxyUrls = extractProxyUrlsFromTelegramResult(binaryPhotoData.result);
+              return { 
+                success: true, 
+                messageId: binaryPhotoData.result?.message_id,
+                proxyUrls,
+                primaryProxyUrl: proxyUrls[0],
+              };
+            }
+          }
         }
       } catch (singleErr) {
-        console.warn('خطأ في إرسال الصورة الفردية المباشرة:', singleErr);
+        console.warn('خطأ في إرسال الصورة الفردية:', singleErr);
       }
     }
 
-    // 3. كحل أخير إذا لم تتوفر صور: إرسال الرسالة النصية
+    // 3. كحل أخير إذا لم تتوفر أي صورة: إرسال الرسالة النصية
     const msgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -543,7 +619,7 @@ export async function publishProductToTelegramChannel(product: {
 
     const msgData = await msgRes.json();
     if (msgData.ok) {
-      await sendExtraPromoIfNeeded();
+      await sendPromotionalPost();
     }
     return { success: msgData.ok === true, messageId: msgData.result?.message_id, error: msgData.description };
   } catch (err: any) {
