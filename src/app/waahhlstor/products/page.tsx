@@ -1281,19 +1281,185 @@ export default function AdminProductsPage() {
                 </div>
               </div>
 
+              {/* لوحة تتبع التقدم اللحظي للنقل (كم منتج انقل، كم منتج باقي، يا منتج جاي ينقل، يا منتج انقل) */}
+              {importProgress && (
+                <div className="bg-gradient-to-br from-purple-950 via-indigo-950 to-slate-900 text-white p-4 sm:p-5 border-b border-purple-800/80 shadow-inner space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  {/* شريط الإحصائيات الرئيسي */}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        {importingMojod ? (
+                          <span className="relative flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-purple-500"></span>
+                          </span>
+                        ) : importProgress.isCancelled ? (
+                          <AlertCircle className="w-4 h-4 text-amber-400" />
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        )}
+                        <h3 className="text-sm sm:text-base font-black text-white">
+                          {importingMojod 
+                            ? 'جاري نقل المنتجات ونشرها في تليغرام الآن...' 
+                            : importProgress.isCancelled 
+                            ? 'تم إيقاف عملية النقل مؤقتاً' 
+                            : 'اكتملت عملية النقل بنجاح!'}
+                        </h3>
+                      </div>
+                      <p className="text-xs text-purple-200/80 mt-1">
+                        {importingMojod 
+                          ? 'يتم سحب كل منتج، تنزيل صوره، وتخزينه في وصلي مع النشر الفوري في قناة التجار'
+                          : `تمت معالجة ${importProgress.completedList.length} منتج بالكامل`}
+                      </p>
+                    </div>
+
+                    {/* العدادات التفصيلية: كم منتج انقل - كم منتج باقي - الإجمالي */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="bg-emerald-500/20 border border-emerald-400/40 rounded-xl px-3 py-1.5 text-center min-w-[75px]">
+                        <span className="text-[10px] text-emerald-300 block font-bold">تم نقله</span>
+                        <span className="text-base font-black text-emerald-400">
+                          {importProgress.completedList.filter(c => c.status === 'success' || c.status === 'skipped').length}
+                        </span>
+                      </div>
+
+                      <div className="bg-amber-500/20 border border-amber-400/40 rounded-xl px-3 py-1.5 text-center min-w-[75px]">
+                        <span className="text-[10px] text-amber-300 block font-bold">المتبقي</span>
+                        <span className="text-base font-black text-amber-300">
+                          {Math.max(0, importProgress.total - importProgress.completedList.length)}
+                        </span>
+                      </div>
+
+                      <div className="bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 text-center min-w-[75px]">
+                        <span className="text-[10px] text-purple-200 block font-bold">إجمالي المحدد</span>
+                        <span className="text-base font-black text-white">
+                          {importProgress.total}
+                        </span>
+                      </div>
+
+                      {importingMojod && (
+                        <button
+                          type="button"
+                          onClick={handleCancelImport}
+                          className="py-2 px-3 bg-red-500/30 hover:bg-red-500/50 text-red-200 border border-red-400/40 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                        >
+                          <StopCircle className="w-4 h-4 text-red-400" />
+                          <span>إيقاف مؤقت</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* شريط التقدم المئوي */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[11px] font-mono text-purple-200">
+                      <span>التقدم المنجز: {Math.round((importProgress.completedList.length / importProgress.total) * 100)}%</span>
+                      <span>{importProgress.completedList.length} من أصل {importProgress.total} منتج</span>
+                    </div>
+                    <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden p-0.5 border border-white/15">
+                      <div 
+                        className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-emerald-400 rounded-full transition-all duration-300 shadow-sm"
+                        style={{ width: `${Math.min(100, Math.round((importProgress.completedList.length / importProgress.total) * 100))}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* كارت: يا منتج جاي ينقل حالياً */}
+                  {importProgress.currentItem && importingMojod && (
+                    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-purple-400/30 flex items-center justify-between gap-3 animate-pulse">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-12 h-12 rounded-xl overflow-hidden bg-purple-950 shrink-0 border border-purple-400/40">
+                          {importProgress.currentItem.image ? (
+                            <img src={importProgress.currentItem.image} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-purple-300">
+                              <ImageIcon className="w-6 h-6" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="bg-purple-500/40 text-purple-200 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border border-purple-400/30 shrink-0">
+                              جاري نقله الآن #{importProgress.currentItem.id}
+                            </span>
+                            <span className="text-[11px] text-amber-300 font-bold shrink-0">
+                              (المنتج {importProgress.current} من {importProgress.total})
+                            </span>
+                          </div>
+                          <h4 className="text-xs font-bold text-white truncate mt-0.5" title={importProgress.currentItem.name}>
+                            {importProgress.currentItem.name}
+                          </h4>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 text-purple-300 text-xs font-bold shrink-0">
+                        <RefreshCw className="w-4 h-4 animate-spin text-purple-300" />
+                        <span className="hidden sm:inline">جلب الصور والرفع لتليغرام...</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* قائمة: يا منتج انقل (المنتجات التي تم الانتهاء منها) */}
+                  {importProgress.completedList.length > 0 && (
+                    <div className="space-y-1.5">
+                      <div className="text-[11px] font-bold text-purple-200 flex items-center justify-between">
+                        <span>المنتجات المكتملة بالتتابع ({importProgress.completedList.length}):</span>
+                        <span className="text-[10px] text-purple-300">تحديث لحظي</span>
+                      </div>
+                      <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
+                        {importProgress.completedList.map((item, idx) => (
+                          <div 
+                            key={idx} 
+                            className={`text-xs px-3 py-1.5 rounded-xl border flex items-center justify-between gap-2 ${
+                              item.status === 'success' 
+                                ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-200' 
+                                : item.status === 'skipped'
+                                ? 'bg-sky-950/50 border-sky-500/40 text-sky-200'
+                                : 'bg-red-950/50 border-red-500/40 text-red-200'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              {item.status === 'success' ? (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                              ) : item.status === 'skipped' ? (
+                                <Check className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                              ) : (
+                                <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                              )}
+                              <span className="font-mono text-[10px] opacity-80 shrink-0">#{item.id}</span>
+                              <span className="truncate font-semibold">{item.name}</span>
+                            </div>
+                            <span className="text-[10px] font-bold shrink-0 px-2 py-0.5 rounded-full bg-white/10">
+                              {item.note}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* تنبيه الحالة إن وُجد */}
-              {mojodImportMsg && (
-                <div className={`p-3 text-xs font-bold border-b flex items-center gap-2 ${
+              {mojodImportMsg && !importingMojod && (
+                <div className={`p-3 text-xs font-bold border-b flex items-center justify-between gap-2 ${
                   mojodImportMsg.type === 'success' 
                     ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
                     : 'bg-red-50 text-red-800 border-red-200'
                 }`}>
-                  {mojodImportMsg.type === 'success' ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                  )}
-                  <span>{mojodImportMsg.text}</span>
+                  <div className="flex items-center gap-2">
+                    {mojodImportMsg.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                    )}
+                    <span>{mojodImportMsg.text}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMojodImportMsg(null)}
+                    className="text-xs text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               )}
 
@@ -1320,6 +1486,19 @@ export default function AdminProductsPage() {
                       // سعر الجملة المقترح للتاجر
                       const wholesalePrice = rawPrice > 0 ? rawPrice : 10000;
                       const supplierCost = Math.round(wholesalePrice * 0.7);
+
+                      // استخراج أول صورة بدقة
+                      const itemImg = Array.isArray(item.img) 
+                        ? item.img[0] 
+                        : (typeof item.img === 'string' ? item.img : (item.image || ''));
+
+                      // استخراج اسم أنيق للمنتج بدلاً من النص الكامل
+                      let shortName = (item.name || '').trim();
+                      if (!shortName && item.body) {
+                        const line = item.body.split('\n')[0].replace(/[•\-*]/g, '').trim();
+                        shortName = line.length > 55 ? line.slice(0, 55) + '...' : line;
+                      }
+                      if (!shortName) shortName = `منتج #${idNum}`;
 
                       return (
                         <div
@@ -1348,10 +1527,10 @@ export default function AdminProductsPage() {
 
                           {/* صورة المنتج */}
                           <div className="w-full aspect-square rounded-xl overflow-hidden bg-slate-100 relative mb-2.5">
-                            {item.img ? (
+                            {itemImg ? (
                               <img
-                                src={item.img}
-                                alt={item.body || 'منتج موچود'}
+                                src={itemImg}
+                                alt={shortName}
                                 className="w-full h-full object-cover"
                                 loading="lazy"
                               />
@@ -1374,8 +1553,8 @@ export default function AdminProductsPage() {
                               <div className="flex items-center gap-1.5 text-[10px] text-purple-700 font-mono font-bold">
                                 <span># {idNum}</span>
                               </div>
-                              <h3 className="text-xs font-bold text-slate-900 line-clamp-2 mt-0.5" title={item.body}>
-                                {item.body || 'بدون عنوان'}
+                              <h3 className="text-xs font-bold text-slate-900 line-clamp-2 mt-0.5" title={item.body || shortName}>
+                                {shortName}
                               </h3>
                             </div>
 
@@ -1423,7 +1602,7 @@ export default function AdminProductsPage() {
                     {importingMojod ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>جاري استيراد المنتجات ونشرها...</span>
+                        <span>جاري النقل ({importProgress?.completedList.length || 0} / {importProgress?.total || 0})...</span>
                       </>
                     ) : (
                       <>
