@@ -176,4 +176,136 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     return true; // إبقاء القناة مفتوحة للاستجابة غير المتزامنة
   }
+
+  // 3. السحب السحري المباشر في الخلفية بدون فتح أي تبويب أو نافذة نهائياً (Zero Tab Popup)
+  if (request.action === 'quickBackgroundImport') {
+    (async () => {
+      try {
+        const code = String(request.code || '').trim();
+        if (!code) {
+          sendResponse({ ok: false, error: 'كود المنتج مفقود' });
+          return;
+        }
+
+        const productUrl = `https://web.fedshi.com/products/${code}`;
+        const pageRes = await fetch(productUrl, { cache: 'no-store' });
+        if (!pageRes.ok) {
+          sendResponse({ ok: false, error: 'تعذر جلب صفحة فدشي في الخلفية' });
+          return;
+        }
+
+        const html = await pageRes.text();
+        const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+        if (!nextDataMatch || !nextDataMatch[1]) {
+          sendResponse({ ok: false, error: 'لم يتم العثور على بيانات المنتج المباشرة' });
+          return;
+        }
+
+        const parsed = JSON.parse(nextDataMatch[1]);
+        const props = parsed?.props?.pageProps;
+
+        function deepFind(obj, depth = 0) {
+          if (!obj || typeof obj !== 'object' || depth > 6) return null;
+          if (obj.wholesale_price !== undefined || (obj.title && (obj.product_code || obj.detailed_description || obj.suggested_price_min))) {
+            return obj;
+          }
+          for (const k of Object.keys(obj)) {
+            if (typeof obj[k] === 'object' && obj[k] !== null) {
+              const res = deepFind(obj[k], depth + 1);
+              if (res) return res;
+            }
+          }
+          return null;
+        }
+
+        const product = props?.product || props?.productData || deepFind(props);
+        if (!product || (!product.title && !product.wholesale_price)) {
+          sendResponse({ ok: false, error: 'بيانات المنتج داخل السكربت غير مكتملة' });
+          return;
+        }
+
+        const title = product.title || 'منتج جديد';
+        const costPrice = Number(product.wholesale_price || product.price || 0);
+        const profit = Number(product.profit || 3000);
+        const minSuggested = Number(product.suggested_price_min || (costPrice + profit));
+        const wholesale = costPrice + profit;
+        const minPrice = minSuggested || (wholesale + 5000);
+        const maxPrice = Number(product.suggested_price_max || (wholesale + Math.max(profit * 2, 20000)));
+        const storePrice = wholesale + 10000;
+
+        const promoDescription = String(product.detailed_description || product.detailedDescription || product.promo_description || product.postBody || '').trim();
+        const specifications = String(product.description || product.specifications || product.specs || '').trim();
+
+        const images = [];
+        const rawImgs = product.images || product.product_images || product.gallery || product.media || [];
+        if (Array.isArray(rawImgs)) {
+          rawImgs.forEach(im => {
+            const u = typeof im === 'string' ? im : (im?.url || im?.src || im?.image || '');
+            if (u && !images.includes(u)) images.push(u);
+          });
+        }
+
+        const payload = {
+          name: title,
+          fedshiCode: code,
+          supplierCode: code,
+          fedshiSku: String(product.sku || code),
+          supplierSku: String(product.sku || code),
+          fedshiPrice: costPrice,
+          supplierPriceIqd: costPrice,
+          fedshiProfit: profit,
+          minSuggestedPrice: minSuggested,
+          maxSuggestedPrice: maxPrice,
+          wholesalePriceIqd: wholesale,
+          platformPriceIqd: wholesale,
+          defaultPriceIqd: storePrice,
+          minPriceIqd: minPrice,
+          maxPriceIqd: maxPrice,
+          category: 'عام',
+          subcategory: '',
+          description: specifications || promoDescription || title,
+          promoDescription: promoDescription,
+          specifications: specifications,
+          colors: [],
+          images: images.slice(0, 15),
+          videoUrl: product.video_url || '',
+          stockQuantity: 50,
+          supplierSource: 'fedshi',
+        };
+
+        const targetUrl = request.targetUrl || 'https://wasli-smart.vercel.app/api/products/import-fedshi';
+        const importRes = await fetch(targetUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const importData = await importRes.json();
+        if (importData && importData.success) {
+          // بث النجاح لكافة التبويبات لتحديث الأزرار فوراً
+          if (chrome.tabs && chrome.tabs.query) {
+            chrome.tabs.query({}, (tabs) => {
+              if (Array.isArray(tabs)) {
+                tabs.forEach(t => {
+                  if (t.id) {
+                    chrome.tabs.sendMessage(t.id, {
+                      action: 'productImportedBroadcast',
+                      code: code,
+                      product: importData.product,
+                    }, () => { if (chrome.runtime.lastError) {} });
+                  }
+                });
+              }
+            });
+          }
+          sendResponse({ ok: true, result: importData });
+        } else {
+          sendResponse({ ok: false, error: importData?.message || 'خطأ في استجابة الخادم' });
+        }
+      } catch (directErr) {
+        sendResponse({ ok: false, error: directErr.message || 'فشل السحب المباشر' });
+      }
+    })();
+    return true;
+  }
 });

@@ -1577,7 +1577,18 @@
     }
 
     // 1. إذا فُتحت الصفحة بنمط السحب التلقائي (من زر الكارت أو السحب التجميعي)
-    const isAutoImportMode = window.location.hash.includes('wasli-auto-import') || window.location.search.includes('wasli-auto-import');
+    let isAutoImportMode = 
+      window.location.hash.includes('wasli-auto-import') || 
+      window.location.search.includes('wasli-auto-import') || 
+      window.location.search.includes('wasli_auto=1');
+
+    try {
+      if (!isAutoImportMode && pageCode && sessionStorage.getItem('wasli_auto_' + pageCode)) {
+        isAutoImportMode = true;
+        sessionStorage.removeItem('wasli_auto_' + pageCode);
+      }
+    } catch (e) {}
+
     if (isAutoImportMode) {
       executeDirectAutoImportProcess(pageCode, isMojod);
       return;
@@ -1731,9 +1742,12 @@
     // متغير لمنع الضغط المتكرر أثناء عملية السحب الفوري
     let isImportingInProgress = false;
 
-    // دالة الرجوع المباشرة والسلسة بدون ريفريش وبدون أي نقر خاطئ على روابط أسفل الصفحة
+    // دالة الرجوع المباشرة والسلسة أو إغلاق التبويب تلقائياً بعد اكتمال السحب
     const navigateBackSmoothly = () => {
-      // الرجوع النقي والمباشر عبر سجل المتصفح الداخلي للحفاظ على موضع التمرير في SPA
+      // إرسال طلب إغلاق التبويب إلى خلفية الإضافة لضمان إغلاقه إن فُتح تلقائياً
+      safeChromeSendMessage({ action: 'closeMyTab', code: pageCode });
+
+      // الرجوع عبر سجل المتصفح إن وجد تاريخ سابق
       if (window.history.length > 1) {
         window.history.back();
       } else if (window.location.hostname.includes('mojod.app')) {
@@ -1741,6 +1755,11 @@
         if (backBtn) backBtn.click();
         else window.location.href = 'home.html';
       }
+
+      // إغلاق النافذة ذاتياً لمنع بقائها مفتوحة
+      setTimeout(() => {
+        try { window.close(); } catch (e) {}
+      }, 400);
     };
 
     // معالج النقر المباشر: استيراد فوري في الخلفية وخروج سريع بدون أي انتظار وبدون ريفريش!
@@ -2508,11 +2527,40 @@
     }
 
     const isMojod = window.location.hostname.includes('mojod.app');
-    const targetUrl = isMojod
-      ? `https://mojod.app/website/pages/home/product-details.html?id=${code}#wasli-auto-import=1`
-      : `https://web.fedshi.com/products/${code}#wasli-auto-import=1`;
+    showFloatingToast(`جاري سحب المنتج #${code} ونشره في تليغرام...`, 'loading');
 
-    showFloatingToast(`جاري سحب المنتج #${code} بالخلفية ونشره في تليغرام...`, 'info');
+    // 1. السحب المباشر السحري في الخلفية بدون فتح أي تبويب نهائياً (Zero Tab Popup)
+    if (!isMojod && isExtensionContextValid()) {
+      safeChromeSendMessage({
+        action: 'quickBackgroundImport',
+        code: code,
+        targetUrl: `${wasliServerUrl.trim().replace(/\/+$/, '')}/api/products/import-fedshi`,
+      }, (res) => {
+        if (res && res.ok) {
+          markProductAsImported(code);
+          injectProductCardButtons();
+          showFloatingToast(`تم سحب المنتج #${code} ونشره في تليغرام بنجاح ✓`, 'success');
+          return;
+        }
+
+        // إذا تعذر السحب المباشر السريع، نلجأ للتبويب الصامت
+        fallbackToAutoImportTab(code, isMojod);
+      });
+      return;
+    }
+
+    // 2. البديل (لموجود أو عند تعذر الخلفية): فتح تبويب صامت في الخلفية
+    fallbackToAutoImportTab(code, isMojod);
+  }
+
+  function fallbackToAutoImportTab(code, isMojod) {
+    const targetUrl = isMojod
+      ? `https://mojod.app/website/pages/home/product-details.html?id=${code}&wasli_auto=1#wasli-auto-import=1`
+      : `https://web.fedshi.com/products/${code}?wasli_auto=1#wasli-auto-import=1`;
+
+    try {
+      sessionStorage.setItem('wasli_auto_' + code, '1');
+    } catch (e) {}
 
     safeChromeSendMessage({
       action: 'openAutoImportTab',
