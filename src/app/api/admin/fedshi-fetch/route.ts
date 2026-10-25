@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { publishProductToTelegramChannel } from '@/lib/telegram/vault';
 import { createPlatformProduct, findProductBySupplierCode } from '@/lib/services/productService';
 import { findOrCreateCategoryAndSubcategory } from '@/lib/services/categoryService';
+import { cleanText } from '@/lib/utils/fedshiInspector';
 
 interface FedshiGraphqlResponse {
   data?: {
@@ -196,9 +197,12 @@ export async function POST(request: NextRequest) {
     const maxPrice = Math.max(maxSuggested, wholesalePrice + 15000);
     const platformPrice = wholesalePrice;
 
-    // استخراج المواصفات والنص الترويجي
-    const specifications = product.PlainDescription || stripHtml(product.Description || '') || product.Name;
-    const promoDescription = product.PlainDetailedDescription || stripHtml(product.DetailedDescription || '') || specifications;
+    // استخراج وتنظيف المواصفات والنص الترويجي واسم المنتج تلقائياً من روابط وكلمات فدشي
+    const rawSpecs = product.PlainDescription || stripHtml(product.Description || '') || product.Name;
+    const rawPromo = product.PlainDetailedDescription || stripHtml(product.DetailedDescription || '') || rawSpecs;
+    const specifications = cleanText(rawSpecs) || cleanText(product.Name) || product.Name;
+    const promoDescription = cleanText(rawPromo) || specifications;
+    const cleanProductName = cleanText(product.Name) || product.Name;
 
     // استخراج الصور والفيديو
     const { images: rawImages, videoUrl } = cleanFedshiMediaUrls(product.Multimedia);
@@ -226,7 +230,7 @@ export async function POST(request: NextRequest) {
     } else {
       // إنشاء المنتج فوراً في قاعدة البيانات
       finalProductRecord = await createPlatformProduct({
-        name: product.Name,
+        name: cleanProductName,
         category: finalCategoryName,
         categoryId: finalCategoryId,
         description: specifications,
@@ -253,7 +257,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const tgResult = await publishProductToTelegramChannel({
-        name: product.Name,
+        name: cleanProductName,
         image: primaryRawImage,
         images: rawImages,
         wholesalePriceIqd: wholesalePrice,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPlatformProduct, findProductBySupplierCode } from '@/lib/services/productService';
 import { findOrCreateCategoryAndSubcategory } from '@/lib/services/categoryService';
+import { cleanText } from '@/lib/utils/fedshiInspector';
 import { publishProductToTelegramChannel, mirrorProductImageToVault } from '@/lib/telegram/vault';
 
 // دعم طلبات CORS المسبقة للمتصفح وإضافة كروم
@@ -258,17 +259,22 @@ export async function POST(request: NextRequest) {
     const initialSafeImages = rawImagesList.map(convertToSafeProxy);
     const initialSafePrimary = convertToSafeProxy(rawPrimaryImage);
 
+    // تنظيف اسم المنتج والوصف والمواصفات من أي روابط أو كلمات فدشي لحماية خصوصية التاجر
+    const cleanedName = cleanText(name) || name;
+    const cleanedSpecs = cleanText(specifications || description || name) || cleanedName;
+    const cleanedPromo = cleanText(promoDescription || '') || cleanedSpecs;
+
     // 1. حفظ المنتج فوراً في النظام (فائق السرعة: أقل من 0.1 ثانية)
     const product = await createPlatformProduct({
-      name,
+      name: cleanedName,
       category: finalCategoryName,
       categoryId: finalCategoryId,
       subcategory: finalSubcategoryName,
       subcategoryId: finalSubcategoryId,
-      description: specifications || description || name,
-      shortDescription: promoDescription || '',
-      promoDescription: promoDescription || '',
-      specifications: specifications || description || '',
+      description: cleanedSpecs,
+      shortDescription: cleanedPromo,
+      promoDescription: cleanedPromo,
+      specifications: cleanedSpecs,
       wholesalePriceIqd: wholesalePrice,
       platformPriceIqd: platformPrice,
       minPriceIqd: minPrice,
@@ -293,15 +299,15 @@ export async function POST(request: NextRequest) {
     // 2. نشر المنتج في قناة تيليجرام بمهلة سريعة (Fast Timeout 4 ثوانٍ) لمنع أي تعليق
     try {
       const tgPromise = publishProductToTelegramChannel({
-        name,
+        name: cleanedName,
         image: rawPrimaryImage,
         images: rawImagesList,
         wholesalePriceIqd: wholesalePrice,
         minPriceIqd: minPrice,
         maxPriceIqd: maxPrice,
-        description: specifications || description || '',
-        specifications: specifications || description || '',
-        promoDescription: promoDescription || '',
+        description: cleanedSpecs,
+        specifications: cleanedSpecs,
+        promoDescription: cleanedPromo,
         supplierCode: actualSupplierCode || '',
         category: finalCategoryName,
         productId: product.id,

@@ -40,12 +40,14 @@ import {
 import Link from 'next/link';
 import { Product, Category, Subcategory } from '@/types';
 import FedshiQuickImporter from '@/components/admin/FedshiQuickImporter';
+import FedshiInspectorModal from '@/components/admin/FedshiInspectorModal';
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showFedshiInspectorModal, setShowFedshiInspectorModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   // فلتر ربح المنصة: الكل أو أقل من 3000 د.ع أو 3000 د.ع وأكثر
   const [profitFilter, setProfitFilter] = useState<'all' | 'low_profit' | 'good_profit'>('all');
@@ -1104,6 +1106,15 @@ export default function AdminProductsPage() {
                 <Copy className="w-4 h-4 text-amber-200" />
               )}
               <span>كشف المنتجات المتشابهة</span>
+            </button>
+
+            <button
+              onClick={() => setShowFedshiInspectorModal(true)}
+              className="py-2.5 px-3.5 bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-700/20 transition-all flex items-center gap-1.5 cursor-pointer"
+              title="كاشف نصوص وروابط فد شي لفحص الأوصاف وكشف الروابط والكلمات وتنظيفها"
+            >
+              <ShieldAlert className="w-4 h-4 text-rose-200" />
+              <span>كاشف نصوص وروابط فد شي</span>
             </button>
 
             <button
@@ -2447,6 +2458,15 @@ export default function AdminProductsPage() {
         )}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md space-y-6">
           
+        {/* نافذة كاشف نصوص وروابط فد شي وحماية الخصوصية */}
+        <FedshiInspectorModal
+          isOpen={showFedshiInspectorModal}
+          onClose={() => setShowFedshiInspectorModal(false)}
+          onProductsUpdated={() => {
+            loadProductsPage(currentPage, searchQuery, true, viewLimit);
+          }}
+        />
+
           {/* بطاقة تنبيه بارزة للمنتجات ذات الربح الأقل من 3,000 د.ع */}
           {lowProfitProducts.length > 0 && (
             <div className="bg-gradient-to-r from-amber-50 via-rose-50 to-amber-50 border-2 border-amber-300/80 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
