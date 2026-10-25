@@ -546,6 +546,45 @@ export async function deleteAllProducts(): Promise<boolean> {
 }
 
 /**
+ * معالجة ورفع أرباح كافة المنتجات التي يقل ربح المنصة فيها عن الحد المطلوب (افتراضياً 3,000 د.ع)
+ */
+export async function fixLowProfitProducts(targetMinProfit = 3000): Promise<{ updatedCount: number; products: Product[] }> {
+  const allProducts = await getAllProducts();
+  const updatedProducts: Product[] = [];
+
+  for (const p of allProducts) {
+    const wholesale = Number(p.wholesalePriceIqd) || 0;
+    const supplier = Number(p.supplierPriceIqd) || 0;
+    const currentProfit = wholesale - supplier;
+
+    if (currentProfit < targetMinProfit) {
+      const diff = targetMinProfit - currentProfit;
+      const newWholesale = wholesale + diff;
+      const newPlatform = Math.max(Number(p.platformPriceIqd || 0) + diff, newWholesale);
+      const newMinPrice = Math.max(Number(p.minPriceIqd || 0) + diff, newWholesale);
+      const newMaxPrice = Math.max(Number(p.maxPriceIqd || 0) + diff, newMinPrice + 5000);
+
+      await updatePlatformProduct(p.id, {
+        wholesalePriceIqd: newWholesale,
+        platformPriceIqd: newPlatform,
+        minPriceIqd: newMinPrice,
+        maxPriceIqd: newMaxPrice,
+      });
+
+      updatedProducts.push({
+        ...p,
+        wholesalePriceIqd: newWholesale,
+        platformPriceIqd: newPlatform,
+        minPriceIqd: newMinPrice,
+        maxPriceIqd: newMaxPrice,
+      });
+    }
+  }
+
+  return { updatedCount: updatedProducts.length, products: updatedProducts };
+}
+
+/**
  * البحث عن منتج بواسطة كود المورد (كود فدشي) للتأكد من وجوده مسبقاً
  */
 export async function findProductBySupplierCode(code: string): Promise<any | null> {

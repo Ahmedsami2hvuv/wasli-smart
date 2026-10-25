@@ -6,7 +6,8 @@ import {
   updatePlatformProduct, 
   deleteOrArchiveProduct, 
   deleteProducts,
-  deleteAllProducts
+  deleteAllProducts,
+  fixLowProfitProducts
 } from '@/lib/services/productService';
 
 export async function GET(request: NextRequest) {
@@ -86,6 +87,14 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
+
+    // خيار معالجة وتصحيح كافة أرباح المنتجات دفعة واحدة لتصبح 3000 د.ع أو أكثر
+    if (body.action === 'fix_low_profits') {
+      const minProfit = Number(body.minProfit) || 3000;
+      const result = await fixLowProfitProducts(minProfit);
+      return NextResponse.json({ success: true, ...result });
+    }
+
     const { id, ...updates } = body;
 
     if (!id) {

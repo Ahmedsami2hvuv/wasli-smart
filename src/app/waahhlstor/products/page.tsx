@@ -90,6 +90,8 @@ export default function AdminProductsPage() {
   const [isFromCache, setIsFromCache] = useState(false);
   const [viewLimit, setViewLimit] = useState<number | 'all'>(20);
   const [selectAllPlatform, setSelectAllPlatform] = useState(false);
+  const [adjustingProfitId, setAdjustingProfitId] = useState<string | null>(null);
+  const [fixingAllProfits, setFixingAllProfits] = useState(false);
 
   // حالات ودوال الربط المباشر مع API موجود
   const [showMojodModal, setShowMojodModal] = useState(false);
@@ -535,6 +537,104 @@ export default function AdminProductsPage() {
       fetchInitialData();
     } finally {
       setTogglingStatusId(null);
+    }
+  };
+
+  // رفع سعر جملة منتج فردي ليصبح ربح المنصة 3,000 د.ع تلقائياً
+  const handleAdjustSingleProductProfit = async (p: Product) => {
+    const wholesale = Number(p.wholesalePriceIqd) || 0;
+    const supplier = Number(p.supplierPriceIqd) || 0;
+    const currentProfit = wholesale - supplier;
+    const targetProfit = 3000;
+    const diff = targetProfit - currentProfit;
+    if (diff <= 0) return;
+
+    const newWholesale = wholesale + diff;
+    const newPlatform = Math.max(Number(p.platformPriceIqd || 0) + diff, newWholesale);
+    const newMinPrice = Math.max(Number(p.minPriceIqd || 0) + diff, newWholesale);
+    const newMaxPrice = Math.max(Number(p.maxPriceIqd || 0) + diff, newMinPrice + 5000);
+
+    try {
+      setAdjustingProfitId(p.id);
+      // تحديث لحظي مباشر وسلس في الواجهة
+      setProducts(prev => prev.map(item => item.id === p.id ? {
+        ...item,
+        wholesalePriceIqd: newWholesale,
+        platformPriceIqd: newPlatform,
+        minPriceIqd: newMinPrice,
+        maxPriceIqd: newMaxPrice,
+      } : item));
+
+      const res = await fetch('/api/products', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: p.id,
+          wholesalePriceIqd: newWholesale,
+          platformPriceIqd: newPlatform,
+          minPriceIqd: newMinPrice,
+          maxPriceIqd: newMaxPrice,
+        }),
+      });
+      const data = await res.json();
+      invalidateProductsCache();
+      if (data.success) {
+        setBatchMsg(`تم تعديل سعر جملة (${p.name}) من ${wholesale.toLocaleString('ar-IQ')} إلى ${newWholesale.toLocaleString('ar-IQ')} د.ع وأصبح ربح المنصة 3,000 د.ع`);
+        setTimeout(() => setBatchMsg(null), 3500);
+      }
+    } catch (err) {
+      console.error('خطأ في تعديل ربح المنتج:', err);
+    } finally {
+      setAdjustingProfitId(null);
+    }
+  };
+
+  // رفع وتصحيح أرباح كافة المنتجات التي يقل ربحها عن 3,000 د.ع دفعة واحدة
+  const handleFixAllLowProfits = async () => {
+    if (lowProfitProducts.length === 0) return;
+    const count = lowProfitProducts.length;
+    if (!confirm(`هل تريد رفع أسعار جملة (${count}) منتج تلقائياً ليصبح ربح المنصة الصافي في جميعها 3,000 د.ع على الأقل؟`)) {
+      return;
+    }
+
+    setFixingAllProfits(true);
+    try {
+      // 1. تحديث لحظي مباشر على الشاشة
+      setProducts(prev => prev.map(item => {
+        const wholesale = Number(item.wholesalePriceIqd) || 0;
+        const supplier = Number(item.supplierPriceIqd) || 0;
+        const currentProfit = wholesale - supplier;
+        if (currentProfit < 3000) {
+          const diff = 3000 - currentProfit;
+          const newWholesale = wholesale + diff;
+          const newPlatform = Math.max(Number(item.platformPriceIqd || 0) + diff, newWholesale);
+          const newMinPrice = Math.max(Number(item.minPriceIqd || 0) + diff, newWholesale);
+          const newMaxPrice = Math.max(Number(item.maxPriceIqd || 0) + diff, newMinPrice + 5000);
+          return {
+            ...item,
+            wholesalePriceIqd: newWholesale,
+            platformPriceIqd: newPlatform,
+            minPriceIqd: newMinPrice,
+            maxPriceIqd: newMaxPrice,
+          };
+        }
+        return item;
+      }));
+
+      // 2. إرسال إلى السيرفر لحفظ التعديلات في سوبابيس
+      const res = await fetch('/api/products', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'fix_low_profits', minProfit: 3000 }),
+      });
+      const data = await res.json();
+      invalidateProductsCache();
+      setBatchMsg(`تم تصحيح ورفع أرباح (${count}) منتج بنجاح لتصبح 3,000 د.ع أو أكثر في سوبابيس والمنصة`);
+      setTimeout(() => setBatchMsg(null), 3500);
+    } catch (err) {
+      console.error('خطأ في معالجة أرباح المنتجات:', err);
+    } finally {
+      setFixingAllProfits(false);
     }
   };
 
@@ -1891,23 +1991,38 @@ export default function AdminProductsPage() {
                     </span>
                   </h3>
                   <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                    هناك <strong>{lowProfitProducts.length} منتج</strong> ربح المنصة الصافي فيها أقل من <strong>3,000 د.ع</strong>. يمكنك تصفيتها وتعديل أسعار جملتها لتحقيق هامش الربح المطلوب.
+                    هناك <strong>{lowProfitProducts.length} منتج</strong> ربح المنصة الصافي فيها أقل من <strong>3,000 د.ع</strong>. يمكنك رفعها جميعاً تلقائياً بنقرة زر واحدة أو النقر على كل منتج لضبطه.
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  disabled={fixingAllProfits}
+                  onClick={handleFixAllLowProfits}
+                  className="py-2.5 px-4 rounded-xl text-xs font-black bg-emerald-700 hover:bg-emerald-800 text-white shadow-md shadow-emerald-700/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  title="رفع سعر الجملة لكافة هذه المنتجات تلقائياً لتصبح أرباح المنصة 3,000 د.ع في جميعها"
+                >
+                  {fixingAllProfits ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5 text-accent-400" />
+                  )}
+                  <span>رفع أرباح كافة المنتجات إلى 3,000 د.ع تلقائياً ({lowProfitProducts.length})</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setProfitFilter(profitFilter === 'low_profit' ? 'all' : 'low_profit')}
-                  className={`py-2 px-4 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                  className={`py-2 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
                     profitFilter === 'low_profit'
                       ? 'bg-rose-700 hover:bg-rose-800 text-white ring-2 ring-rose-400'
                       : 'bg-white hover:bg-rose-50 text-rose-900 border border-rose-300'
                   }`}
                 >
-                  <Filter className="w-4 h-4" />
-                  <span>{profitFilter === 'low_profit' ? 'إلغاء التصفية (عرض الكل)' : 'عرض المنتجات الأقل من 3,000 د.ع فقط'}</span>
+                  <Filter className="w-3.5 h-3.5" />
+                  <span>{profitFilter === 'low_profit' ? 'إلغاء التصفية' : 'تصفية الأقل من 3 آلاف'}</span>
                 </button>
               </div>
             </div>
@@ -2046,6 +2161,19 @@ export default function AdminProductsPage() {
               <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
               <span>⚠️ ربح المنصة أقل من 3,000 د.ع ({lowProfitProducts.length})</span>
             </button>
+
+            {lowProfitProducts.length > 0 && (
+              <button
+                type="button"
+                disabled={fixingAllProfits}
+                onClick={handleFixAllLowProfits}
+                className="px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="معالجة كل المنتجات ورفع أرباحها فوراً"
+              >
+                {fixingAllProfits ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3 text-accent-400" />}
+                <span>تصحيح ورفع الكل إلى 3,000 د.ع ({lowProfitProducts.length})</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -2241,15 +2369,25 @@ export default function AdminProductsPage() {
                           <td className="py-3.5 px-3">
                             {p.supplierPriceIqd ? (
                               isLowProfit ? (
-                                <div className="inline-flex flex-col items-start gap-1">
-                                  <span className="font-black text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-xl text-xs flex items-center gap-1 shadow-2xs">
-                                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                <button
+                                  type="button"
+                                  disabled={adjustingProfitId === p.id}
+                                  onClick={() => handleAdjustSingleProductProfit(p)}
+                                  className="inline-flex flex-col items-start gap-1 p-1 -m-1 rounded-xl hover:bg-rose-100/70 transition-all text-right cursor-pointer group"
+                                  title={`انقر لرفع سعر الجملة إلى ${(supplier + 3000).toLocaleString('ar-IQ')} د.ع ليصبح ربح المنصة 3,000 د.ع تلقائياً`}
+                                >
+                                  <span className="font-black text-rose-700 bg-rose-50 group-hover:bg-rose-200/80 border border-rose-300 px-2.5 py-1 rounded-xl text-xs flex items-center gap-1.5 shadow-2xs transition-all">
+                                    {adjustingProfitId === p.id ? (
+                                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-rose-600" />
+                                    ) : (
+                                      <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 group-hover:scale-110 transition-transform" />
+                                    )}
                                     <span>+{platformProfit.toLocaleString('ar-IQ')} د.ع</span>
                                   </span>
-                                  <span className="text-[10px] text-rose-600 font-black">
-                                    أقل من 3 آلاف د.ع
+                                  <span className="text-[10px] text-rose-600 font-black group-hover:underline flex items-center gap-0.5">
+                                    <span>أقل من 3 آلاف (انقر لرفعه إلى 3,000)</span>
                                   </span>
-                                </div>
+                                </button>
                               ) : (
                                 <span className="font-black text-emerald-700 bg-emerald-50/80 border border-emerald-200 px-2.5 py-1 rounded-xl text-xs inline-block">
                                   +{platformProfit.toLocaleString('ar-IQ')} د.ع
