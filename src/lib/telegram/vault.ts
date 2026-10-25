@@ -356,6 +356,23 @@ function extractProxyUrlsFromTelegramResult(result: any): string[] {
   return fileIds.map(fid => `/api/images/proxy?fileId=${encodeURIComponent(fid)}`);
 }
 
+// متغير الذاكرة المؤقتة لمتابعة حد طلبات تيليجرام (Rate Limit - Cooldown)
+let lastTelegramRateLimitUntil = 0;
+
+function isTelegramRateLimited(): boolean {
+  return Date.now() < lastTelegramRateLimitUntil;
+}
+
+function handleTelegramRateLimit(data: any): boolean {
+  if (data && (data.error_code === 429 || (data.description && String(data.description).includes('Too Many Requests')))) {
+    const retryAfter = data.parameters?.retry_after || 25;
+    lastTelegramRateLimitUntil = Date.now() + (retryAfter * 1000);
+    console.warn(`[تيليجرام] تجاوز حد الطلبات المسموح (Rate Limit 429)، إيقاف الإرسال التلقائي لمدة ${retryAfter} ثانية لتفادي الحظر.`);
+    return true;
+  }
+  return false;
+}
+
 /**
  * نشر المنتج المستورد تلقائياً في قناة تيليجرام ككتلة صور مجمعة WebP
  */
@@ -379,6 +396,15 @@ export async function publishProductToTelegramChannel(product: {
   proxyUrls?: string[];
   primaryProxyUrl?: string;
 }> {
+  // 0. التحقق من فترة الهدنة في حال وجود Rate Limit من تيليجرام لمنع التراكم والتأخير
+  if (isTelegramRateLimited()) {
+    const remainingSec = Math.ceil((lastTelegramRateLimitUntil - Date.now()) / 1000);
+    return {
+      success: false,
+      error: `تيليجرام يطلب الانتظار ${remainingSec} ثانية لتفادي تجاوز معدل الرسائل (Rate Limit)`
+    };
+  }
+
   const botToken = getVaultBotToken() || getOrdersBotToken();
   const rawChannelId = getVaultChannelId() || process.env.TELEGRAM_ADMIN_CHAT_ID;
   const channelId = cleanTelegramChatId(rawChannelId);
@@ -422,6 +448,9 @@ export async function publishProductToTelegramChannel(product: {
     const textToCopy = promoText || descriptionText || product.name;
     if (!textToCopy) return;
 
+    // انتظار زمني آمن (1.2 ثانية) لمنع تجاوز حدود تيليجرام لنفس القناة (Flood Prevention)
+    await new Promise(r => setTimeout(r, 1200));
+
     const promoMessageContent = [
       '📢 النص الترويجي الجاهز للإعلان والنسخ (Copy & Paste):',
       '==============================',
@@ -434,6 +463,7 @@ export async function publishProductToTelegramChannel(product: {
       await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(6000),
         body: JSON.stringify({
           chat_id: channelId,
           text: promoMessageContent.slice(0, 4000),
@@ -445,18 +475,18 @@ export async function publishProductToTelegramChannel(product: {
   };
 
   try {
-    // جمع الصور وتصفيتها (حتى 8 صور للألبوم)
+    // جمع الصور وتصفيتها (أول 4 صور كحد أقصى لضمان أقصى سرعة وعدم إثقال السيرفر)
     const rawImages = (product.images && product.images.length > 0)
       ? product.images
       : (product.image ? [product.image] : []);
 
     const validUrls = Array.from(new Set(
       rawImages.filter(img => typeof img === 'string' && (img.startsWith('http://') || img.startsWith('https://')))
-    )).slice(0, 8);
+    )).slice(0, 4);
 
     // 1. إذا كان لدينا أكثر من صورة: محاولة إرسال ألبوم الصور (Media Group)
     if (validUrls.length > 1) {
-      // أ) محاولة الإرسال السريع بالروابط المباشرة
+      // أ) محاولة الإرسال السريع بالروابط المباشرة (مهلة 6 ثوانٍ)
       try {
         const mediaUrls = validUrls.map((url, idx) => ({
           type: 'photo',
@@ -467,7 +497,7 @@ export async function publishProductToTelegramChannel(product: {
         const groupUrlRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMediaGroup`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(6000),
           body: JSON.stringify({
             chat_id: channelId,
             media: mediaUrls,
@@ -485,18 +515,22 @@ export async function publishProductToTelegramChannel(product: {
             primaryProxyUrl: proxyUrls[0],
           };
         } else {
-          console.warn('روابط الألبوم المباشرة لم يقبلها تيليجرام، جاري الرفع بالملفات الثنائية (FormData):', groupUrlData.description);
+          // إذا كان سبب الفشل هو تجاوز معدل الطلبات 429، نتوقف فوراً ولا نقوم بأي محاولات إضافية مرهقة
+          if (handleTelegramRateLimit(groupUrlData)) {
+            return { success: false, error: 'تم تفعيل Rate Limit من تيليجرام، تم إيقاف المحاولات لتجنب الحظر' };
+          }
+          console.warn('روابط الألبوم المباشرة لم يقبلها تيليجرام، جاري تجربة الرفع السريع للصور:', groupUrlData.description);
         }
       } catch (groupFallbackErr) {
-        console.warn('خطأ في ألبوم تيليجرام المباشر:', groupFallbackErr);
+        console.warn('تجاوزت الروابط المباشرة لتيليجرام مهلة 6 ثوانٍ أو فشلت:', groupFallbackErr);
       }
 
-      // ب) البديل الموثوق 100%: جلب الصور بالتوازي عبر السيرفر ورفعها كـ Multipart FormData
+      // ب) البديل الخفيف والسريع: جلب 3 صور رئيسية فقط كـ FormData (بمهلة 7 ثوانٍ)
       try {
         const downloadedBuffers = await Promise.all(
-          validUrls.slice(0, 6).map(async (u) => {
+          validUrls.slice(0, 3).map(async (u) => {
             try {
-              const r = await fetch(u, { signal: AbortSignal.timeout(7000) });
+              const r = await fetch(u, { signal: AbortSignal.timeout(3500) });
               if (!r.ok) return null;
               const ab = await r.arrayBuffer();
               return { buffer: Buffer.from(ab), contentType: r.headers.get('content-type') || 'image/jpeg' };
@@ -527,7 +561,7 @@ export async function publishProductToTelegramChannel(product: {
           const formRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMediaGroup`, {
             method: 'POST',
             body: form,
-            signal: AbortSignal.timeout(25000),
+            signal: AbortSignal.timeout(8000),
           });
 
           const formData = await formRes.json();
@@ -541,22 +575,25 @@ export async function publishProductToTelegramChannel(product: {
               primaryProxyUrl: proxyUrls[0],
             };
           } else {
+            if (handleTelegramRateLimit(formData)) {
+              return { success: false, error: 'تم تفعيل Rate Limit من تيليجرام أثناء رفع الألبوم' };
+            }
             console.warn('فشل رفع الألبوم عبر FormData:', formData.description);
           }
         }
       } catch (formErr) {
-        console.warn('خطأ أثناء رفع الألبوم المزدوج:', formErr);
+        console.warn('تجاوز رفع الألبوم السريع المهلة:', formErr);
       }
     }
 
-    // 2. إذا كانت صورة واحدة فقط أو كبديل أخير عند تعذر الألبوم:
+    // 2. إذا كانت صورة واحدة فقط أو كبديل سريع بصورة رئيسية واحدة:
     const singleImageUrl = validUrls[0] || product.image;
     if (singleImageUrl && (singleImageUrl.startsWith('http://') || singleImageUrl.startsWith('https://'))) {
       try {
-        // محاولة إرسال الصورة الفردية بالرابط
         const photoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(5000),
           body: JSON.stringify({
             chat_id: channelId,
             photo: singleImageUrl,
@@ -575,31 +612,8 @@ export async function publishProductToTelegramChannel(product: {
             primaryProxyUrl: proxyUrls[0],
           };
         } else {
-          // إذا رفض تيليجرام رابط الصورة، نرفعها كـ Blob
-          const r = await fetch(singleImageUrl, { signal: AbortSignal.timeout(7000) });
-          if (r.ok) {
-            const ab = await r.arrayBuffer();
-            const form = new FormData();
-            form.append('chat_id', String(channelId));
-            form.append('caption', caption);
-            form.append('photo', new Blob([new Uint8Array(ab)], { type: r.headers.get('content-type') || 'image/jpeg' }), 'single.jpg');
-
-            const binaryPhotoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
-              method: 'POST',
-              body: form,
-              signal: AbortSignal.timeout(20000),
-            });
-            const binaryPhotoData = await binaryPhotoRes.json();
-            if (binaryPhotoData.ok) {
-              await sendPromotionalPost();
-              const proxyUrls = extractProxyUrlsFromTelegramResult(binaryPhotoData.result);
-              return { 
-                success: true, 
-                messageId: binaryPhotoData.result?.message_id,
-                proxyUrls,
-                primaryProxyUrl: proxyUrls[0],
-              };
-            }
+          if (handleTelegramRateLimit(photoData)) {
+            return { success: false, error: 'تم تفعيل Rate Limit من تيليجرام للصورة' };
           }
         }
       } catch (singleErr) {

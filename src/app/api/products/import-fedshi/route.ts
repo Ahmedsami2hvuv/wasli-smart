@@ -125,12 +125,12 @@ export async function POST(request: NextRequest) {
     if (actualSupplierCode) {
       const existingProduct = await findProductBySupplierCode(actualSupplierCode);
       if (existingProduct) {
-        // إذا كان المنتج موجوداً، نتأكد من إرساله/تحديثه في قناة تيليجرام وتحديث صوره لروابط تيليجرام البروكسي
+        // إذا كان المنتج موجوداً، نتأكد من إرساله/تحديثه في قناة تيليجرام بمهلة سريعة وتحديث صوره
         const rawPrimaryImg = (images && images.length > 0) ? images[0] : (existingProduct.image || '/placeholder-product.svg');
         const rawImgsList = Array.isArray(images) && images.length > 0 ? images : [rawPrimaryImg];
 
         try {
-          const telegramResult = await publishProductToTelegramChannel({
+          const tgPromise = publishProductToTelegramChannel({
             name: existingProduct.name || name,
             image: rawPrimaryImg,
             images: rawImgsList,
@@ -145,13 +145,20 @@ export async function POST(request: NextRequest) {
             productId: existingProduct.id,
           });
 
-          // استبدال صور فدشي القديمة بصور تيليجرام البروكسي في جدول product_images
+          // مهلة قصوى 4 ثوانٍ لتيليجرام لضمان عدم تعليق المتصفح أبداً
+          const timeoutPromise = new Promise<{ success: boolean; proxyUrls?: string[]; timeout: boolean }>((res) => {
+            setTimeout(() => res({ success: false, timeout: true }), 4000);
+          });
+
+          const telegramResult: any = await Promise.race([tgPromise, timeoutPromise]);
+
+          // استبدال صور فدشي القديمة بصور تيليجرام البروكسي في جدول product_images إذا نجح الرفع
           if (telegramResult && telegramResult.success && Array.isArray(telegramResult.proxyUrls) && telegramResult.proxyUrls.length > 0) {
             const { supabaseAdmin } = await import('@/lib/supabase/admin');
             if (supabaseAdmin) {
               await supabaseAdmin.from('product_images').delete().eq('product_id', existingProduct.id);
               await supabaseAdmin.from('product_images').insert(
-                telegramResult.proxyUrls.map((proxyUrl, idx) => ({
+                telegramResult.proxyUrls.map((proxyUrl: string, idx: number) => ({
                   id: crypto.randomUUID(),
                   product_id: existingProduct.id,
                   local_url: proxyUrl,
@@ -240,34 +247,18 @@ export async function POST(request: NextRequest) {
       ? images 
       : (rawPrimaryImage ? [rawPrimaryImage] : []);
 
-    // 1. نشر المنتج في قناة تيليجرام أولاً لرفع الصور وتحويلها لروابط وسيطة محمية
-    let safeImagesList = rawImagesList;
-    let safePrimaryImage = rawPrimaryImage;
-
-    try {
-      const telegramResult = await publishProductToTelegramChannel({
-        name,
-        image: rawPrimaryImage,
-        images: rawImagesList,
-        wholesalePriceIqd: wholesalePrice,
-        minPriceIqd: minPrice,
-        maxPriceIqd: maxPrice,
-        description: specifications || description || '',
-        specifications: specifications || description || '',
-        promoDescription: promoDescription || '',
-        supplierCode: actualSupplierCode || '',
-        category: finalCategoryName,
-      });
-
-      if (telegramResult && telegramResult.success && Array.isArray(telegramResult.proxyUrls) && telegramResult.proxyUrls.length > 0) {
-        safeImagesList = telegramResult.proxyUrls;
-        safePrimaryImage = telegramResult.primaryProxyUrl || telegramResult.proxyUrls[0];
+    // تحويل الروابط فوراً لروابط وسيطة محمية تحجب فدشي وموجد تماماً
+    const convertToSafeProxy = (u: string) => {
+      if (typeof u === 'string' && (u.includes('fedshi.com') || u.includes('mojod.app'))) {
+        return `/api/images/proxy?url=${encodeURIComponent(u)}`;
       }
-    } catch (tgErr) {
-      console.warn('تنبيه أثناء نشر تيليجرام:', tgErr);
-    }
+      return u;
+    };
 
-    // 2. حفظ المنتج فوراً في النظام بروابط تيليجرام البروكسي النظيفة
+    const initialSafeImages = rawImagesList.map(convertToSafeProxy);
+    const initialSafePrimary = convertToSafeProxy(rawPrimaryImage);
+
+    // 1. حفظ المنتج فوراً في النظام (فائق السرعة: أقل من 0.1 ثانية)
     const product = await createPlatformProduct({
       name,
       category: finalCategoryName,
@@ -295,9 +286,51 @@ export async function POST(request: NextRequest) {
       })),
       videoUrl: videoUrl || '',
       stockQuantity: Number(stockQuantity) || 50,
-      image: safePrimaryImage,
-      images: safeImagesList,
+      image: initialSafePrimary,
+      images: initialSafeImages,
     });
+
+    // 2. نشر المنتج في قناة تيليجرام بمهلة سريعة (Fast Timeout 4 ثوانٍ) لمنع أي تعليق
+    try {
+      const tgPromise = publishProductToTelegramChannel({
+        name,
+        image: rawPrimaryImage,
+        images: rawImagesList,
+        wholesalePriceIqd: wholesalePrice,
+        minPriceIqd: minPrice,
+        maxPriceIqd: maxPrice,
+        description: specifications || description || '',
+        specifications: specifications || description || '',
+        promoDescription: promoDescription || '',
+        supplierCode: actualSupplierCode || '',
+        category: finalCategoryName,
+        productId: product.id,
+      });
+
+      const timeoutPromise = new Promise<{ success: boolean; proxyUrls?: string[]; timeout: boolean }>((res) => {
+        setTimeout(() => res({ success: false, timeout: true }), 4000);
+      });
+
+      const telegramResult: any = await Promise.race([tgPromise, timeoutPromise]);
+
+      if (telegramResult && telegramResult.success && Array.isArray(telegramResult.proxyUrls) && telegramResult.proxyUrls.length > 0) {
+        const { supabaseAdmin } = await import('@/lib/supabase/admin');
+        if (supabaseAdmin) {
+          await supabaseAdmin.from('product_images').delete().eq('product_id', product.id);
+          await supabaseAdmin.from('product_images').insert(
+            telegramResult.proxyUrls.map((proxyUrl: string, idx: number) => ({
+              id: crypto.randomUUID(),
+              product_id: product.id,
+              local_url: proxyUrl,
+              is_primary: idx === 0,
+              sort_order: idx,
+            }))
+          );
+        }
+      }
+    } catch (tgErr) {
+      console.warn('تنبيه أثناء نشر تيليجرام السريع للمنتج:', tgErr);
+    }
 
     const platformProfit = wholesalePrice - supplierCost;
     const merchantProfitRange = `${minPrice - wholesalePrice} - ${maxPrice - wholesalePrice}`;
