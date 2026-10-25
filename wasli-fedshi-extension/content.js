@@ -835,15 +835,13 @@
   }
 
   // ========================================================
-  // إدارة قائمة المعرفات المسحوبة محلياً ودائماً لمنع التكرار مع المزامنة الحية
+  // إدارة قائمة المعرفات المسحوبة الحية من منصة وصلي
   // ========================================================
   const importedCodesSet = new Set();
+  // تفريغ أي ذاكرة مؤقتة قديمة فوراً للاعتماد الحصري على الخادم الفعلي
   try {
-    const savedLocal = JSON.parse(localStorage.getItem('wasli_imported_codes') || '[]');
-    const savedSession = JSON.parse(sessionStorage.getItem('wasli_imported_codes') || '[]');
-    [...savedLocal, ...savedSession].forEach(c => {
-      if (c) importedCodesSet.add(c);
-    });
+    localStorage.removeItem('wasli_imported_codes');
+    sessionStorage.removeItem('wasli_imported_codes');
   } catch (e) {}
 
   function getCurrentProductCode() {
@@ -855,40 +853,51 @@
     return pathParts[pathParts.length - 1] || '';
   }
 
-  // مزامنة فورية مع الخادم الحي لتحديث قائمة المنتجات المسحوبة بدقة وحذف ما تم مسحه
+  // مزامنة فورية وحية مع الخادم لتحديث قائمة المنتجات المسحوبة وحذف الشارات عن أي منتج محذوف
   function syncImportedCodesWithServer() {
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
       const targetUrl = wasliServerUrl.trim().replace(/\/+$/, '') + '/api/products';
       chrome.runtime.sendMessage(
-        { action: 'fetchUrl', url: targetUrl },
+        { action: 'getImportedProductsList', url: targetUrl },
         (res) => {
-          if (!chrome.runtime.lastError && res && res.result && res.result.products) {
-            const activeCodes = new Set();
+          const activeCodes = new Set();
+          if (!chrome.runtime.lastError && res && res.result && Array.isArray(res.result.products)) {
             res.result.products.forEach(p => {
               const c = p.supplierCode || p.id;
               if (c) activeCodes.add(String(c).trim());
             });
-            // إذا كانت المنصة فارغة أو المنتجات تغيرت، نحدث الذاكرة المحلية فوراً
-            importedCodesSet.clear();
-            activeCodes.forEach(c => importedCodesSet.add(c));
-            try {
-              localStorage.setItem('wasli_imported_codes', JSON.stringify(Array.from(activeCodes)));
-              sessionStorage.removeItem('wasli_imported_codes');
-            } catch (e) {}
+          }
 
-            // تحديث حالة الزر في الصفحة إذا كان مفتوحاً
-            const currentCode = getCurrentProductCode();
-            if (currentCode && !importedCodesSet.has(currentCode)) {
-              const floatingBtn = document.getElementById('wasli-floating-smart-btn');
-              if (floatingBtn) resetFloatingButtonToImport(floatingBtn);
+          // تحديث الـ Set بالمنتجات الموجودة فعلياً في وصلي فقط
+          importedCodesSet.clear();
+          activeCodes.forEach(c => importedCodesSet.add(c));
+
+          // تنظيف وإزالة الشارات الخضراء فوراً عن كافة الكروت المعروضة في الصفحة
+          document.querySelectorAll('.wasli-card-status-badge').forEach(badge => {
+            const bCode = badge.getAttribute('data-wasli-code');
+            if (bCode && !importedCodesSet.has(bCode)) {
+              badge.remove();
+            }
+          });
+
+          // تحديث الزر العائم في صفحة المنتج الفردي إذا كان مفتوحاً
+          const currentCode = getCurrentProductCode();
+          const floatingBtn = document.getElementById('wasli-floating-smart-btn');
+          if (floatingBtn) {
+            if (currentCode && importedCodesSet.has(currentCode)) {
+              updateFloatingButtonToImported(floatingBtn);
+            } else {
+              resetFloatingButtonToImport(floatingBtn);
             }
           }
         }
       );
     }
   }
-  // تشغيل المزامنة تلقائياً
-  setTimeout(syncImportedCodesWithServer, 500);
+
+  // تشغيل المزامنة فوراً عند تحميل السكربت ودورياً كل 4 ثوانٍ للتأكد التام
+  syncImportedCodesWithServer();
+  setInterval(syncImportedCodesWithServer, 4000);
 
   function resetFloatingButtonToImport(btn) {
     if (!btn) return;

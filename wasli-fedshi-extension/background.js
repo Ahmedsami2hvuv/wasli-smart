@@ -1,6 +1,23 @@
 // خلفية العمل لإضافة وصلي الذكية (Service Worker - Manifest V3)
 // تتولى إرسال الطلبات وتجاوز أي قيود CSP أو حظر تفرضه صفحة الويب المضيفة
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // 0. جلب قائمة المنتجات الحالية من وصلي للمزامنة الفورية
+  if (request.action === 'fetchUrl' || request.action === 'getImportedProductsList') {
+    const targetUrl = request.url || 'https://wasli-smart.vercel.app/api/products';
+    fetch(targetUrl, { method: 'GET', cache: 'no-store' })
+      .then(async (response) => {
+        let result = null;
+        try {
+          result = await response.json();
+        } catch (e) {}
+        sendResponse({ ok: response.ok, status: response.status, result });
+      })
+      .catch((err) => {
+        sendResponse({ ok: false, error: err.message });
+      });
+    return true;
+  }
+
   // 1. فحص وجود المنتج مسبقاً في منصة وصلي
   if (request.action === 'checkProductExists') {
     const baseTarget = request.url || 'https://wasli-smart.vercel.app/api/products/import-fedshi';
