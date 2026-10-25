@@ -859,6 +859,10 @@
   // ========================================================
   const importedCodesSet = new Set();
   let syncCodesTimer = null;
+  let isBatchRunning = false;
+  let batchShouldStop = false;
+  let currentBatchIndex = 0;
+  let batchQueue = [];
 
   function stopSyncCodesTimer() {
     if (syncCodesTimer) {
@@ -2522,11 +2526,6 @@
   // ========================================================
   // الشريط العلوي التجميعي لسحب كل منتجات الصفحة بضغطة واحدة
   // ========================================================
-  let isBatchRunning = false;
-  let batchShouldStop = false;
-  let currentBatchIndex = 0;
-  let batchQueue = [];
-
   function renderBatchToolbar() {
     if (isProductPage()) {
       const tb = document.getElementById('wasli-batch-toolbar');
