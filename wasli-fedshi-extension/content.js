@@ -1427,6 +1427,11 @@
       checkIfProductImported(pageCode).then((checkRes) => {
         if (checkRes && checkRes.exists) {
           updateFloatingButtonToImported(floatingBtn, checkRes.product);
+          // إذا كان تبويب تلقائي والمنتج مسحوب مسبقاً، يغلق التبويب تلقائياً
+          if (window.location.hash.includes('wasli-auto-import')) {
+            safeChromeSendMessage({ action: 'closeMyTab', code: pageCode });
+            try { window.close(); } catch (e) {}
+          }
         } else {
           // المنتج جديد وغير مسحوب: تشغيل الاستيراد التلقائي الفوري والخروج السلس تلقائياً!
           scheduleAutoImportOnOpen();
@@ -1596,7 +1601,22 @@
         if (mainTextEl) mainTextEl.textContent = isAuto ? 'تم السحب تلقائياً ⚡' : 'تم بدء السحب بنجاح!';
         if (subTextEl) subTextEl.textContent = 'جاري العودة لقائمة المنتجات...';
 
-        // 7. الخروج والرجوع الفوري بعد لحظة سريعة جداً (150ms) بدون أي ريفريش وبدون انتظار ثوانٍ معدودة!
+        // 7. إذا كان هذا تبويب سحب تلقائي تم فتحه من بطاقة منتج، إغلاق التبويب فوراً وبث التحديث
+        const isAutoTab = window.location.hash.includes('wasli-auto-import') || window.location.search.includes('wasli-auto-import');
+        if (isAutoTab) {
+          setTimeout(() => {
+            safeChromeSendMessage({
+              action: 'closeMyTab',
+              code: pageCode,
+            });
+            try {
+              window.close();
+            } catch (e) {}
+          }, 400);
+          return;
+        }
+
+        // الرجوع السلس للصفحة السابقة في التصفح العادي
         setTimeout(() => {
           navigateBackSmoothly();
         }, 150);
@@ -2208,7 +2228,38 @@
   }
 
   // ========================================================
-  // إظهار شارة الحالة فقط إذا كان المنتج مسحوباً مسبقاً (إلغاء زر سحب القديم تماماً)
+  // تشغيل السحب الذكي بالخلفية وإغلاق التبويب تلقائياً
+  // ========================================================
+  function triggerAutoImportForProduct(code) {
+    if (!code) return;
+    if (importedCodesSet.has(code)) {
+      showFloatingToast('هذا المنتج تم استيراده ورفعه مسبقاً في منصتك!', 'warning');
+      return;
+    }
+
+    const isMojod = window.location.hostname.includes('mojod.app');
+    const targetUrl = isMojod
+      ? `https://mojod.app/website/pages/home/product-details.html?id=${code}#wasli-auto-import=1`
+      : `https://web.fedshi.com/products/${code}#wasli-auto-import=1`;
+
+    showFloatingToast(`جاري سحب المنتج #${code} بالخلفية ونشره في تليغرام...`, 'info');
+
+    safeChromeSendMessage({
+      action: 'openAutoImportTab',
+      url: targetUrl,
+      code: code,
+    }, (res) => {
+      // احتياط في حال عدم عمل Service Worker
+      if (!res || !res.ok) {
+        try {
+          window.open(targetUrl, `wasli_auto_${code}`, 'width=500,height=500,left=2500,top=2500');
+        } catch (e) {}
+      }
+    });
+  }
+
+  // ========================================================
+  // إظهار زر "سحب لوصلي" فوق كل كارت منتج وشارة "مسحوب مسبقاً ✓"
   // ========================================================
   function injectProductCardButtons() {
     if (isProductPage()) {
@@ -2224,15 +2275,15 @@
         cardEl.style.position = 'relative';
       }
 
-      // إزالة أي زر قديم لكلمة "سحب" إن وجد
-      const oldBtn = cardEl.querySelector('.wasli-card-quick-btn');
-      if (oldBtn) oldBtn.remove();
-
       const isImported = Boolean(code && importedCodesSet.has(code));
       let badge = cardEl.querySelector('.wasli-card-status-badge');
+      let quickBtn = cardEl.querySelector('.wasli-card-quick-btn');
 
       if (isImported) {
-        // إذا كان المنتج مسحوباً: إظهار الشارة الخضراء الأنيقة
+        // إزالة زر السحب إن وجد
+        if (quickBtn) quickBtn.remove();
+
+        // إظهار الشارة الخضراء الأنيقة
         if (!badge) {
           badge = document.createElement('div');
           badge.className = 'wasli-card-status-badge';
@@ -2247,9 +2298,39 @@
           cardEl.appendChild(badge);
         }
       } else {
-        // إذا لم يكن مسحوباً: يبقى الكارت نظيفاً بدون أي شارة أو كلمة سحب
-        if (badge) {
-          badge.remove();
+        // إزالة الشارة إذا كان غير مسحوب
+        if (badge) badge.remove();
+
+        // إنشاء زر السحب السريع الأزرق
+        if (!quickBtn) {
+          quickBtn = document.createElement('button');
+          quickBtn.type = 'button';
+          quickBtn.className = 'wasli-card-quick-btn';
+          quickBtn.setAttribute('data-wasli-quick-code', code);
+          quickBtn.title = 'انقر لسحب هذا المنتج تلقائياً إلى منصة وصلي ونشره في تليغرام';
+          quickBtn.innerHTML = `
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>سحب لوصلي</span>
+          `;
+
+          quickBtn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            quickBtn.classList.add('loading');
+            quickBtn.innerHTML = `
+              <span class="wasli-card-btn-spinner"></span>
+              <span>جاري السحب...</span>
+            `;
+
+            triggerAutoImportForProduct(code);
+          };
+
+          cardEl.appendChild(quickBtn);
         }
       }
     });
@@ -2358,10 +2439,19 @@
 
   if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
     chrome.runtime.onMessage.addListener(async (msg) => {
+      // 1. استقبال إشعار اكتمال السحب من تبويب خلفي لتحديث الصفحة الحالية فوراً
+      if (msg.action === 'productImportedBroadcast' && msg.code) {
+        markProductAsImported(msg.code);
+        injectProductCardButtons();
+        showFloatingToast(`تم سحب وحفظ المنتج #${msg.code} بنجاح!`, 'success');
+        return;
+      }
+
+      // 2. استقبال أمر السحب المباشر من قائمة الكليك الأيمن
       if (msg.action === 'executeContextMenuImport') {
         const info = msg.info || {};
 
-        // 1. إذا كان في صفحة منتج فردي، ينفذ الاستيراد التلقائي الفوري للصفحة
+        // أ) إذا كان في صفحة منتج فردي، ينفذ السحب الفوري للصفحة
         if (isProductPage()) {
           showFloatingToast('جاري سحب هذا المنتج ونشره في تليغرام...', 'info');
           if (typeof globalDirectImportHandler === 'function') {
@@ -2373,7 +2463,7 @@
           return;
         }
 
-        // 2. إذا كان في صفحة قائمة، استخراج كود المنتج من العنصر المنقور أو الرابط
+        // ب) إذا كان في صفحة قائمة، استخراج كود المنتج من العنصر المنقور أو الرابط
         let targetCode = '';
         const href = info.linkUrl || (lastRightClickedElement?.closest('a')?.href) || '';
         if (href) {
@@ -2401,72 +2491,8 @@
           return;
         }
 
-        showFloatingToast(`جاري سحب المنتج #${targetCode} إلى منصة وصلي ونشره في تليغرام...`, 'info');
-
-        try {
-          const isMojod = window.location.hostname.includes('mojod.app');
-          const targetUrl = wasliServerUrl.trim().replace(/\/+$/, '');
-
-          if (isMojod) {
-            // استيراد من موجود عبر مسار الخادم الرسمي
-            const res = await fetch(`${targetUrl}/api/suppliers/mojod`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ products: [{ _id: targetCode }] })
-            });
-            const data = await res.json();
-            if (data.success && data.importedCount > 0) {
-              markProductAsImported(targetCode);
-              showFloatingToast(`تم استيراد ونشر منتج موجود #${targetCode} بنجاح!`, 'success');
-              injectProductCardButtons();
-            } else if (data.skippedCount > 0) {
-              markProductAsImported(targetCode);
-              showFloatingToast(`هذا المنتج مسحوب مسبقاً في منصتك!`, 'warning');
-            } else {
-              showFloatingToast(data.message || 'تعذر استيراد المنتج', 'error');
-            }
-          } else {
-            // استيراد من فدشي عبر جلب صفحة المنتج خلفياً وسحبها بكامل التفاصيل
-            const prodPageUrl = `https://web.fedshi.com/products/${targetCode}`;
-            const htmlRes = await fetch(prodPageUrl);
-            const htmlText = await htmlRes.text();
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(htmlText, 'text/html');
-            const details = await extractFedshiProductDetails(doc, prodPageUrl);
-            if (details) {
-              const payload = {
-                name: details.title,
-                category: details.category || 'عام',
-                description: details.specifications || details.title,
-                promoDescription: details.promoDescription || details.title,
-                specifications: details.specifications || details.title,
-                wholesalePriceIqd: details.wasliWholesale,
-                platformPriceIqd: details.defaultStorePrice,
-                minPriceIqd: details.wasliMinPrice,
-                maxPriceIqd: details.wasliMaxPrice,
-                supplierPriceIqd: details.fedshiWholesale,
-                supplierCode: targetCode,
-                supplierSource: 'fedshi',
-                image: details.images[0] || '',
-                images: details.images,
-                colors: details.colors,
-                stockQuantity: details.stock,
-              };
-              const importRes = await sendProductPayloadToWasli(payload);
-              if (importRes && importRes.success) {
-                markProductAsImported(targetCode);
-                showFloatingToast(`تم استيراد منتج فدشي #${targetCode} ونشره بنجاح!`, 'success');
-                injectProductCardButtons();
-              } else {
-                showFloatingToast(importRes?.message || 'تعذر استيراد المنتج', 'error');
-              }
-            } else {
-              showFloatingToast('تعذر قراءة بيانات وسعر المنتج من فدشي', 'error');
-            }
-          }
-        } catch (err) {
-          showFloatingToast(`حدث خطأ أثناء سحب المنتج: ${err.message}`, 'error');
-        }
+        // تشغيل السحب الموثوق عبر التبويب الخلفي وإغلاقه تلقائياً
+        triggerAutoImportForProduct(targetCode);
       }
     });
   }

@@ -852,6 +852,61 @@
 }
 
 /* ========================================================
+   زر السحب السريع الفخم فوق بطاقة كل منتج في القوائم
+   ======================================================== */
+.wasli-card-quick-btn {
+  position: absolute !important;
+  top: 8px !important;
+  left: 8px !important;
+  z-index: 55 !important;
+  background: linear-gradient(135deg, #1D4ED8 0%, #0284C7 100%) !important;
+  color: #ffffff !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.85) !important;
+  border-radius: 9999px !important;
+  padding: 5px 12px !important;
+  font-size: 11.5px !important;
+  font-weight: 800 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.45) !important;
+  cursor: pointer !important;
+  font-family: 'Cairo', sans-serif !important;
+  direction: rtl !important;
+  line-height: 1.2 !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  user-select: none !important;
+  text-decoration: none !important;
+}
+
+.wasli-card-quick-btn:hover {
+  transform: translateY(-2px) scale(1.04) !important;
+  box-shadow: 0 6px 20px rgba(2, 132, 199, 0.6) !important;
+  background: linear-gradient(135deg, #1E40AF 0%, #0369A1 100%) !important;
+}
+
+.wasli-card-quick-btn:active {
+  transform: scale(0.96) !important;
+}
+
+.wasli-card-quick-btn.loading {
+  background: #64748b !important;
+  box-shadow: none !important;
+  cursor: wait !important;
+  pointer-events: none !important;
+}
+
+.wasli-card-btn-spinner {
+  width: 12px !important;
+  height: 12px !important;
+  border: 2px solid rgba(255, 255, 255, 0.35) !important;
+  border-top-color: #ffffff !important;
+  border-radius: 50% !important;
+  animation: wasliSpin 0.7s linear infinite !important;
+  display: inline-block !important;
+}
+
+/* ========================================================
    شارة حالة المنتج الذكية (تظهر فقط إذا كان المنتج مسحوباً مسبقاً)
    ======================================================== */
 .wasli-card-status-badge {

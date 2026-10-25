@@ -45,6 +45,43 @@ if (chrome.contextMenus && chrome.contextMenus.onClicked) {
 // خلفية العمل لإضافة وصلي الذكية (Service Worker - Manifest V3)
 // تتولى إرسال الطلبات وتجاوز أي قيود CSP أو حظر تفرضه صفحة الويب المضيفة
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // فتح تبويب خلفي صامت للسحب التلقائي
+  if (request.action === 'openAutoImportTab') {
+    if (chrome.tabs && chrome.tabs.create) {
+      chrome.tabs.create({ url: request.url, active: false }, (newTab) => {
+        sendResponse({ ok: true, tabId: newTab?.id });
+      });
+      return true;
+    }
+  }
+
+  // إغلاق التبويب بعد اكتمال السحب بنجاح وبث التحديث لكافة التبويبات
+  if (request.action === 'closeMyTab') {
+    const tabId = sender?.tab?.id || request.tabId;
+    if (tabId && chrome.tabs && chrome.tabs.remove) {
+      chrome.tabs.remove(tabId, () => {
+        if (chrome.runtime.lastError) {}
+      });
+    }
+    // بث إشعار لكافة التبويبات المفتوحة لتحديث الكروت فوراً دون ريفريش
+    if (request.code && chrome.tabs && chrome.tabs.query) {
+      chrome.tabs.query({}, (tabs) => {
+        if (!tabs || !Array.isArray(tabs)) return;
+        tabs.forEach((t) => {
+          if (t.id && t.id !== tabId) {
+            chrome.tabs.sendMessage(t.id, {
+              action: 'productImportedBroadcast',
+              code: String(request.code).trim(),
+              product: request.product,
+            }).catch(() => {});
+          }
+        });
+      });
+    }
+    sendResponse({ ok: true });
+    return true;
+  }
+
   // 0. جلب قائمة المنتجات الحالية من وصلي للمزامنة الفورية
   if (request.action === 'fetchUrl' || request.action === 'getImportedProductsList') {
     const targetUrl = request.url || 'https://wasli-smart.vercel.app/api/products';
