@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Plus, 
   ShoppingBag, 
@@ -30,7 +30,8 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
-  Filter
+  Filter,
+  StopCircle
 } from 'lucide-react';
 import Link from 'next/link';
 import { Product, Category, Subcategory } from '@/types';
@@ -88,6 +89,22 @@ export default function AdminProductsPage() {
   const [importingMojod, setImportingMojod] = useState(false);
   const [mojodImportMsg, setMojodImportMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
+  // حالة تتبع التقدم اللحظي للاستيراد
+  interface ImportProgressState {
+    total: number;
+    current: number;
+    currentItem: { id: number; name: string; image?: string; price?: number } | null;
+    completedList: { id: number; name: string; status: 'success' | 'skipped' | 'error'; note?: string }[];
+    isCancelled: boolean;
+    isDone: boolean;
+  }
+  const [importProgress, setImportProgress] = useState<ImportProgressState | null>(null);
+  const cancelImportRef = useRef(false);
+
+  const handleCancelImport = () => {
+    cancelImportRef.current = true;
+  };
+
   const loadMojodProducts = async (page = 1, search = '') => {
     setMojodLoading(true);
     setMojodImportMsg(null);
@@ -130,36 +147,125 @@ export default function AdminProductsPage() {
     }
   };
 
+  // الاستيراد الذكي التدريجي مع التحديث اللحظي لتقدم النقل
   const handleImportSelectedMojod = async () => {
     if (selectedMojodIds.length === 0) return;
+    const selectedItems = mojodProducts.filter(p => selectedMojodIds.includes(p._id));
+    if (selectedItems.length === 0) return;
+
     setImportingMojod(true);
     setMojodImportMsg(null);
-    try {
-      const selectedItems = mojodProducts.filter(p => selectedMojodIds.includes(p._id));
-      const res = await fetch('/api/suppliers/mojod', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ products: selectedItems }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMojodImportMsg({
-          text: `تم استيراد ${data.importedCount} منتج بنجاح ونشرها في تليغرام وحفظها بالمنصة! ${data.skippedCount > 0 ? `(${data.skippedCount} كانت مسحوبة مسبقاً)` : ''}`,
-          type: 'success'
-        });
-        setSelectedMojodIds([]);
-        // تحديث قائمة المنتجات المعروضة فوراً
-        fetch('/api/products').then(r => r.json()).then(d => {
-          if (d.success && d.products) setProducts(d.products);
-        });
-      } else {
-        setMojodImportMsg({ text: data.message || 'حدث خطأ أثناء الاستيراد', type: 'error' });
+    cancelImportRef.current = false;
+
+    const progress: ImportProgressState = {
+      total: selectedItems.length,
+      current: 0,
+      currentItem: null,
+      completedList: [],
+      isCancelled: false,
+      isDone: false,
+    };
+    setImportProgress({ ...progress });
+
+    let successCount = 0;
+    let skippedCount = 0;
+    let errorCount = 0;
+
+    for (let i = 0; i < selectedItems.length; i++) {
+      if (cancelImportRef.current) {
+        progress.isCancelled = true;
+        setImportProgress({ ...progress });
+        break;
       }
-    } catch (err: any) {
-      setMojodImportMsg({ text: err.message || 'خطأ أثناء تنفيذ الاستيراد', type: 'error' });
-    } finally {
-      setImportingMojod(false);
+
+      const item = selectedItems[i];
+      let displayName = (item.name || '').trim();
+      if (!displayName && item.body) {
+        const firstLine = item.body.split('\n')[0].replace(/[•\-*]/g, '').trim();
+        displayName = firstLine.length > 60 ? firstLine.slice(0, 60) + '...' : firstLine;
+      }
+      if (!displayName) displayName = `منتج #${item._id}`;
+
+      const imgUrl = Array.isArray(item.img) ? item.img[0] : (typeof item.img === 'string' ? item.img : '');
+
+      // تحديث حالة المنتج الجاري نقله الآن
+      progress.current = i + 1;
+      progress.currentItem = {
+        id: item._id,
+        name: displayName,
+        image: imgUrl,
+        price: item.price,
+      };
+      setImportProgress({ ...progress });
+
+      try {
+        const res = await fetch('/api/suppliers/mojod', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ products: [item] }),
+        });
+        const data = await res.json();
+
+        if (data.success && data.importedCount > 0) {
+          successCount++;
+          progress.completedList.unshift({
+            id: item._id,
+            name: displayName,
+            status: 'success',
+            note: 'تم حفظه ونشره في تليغرام بنجاح',
+          });
+        } else if (data.skippedCount > 0) {
+          skippedCount++;
+          progress.completedList.unshift({
+            id: item._id,
+            name: displayName,
+            status: 'skipped',
+            note: 'مسحوب مسبقاً في المنصة',
+          });
+        } else {
+          errorCount++;
+          progress.completedList.unshift({
+            id: item._id,
+            name: displayName,
+            status: 'error',
+            note: data.errors?.[0]?.error || 'تعذر استيراد المنتج',
+          });
+        }
+
+        // إلغاء تحديد المنتج المكتمل فوراً من القائمة
+        setSelectedMojodIds(prev => prev.filter(id => id !== item._id));
+
+      } catch (err: any) {
+        errorCount++;
+        progress.completedList.unshift({
+          id: item._id,
+          name: displayName,
+          status: 'error',
+          note: err.message || 'خطأ في الاتصال بالخادم',
+        });
+      }
+
+      setImportProgress({ ...progress });
     }
+
+    progress.isDone = true;
+    progress.currentItem = null;
+    setImportProgress({ ...progress });
+    setImportingMojod(false);
+
+    // تحديث قائمة المنتجات المعروضة في الصفحة تلقائياً
+    try {
+      const prodRes = await fetch('/api/products');
+      const prodData = await prodRes.json();
+      if (prodData.success && prodData.products) {
+        setProducts(prodData.products);
+      }
+    } catch (e) {}
+
+    setMojodImportMsg({
+      text: `اكتملت العملية: تم نقل ${successCount} منتج بنجاح، و${skippedCount} كانت مسحوبة مسبقاً ${errorCount > 0 ? `(${errorCount} واجهت خطأ)` : ''}`,
+      type: successCount > 0 || skippedCount > 0 ? 'success' : 'error'
+    });
   };
 
   // حالة تعديل المنتج

@@ -63,7 +63,14 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        const name = (item.name || '').trim();
+        // استخراج اسم المنتج بذكاء: إذا لم يوجد اسم صريح نأخذ أول سطر من الوصف
+        let name = (item.name || '').trim();
+        if (!name && item.body) {
+          const firstLine = item.body.split('\n')[0].replace(/[•\-*]/g, '').trim();
+          name = firstLine.length > 80 ? firstLine.slice(0, 80) + '...' : firstLine;
+        }
+        if (!name) name = `منتج رقم ${code}`;
+
         const rawPrice = Number(item.price) || 10000;
         
         // حساب المعادلة المالية الذكية لمنصة وصلي:
@@ -73,7 +80,14 @@ export async function POST(request: NextRequest) {
         const minPrice = wholesalePrice + 5000; // حد التاجر الأدنى للبيع
         const maxPrice = wholesalePrice + 15000; // حد البيع الأعلى المقترح
 
-        const images = Array.isArray(item.img) ? item.img : (item.image ? [item.image] : []);
+        let images: string[] = [];
+        if (Array.isArray(item.img)) {
+          images = item.img.filter(Boolean);
+        } else if (typeof item.img === 'string' && item.img) {
+          images = [item.img];
+        } else if (item.image) {
+          images = [item.image];
+        }
         const primaryImage = images[0] || '/placeholder-product.svg';
         const description = (item.body || item.description || name).trim();
         const promoDescription = (item.post_body || item.promoDescription || '').trim();

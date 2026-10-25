@@ -449,6 +449,45 @@ export async function updateOrderStatus(orderId: string, newStatus: OrderStatus)
 }
 
 /**
+ * حذف طلب أو عدة طلبات نهائياً من النظام وقاعدة البيانات
+ */
+export async function deleteOrders(orderIds: string[]): Promise<boolean> {
+  if (!orderIds || orderIds.length === 0) return false;
+
+  const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+  if (activeSupabase) {
+    try {
+      // 1. حذف عناصر الطلبات من جدول order_items
+      await activeSupabase
+        .from('order_items')
+        .delete()
+        .in('order_id', orderIds);
+
+      // 2. حذف الطلبات من جدول orders
+      await activeSupabase
+        .from('orders')
+        .delete()
+        .in('id', orderIds);
+
+      // في حال كان المعرف الممرر هو رقم الطلب order_number
+      await activeSupabase
+        .from('orders')
+        .delete()
+        .in('order_number', orderIds);
+
+    } catch (err) {
+      console.warn('تنبيه أثناء حذف الطلبات من سوبابيس:', err);
+    }
+  }
+
+  // 3. الحذف من الذاكرة المحلية
+  localOrders = localOrders.filter(o => !orderIds.includes(o.id) && !orderIds.includes(o.orderNumber));
+  localProfitEntries = localProfitEntries.filter(p => !p.orderId || (!orderIds.includes(p.orderId) && (!p.orderNumber || !orderIds.includes(p.orderNumber))));
+
+  return true;
+}
+
+/**
  * جلب سجل الأرباح لمتجر معين
  */
 export async function getStoreProfitLedger(storeId: string): Promise<ProfitEntry[]> {

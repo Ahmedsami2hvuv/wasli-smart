@@ -30,7 +30,8 @@ import {
   MapPin,
   Calendar,
   FileText,
-  Check
+  Check,
+  Trash2
 } from 'lucide-react';
 import Link from 'next/link';
 import { Order, OrderStatus, Store as StoreType } from '@/types';
@@ -51,11 +52,92 @@ export default function AdminDashboardPage() {
   const [copiedMessage, setCopiedMessage] = useState<string | null>(null);
   const [productsList, setProductsList] = useState<any[]>([]);
 
+  // حالة التحديد الفردي والجماعي للطلبات
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [deletingOrders, setDeletingOrders] = useState(false);
+
   const copyToClipboard = (text: string, msg = 'تم النسخ بنجاح') => {
     if (navigator?.clipboard) {
       navigator.clipboard.writeText(text);
       setCopiedMessage(msg);
       setTimeout(() => setCopiedMessage(null), 2500);
+    }
+  };
+
+  // تبديل تحديد طلب فردي
+  const toggleSelectOrder = (id: string) => {
+    setSelectedOrderIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  // حذف الطلبات المحددة
+  const handleDeleteSelectedOrders = async () => {
+    if (selectedOrderIds.length === 0) return;
+
+    const count = selectedOrderIds.length;
+    if (!confirm(`هل أنت متأكد من رغبتك في حذف (${count}) طلب نهائياً من قاعدة البيانات؟ لن يمكن التراجع عن هذا الإجراء.`)) {
+      return;
+    }
+
+    setDeletingOrders(true);
+    try {
+      // إزالة فورية من الشاشة
+      setOrders(prev => prev.filter(o => !selectedOrderIds.includes(o.id)));
+      if (selectedOrder && selectedOrderIds.includes(selectedOrder.id)) {
+        setSelectedOrder(null);
+      }
+
+      const res = await fetch('/api/orders', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedOrderIds }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCopiedMessage(`تم حذف ${count} طلب بنجاح`);
+        setTimeout(() => setCopiedMessage(null), 3000);
+        setSelectedOrderIds([]);
+        fetchData();
+      } else {
+        console.warn('تنبيه الحذف:', data.message);
+        fetchData();
+      }
+    } catch (err) {
+      console.error('خطأ في حذف الطلبات:', err);
+      fetchData();
+    } finally {
+      setDeletingOrders(false);
+    }
+  };
+
+  // حذف طلب فردي محدد
+  const handleDeleteSingleOrder = async (orderId: string, orderNumber: string) => {
+    if (!confirm(`هل أنت متأكد من حذف الطلب رقم [${orderNumber}] نهائياً من قاعدة البيانات؟`)) {
+      return;
+    }
+
+    try {
+      setOrders(prev => prev.filter(o => o.id !== orderId));
+      setSelectedOrderIds(prev => prev.filter(id => id !== orderId));
+      if (selectedOrder && selectedOrder.id === orderId) {
+        setSelectedOrder(null);
+      }
+
+      const res = await fetch('/api/orders', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [orderId] }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCopiedMessage(`تم حذف الطلب [${orderNumber}] بنجاح`);
+        setTimeout(() => setCopiedMessage(null), 3000);
+        fetchData();
+      }
+    } catch (err) {
+      console.error('خطأ في حذف الطلب:', err);
+      fetchData();
     }
   };
 
@@ -302,7 +384,7 @@ export default function AdminDashboardPage() {
             <div>
               <h2 className="text-lg font-black text-slate-900">إدارة الطلبات الواردة من كافة متاجر التجار</h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                يمكنك معرفة التاجر ومتجره الذي جلب كل طلب، وتحديث حالته وتأكيد التوصيل واحتساب الأرباح
+                يمكنك تحديد وحذف الطلبات، ومتابعة التاجر الذي جلب كل طلب، وتحديث حالته وتأكيد التوصيل
               </p>
             </div>
 
@@ -311,7 +393,10 @@ export default function AdminDashboardPage() {
               <Filter className="w-4 h-4 text-slate-400" />
               <select
                 value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
+                onChange={(e) => {
+                  setFilterStatus(e.target.value);
+                  setSelectedOrderIds([]);
+                }}
                 className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 outline-none bg-slate-50"
               >
                 <option value="all">كافة الطلبات ({orders.length})</option>
@@ -324,6 +409,37 @@ export default function AdminDashboardPage() {
               </select>
             </div>
           </div>
+
+          {/* شريط الإجراءات الجماعية عند تحديد طلب أو أكثر */}
+          {selectedOrderIds.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 mb-5 flex flex-col sm:flex-row items-center justify-between gap-3 animate-fadeIn">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-amber-700" />
+                <span className="text-xs font-black text-amber-900">
+                  تم تحديد {selectedOrderIds.length} من أصل {filteredOrders.length} طلب
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrderIds([])}
+                  className="py-1.5 px-3 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-colors cursor-pointer"
+                >
+                  إلغاء التحديد
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteSelectedOrders}
+                  disabled={deletingOrders}
+                  className="py-1.5 px-4 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                  title="حذف كافة الطلبات المحددة نهائياً من قاعدة البيانات"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{deletingOrders ? 'جاري الحذف...' : `حذف المحدد (${selectedOrderIds.length})`}</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {loading ? (
             <div className="text-center py-12">
@@ -339,6 +455,24 @@ export default function AdminDashboardPage() {
               <table className="w-full text-right text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-400 uppercase">
+                    {/* مربع تحديد الكل */}
+                    <th className="py-3 px-3 w-12 text-center">
+                      <div className="flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          checked={filteredOrders.length > 0 && selectedOrderIds.length === filteredOrders.length}
+                          onChange={() => {
+                            if (selectedOrderIds.length === filteredOrders.length && filteredOrders.length > 0) {
+                              setSelectedOrderIds([]);
+                            } else {
+                              setSelectedOrderIds(filteredOrders.map(o => o.id));
+                            }
+                          }}
+                          className="w-4 h-4 rounded text-brand-600 border-slate-300 focus:ring-brand-500 cursor-pointer"
+                          title="تحديد أو إلغاء تحديد كافة الطلبات"
+                        />
+                      </div>
+                    </th>
                     <th className="py-3 px-3">رقم الطلب</th>
                     <th className="py-3 px-3">متجر التاجر</th>
                     <th className="py-3 px-3">الزبون والهاتف</th>
@@ -348,79 +482,106 @@ export default function AdminDashboardPage() {
                     <th className="py-3 px-3">ربح التاجر</th>
                     <th className="py-3 px-3">ربح المنصة</th>
                     <th className="py-3 px-3">تحديث الحالة</th>
-                    <th className="py-3 px-3 text-center">التفاصيل الكاملة</th>
+                    <th className="py-3 px-3 text-center">الإجراءات</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredOrders.map((order) => (
-                    <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-3">
-                        <button
-                          onClick={() => setSelectedOrder(order)}
-                          className="font-mono font-bold text-brand-700 hover:text-brand-900 hover:underline flex items-center gap-1 cursor-pointer"
-                          title="انقر لفتح تفاصيل الطلب الكاملة"
-                        >
-                          <span>{order.orderNumber}</span>
-                          <ExternalLink className="w-3 h-3 text-brand-500" />
-                        </button>
-                      </td>
-                      <td className="py-3.5 px-3">
-                        <span className="font-bold text-slate-800 block">{order.storeName || 'المتجر المباشر'}</span>
-                        <span className="font-mono text-[10px] text-slate-400">{order.storeCode || 'platform'}</span>
-                      </td>
-                      <td className="py-3.5 px-3">
-                        <div className="font-bold text-slate-800">{order.customerName}</div>
-                        <div className="text-[11px] text-slate-500 font-mono" dir="ltr">{order.customerPhone}</div>
-                      </td>
-                      <td className="py-3.5 px-3 text-slate-600 max-w-xs truncate" title={order.address}>
-                        {order.governorate} - {order.city} ({order.address})
-                      </td>
-                      <td className="py-3.5 px-3 font-semibold text-slate-700">
-                        {order.items?.length || 1} منتج
-                      </td>
-                      <td className="py-3.5 px-3 font-black text-slate-900">
-                        {order.totalAmount.toLocaleString('ar-IQ')} د.ع
-                      </td>
-                      <td className="py-3.5 px-3 font-bold text-emerald-600">
-                        +{order.merchantProfit.toLocaleString('ar-IQ')} د.ع
-                      </td>
-                      <td className="py-3.5 px-3 font-bold text-brand-800">
-                        +{order.platformProfit.toLocaleString('ar-IQ')} د.ع
-                      </td>
-                      <td className="py-3.5 px-3">
-                        <select
-                          disabled={updatingId === order.id}
-                          value={order.status}
-                          onChange={(e) => handleStatusChange(order.id, e.target.value as OrderStatus)}
-                          className={`text-xs font-bold py-1.5 px-2.5 rounded-lg border outline-none cursor-pointer ${
-                            order.status === 'delivered' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' :
-                            order.status === 'cancelled' ? 'bg-red-50 text-red-800 border-red-300' :
-                            order.status === 'shipped' ? 'bg-blue-50 text-blue-800 border-blue-300' :
-                            'bg-amber-50 text-amber-800 border-amber-300'
-                          }`}
-                        >
-                          <option value="new">جديد</option>
-                          <option value="reviewed">تمت المراجعة</option>
-                          <option value="processing">قيد التجهيز</option>
-                          <option value="ready_for_shipping">جاهز للشحن</option>
-                          <option value="shipped">خرج للتوصيل</option>
-                          <option value="delivered">تم التسليم</option>
-                          <option value="cancelled">ملغي</option>
-                          <option value="returned">مرتجع</option>
-                        </select>
-                      </td>
-                      <td className="py-3.5 px-3 text-center">
-                        <button
-                          onClick={() => setSelectedOrder(order)}
-                          className="py-1.5 px-3 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-800 font-bold text-xs border border-brand-200 transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                          title="عرض كافة تفاصيل الطلب والمنتجات وبوليصة الشحن"
-                        >
-                          <Eye className="w-3.5 h-3.5 text-brand-700" />
-                          <span>تفاصيل الطلب</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredOrders.map((order) => {
+                    const isSelected = selectedOrderIds.includes(order.id);
+                    return (
+                      <tr 
+                        key={order.id} 
+                        className={`transition-colors ${isSelected ? 'bg-amber-50/50 hover:bg-amber-50/80' : 'hover:bg-slate-50/80'}`}
+                      >
+                        {/* مربع التحديد الفردي */}
+                        <td className="py-3.5 px-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelectOrder(order.id)}
+                            className="w-4 h-4 rounded text-brand-600 border-slate-300 focus:ring-brand-500 cursor-pointer"
+                            title="تحديد هذا الطلب"
+                          />
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <button
+                            onClick={() => setSelectedOrder(order)}
+                            className="font-mono font-bold text-brand-700 hover:text-brand-900 hover:underline flex items-center gap-1 cursor-pointer"
+                            title="انقر لفتح تفاصيل الطلب الكاملة"
+                          >
+                            <span>{order.orderNumber}</span>
+                            <ExternalLink className="w-3 h-3 text-brand-500" />
+                          </button>
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <span className="font-bold text-slate-800 block">{order.storeName || 'المتجر المباشر'}</span>
+                          <span className="font-mono text-[10px] text-slate-400">{order.storeCode || 'platform'}</span>
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <div className="font-bold text-slate-800">{order.customerName}</div>
+                          <div className="text-[11px] text-slate-500 font-mono" dir="ltr">{order.customerPhone}</div>
+                        </td>
+                        <td className="py-3.5 px-3 text-slate-600 max-w-xs truncate" title={order.address}>
+                          {order.governorate} - {order.city} ({order.address})
+                        </td>
+                        <td className="py-3.5 px-3 font-semibold text-slate-700">
+                          {order.items?.length || 1} منتج
+                        </td>
+                        <td className="py-3.5 px-3 font-black text-slate-900">
+                          {order.totalAmount.toLocaleString('ar-IQ')} د.ع
+                        </td>
+                        <td className="py-3.5 px-3 font-bold text-emerald-600">
+                          +{order.merchantProfit.toLocaleString('ar-IQ')} د.ع
+                        </td>
+                        <td className="py-3.5 px-3 font-bold text-brand-800">
+                          +{order.platformProfit.toLocaleString('ar-IQ')} د.ع
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <select
+                            disabled={updatingId === order.id}
+                            value={order.status}
+                            onChange={(e) => handleStatusChange(order.id, e.target.value as OrderStatus)}
+                            className={`text-xs font-bold py-1.5 px-2.5 rounded-lg border outline-none cursor-pointer ${
+                              order.status === 'delivered' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' :
+                              order.status === 'cancelled' ? 'bg-red-50 text-red-800 border-red-300' :
+                              order.status === 'shipped' ? 'bg-blue-50 text-blue-800 border-blue-300' :
+                              'bg-amber-50 text-amber-800 border-amber-300'
+                            }`}
+                          >
+                            <option value="new">جديد</option>
+                            <option value="reviewed">تمت المراجعة</option>
+                            <option value="processing">قيد التجهيز</option>
+                            <option value="ready_for_shipping">جاهز للشحن</option>
+                            <option value="shipped">خرج للتوصيل</option>
+                            <option value="delivered">تم التسليم</option>
+                            <option value="cancelled">ملغي</option>
+                            <option value="returned">مرتجع</option>
+                          </select>
+                        </td>
+                        <td className="py-3.5 px-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => setSelectedOrder(order)}
+                              className="py-1.5 px-2.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-800 font-bold text-xs border border-brand-200 transition-all inline-flex items-center gap-1 cursor-pointer shadow-2xs"
+                              title="عرض كافة تفاصيل الطلب والمنتجات وبوليصة الشحن"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-brand-700" />
+                              <span>تفاصيل</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSingleOrder(order.id, order.orderNumber)}
+                              className="p-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 transition-colors cursor-pointer"
+                              title="حذف هذا الطلب نهائياً"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -917,6 +1078,17 @@ ${itemsText}
               >
                 <Printer className="w-3.5 h-3.5 text-slate-500" />
                 <span>طباعة</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={deletingOrders}
+                onClick={() => handleDeleteSingleOrder(selectedOrder.id, selectedOrder.orderNumber)}
+                className="py-2.5 px-4 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                title="حذف هذا الطلب نهائياً من قاعدة البيانات"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>حذف الطلب</span>
               </button>
 
               <button
