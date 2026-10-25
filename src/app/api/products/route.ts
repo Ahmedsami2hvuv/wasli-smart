@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllProducts, getProductsPaginated, createPlatformProduct, updatePlatformProduct, deleteOrArchiveProduct, deleteProducts } from '@/lib/services/productService';
+import { 
+  getAllProducts, 
+  getProductsPaginated, 
+  createPlatformProduct, 
+  updatePlatformProduct, 
+  deleteOrArchiveProduct, 
+  deleteProducts,
+  deleteAllProducts
+} from '@/lib/services/productService';
 
 export async function GET(request: NextRequest) {
   try {
@@ -94,11 +102,14 @@ export async function PATCH(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     let ids: string[] = [];
+    let deleteAll = false;
 
     // 1. محاولة قراءة المعرفات من جسم الطلب JSON
     try {
       const body = await request.json();
-      if (Array.isArray(body.ids)) {
+      if (body.all === true || body.deleteAll === true) {
+        deleteAll = true;
+      } else if (Array.isArray(body.ids)) {
         ids = body.ids.map((id: any) => String(id).trim()).filter(Boolean);
       } else if (body.id) {
         ids = [String(body.id).trim()];
@@ -108,16 +119,25 @@ export async function DELETE(request: NextRequest) {
     }
 
     // 2. إذا لم تكن في البودي، نقرأ من الرابط (Query Params)
-    if (ids.length === 0) {
+    if (!deleteAll && ids.length === 0) {
       const { searchParams } = new URL(request.url);
-      const singleId = searchParams.get('id');
-      const rawIds = searchParams.get('ids');
+      if (searchParams.get('all') === 'true') {
+        deleteAll = true;
+      } else {
+        const singleId = searchParams.get('id');
+        const rawIds = searchParams.get('ids');
 
-      if (rawIds) {
-        ids = rawIds.split(',').map(s => s.trim()).filter(Boolean);
-      } else if (singleId) {
-        ids = [singleId.trim()];
+        if (rawIds) {
+          ids = rawIds.split(',').map(s => s.trim()).filter(Boolean);
+        } else if (singleId) {
+          ids = [singleId.trim()];
+        }
       }
+    }
+
+    if (deleteAll) {
+      const ok = await deleteAllProducts();
+      return NextResponse.json({ success: ok, message: 'تم حذف كافة منتجات المنصة بنجاح' });
     }
 
     if (ids.length === 0) {

@@ -478,21 +478,24 @@ export async function deleteProducts(ids: string[]): Promise<boolean> {
   const dbClient = supabaseAdmin || supabase;
   if (dbClient) {
     try {
-      // 1. حذف ارتباطات المنتجات في المتاجر إن وجدت
-      await dbClient.from('store_products').delete().in('product_id', ids);
-    } catch (err) {
-      // تجاهل إذا كان الجدول غير موجود
-    }
+      // 1. حذف ارتباطات صور المنتجات
+      await dbClient.from('product_images').delete().in('product_id', ids);
+    } catch (err) {}
 
     try {
-      // 2. حذف المنتجات من جدول products
+      // 2. حذف ارتباطات المنتجات في المتاجر إن وجدت
+      await dbClient.from('store_products').delete().in('product_id', ids);
+    } catch (err) {}
+
+    try {
+      // 3. حذف المنتجات من جدول products
       await dbClient.from('products').delete().in('id', ids);
     } catch (err) {
       console.warn('تعذر حذف المنتجات من سوبابيس:', err);
     }
   }
 
-  // 3. الحذف من الذاكرة المحلية
+  // 4. الحذف من الذاكرة المحلية
   const idSet = new Set(ids);
   for (let i = localProducts.length - 1; i >= 0; i--) {
     if (idSet.has(localProducts[i].id)) {
@@ -500,6 +503,35 @@ export async function deleteProducts(ids: string[]): Promise<boolean> {
     }
   }
 
+  return true;
+}
+
+/**
+ * حذف جميع منتجات المنصة بالكامل من سوبابيس والذاكرة المحلية
+ */
+export async function deleteAllProducts(): Promise<boolean> {
+  const dbClient = supabaseAdmin || supabase;
+  if (dbClient) {
+    try {
+      // 1. حذف كافة صور المنتجات
+      await dbClient.from('product_images').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    } catch (err) {}
+
+    try {
+      // 2. حذف كافة ارتباطات المنتجات في متاجر التجار
+      await dbClient.from('store_products').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    } catch (err) {}
+
+    try {
+      // 3. حذف كافة المنتجات من جدول products
+      await dbClient.from('products').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    } catch (err) {
+      console.warn('تعذر حذف كافة المنتجات من سوبابيس:', err);
+    }
+  }
+
+  // 4. تفريغ الذاكرة المحلية
+  localProducts.length = 0;
   return true;
 }
 

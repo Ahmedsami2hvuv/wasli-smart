@@ -83,12 +83,13 @@ export default function AdminProductsPage() {
   const [deletingBatch, setDeletingBatch] = useState(false);
   const [batchMsg, setBatchMsg] = useState<string | null>(null);
 
-  // حالات تقسيم الصفحات (20 منتج في الصفحة) وكاش المتصفح لتوفير استهلاك سوبابيس وفيرسل
+  // حالات تقسيم الصفحات وكاش المتصفح لتوفير استهلاك سوبابيس وفيرسل
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalProductsCount, setTotalProductsCount] = useState(0);
   const [isFromCache, setIsFromCache] = useState(false);
-  const pageSize = 20;
+  const [viewLimit, setViewLimit] = useState<number | 'all'>(20);
+  const [selectAllPlatform, setSelectAllPlatform] = useState(false);
 
   // حالات ودوال الربط المباشر مع API موجود
   const [showMojodModal, setShowMojodModal] = useState(false);
@@ -413,6 +414,7 @@ export default function AdminProductsPage() {
 
   // تبديل تحديد منتج فردي
   const handleToggleSelectProduct = (id: string) => {
+    setSelectAllPlatform(false);
     setSelectedProductIds(prev =>
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
@@ -425,6 +427,7 @@ export default function AdminProductsPage() {
     const isAllSelected = allFilteredIds.every(id => selectedProductIds.includes(id));
     if (isAllSelected) {
       setSelectedProductIds(prev => prev.filter(id => !allFilteredIds.includes(id)));
+      setSelectAllPlatform(false);
     } else {
       setSelectedProductIds(prev => Array.from(new Set([...prev, ...allFilteredIds])));
     }
@@ -432,6 +435,44 @@ export default function AdminProductsPage() {
 
   // حذف المنتجات المحددة دفعة واحدة
   const handleDeleteSelectedProducts = async () => {
+    // 1. في حال اختيار حذف كللل منتجات المنصة بالكامل
+    if (selectAllPlatform) {
+      const totalCount = totalProductsCount || products.length;
+      if (!confirm(`⚠️ تحذير حاسم ومؤكد: هل أنت متأكد تماماً من رغبتك في حذف كللل منتجات المنصة بالكامل (${totalCount} منتج) نهائياً من قاعدة البيانات؟ لا يمكن التراجع عن هذا الإجراء إطلاقاً.`)) {
+        return;
+      }
+
+      setDeletingBatch(true);
+      try {
+        setProducts([]);
+        setSelectedProductIds([]);
+        setSelectAllPlatform(false);
+        setTotalProductsCount(0);
+        invalidateProductsCache();
+
+        const res = await fetch('/api/products', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ all: true }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setBatchMsg(`تم حذف كافة منتجات المنصة بالكامل بنجاح (${totalCount} منتج)`);
+          setTimeout(() => setBatchMsg(null), 3500);
+          loadProductsPage(1, searchQuery, true, viewLimit);
+        } else {
+          loadProductsPage(1, searchQuery, true, viewLimit);
+        }
+      } catch (err) {
+        console.error('خطأ في حذف كافة المنتجات:', err);
+        loadProductsPage(1, searchQuery, true, viewLimit);
+      } finally {
+        setDeletingBatch(false);
+      }
+      return;
+    }
+
+    // 2. في حال حذف المنتجات المحددة في الصفحة
     if (selectedProductIds.length === 0) return;
     const count = selectedProductIds.length;
     if (!confirm(`هل أنت متأكد من حذف (${count}) منتج نهائياً من المنصة وقاعدة البيانات؟ لا يمكن التراجع عن هذا الإجراء.`)) {
@@ -455,13 +496,13 @@ export default function AdminProductsPage() {
       if (data.success) {
         setBatchMsg(`تم حذف ${count} منتج بنجاح من المنصة`);
         setTimeout(() => setBatchMsg(null), 3000);
-        loadProductsPage(1, searchQuery, true);
+        loadProductsPage(1, searchQuery, true, viewLimit);
       } else {
-        loadProductsPage(1, searchQuery, true);
+        loadProductsPage(1, searchQuery, true, viewLimit);
       }
     } catch (err) {
       console.error('خطأ في حذف المنتجات:', err);
-      loadProductsPage(1, searchQuery, true);
+      loadProductsPage(1, searchQuery, true, viewLimit);
     } finally {
       setDeletingBatch(false);
     }
@@ -556,9 +597,10 @@ export default function AdminProductsPage() {
     } catch (e) {}
   };
 
-  // جلب المنتجات مع الكاش والتقسيم إلى 20 منتج في الصفحة لتوفير استهلاك سوبابيس وفيرسل
-  const loadProductsPage = async (page = 1, search = '', forceRefresh = false) => {
-    const cacheKey = `wasli_admin_products_p${page}_s_${encodeURIComponent(search.trim().toLowerCase())}`;
+  // جلب المنتجات مع الكاش والتقسيم إلى صفحات أو عرض الكل لتوفير استهلاك سوبابيس وفيرسل
+  const loadProductsPage = async (page = 1, search = '', forceRefresh = false, limit: number | 'all' = viewLimit) => {
+    const effectiveLimit = limit === 'all' ? 1000 : limit;
+    const cacheKey = `wasli_admin_products_p${page}_l${limit}_s_${encodeURIComponent(search.trim().toLowerCase())}`;
 
     // 1. فحص كاش المتصفح أولاً إذا لم يُطلب تحديث قسري
     if (!forceRefresh) {
@@ -571,6 +613,7 @@ export default function AdminProductsPage() {
             setTotalPages(cached.totalPages || 1);
             setTotalProductsCount(cached.total || cached.products.length);
             setCurrentPage(page);
+            setViewLimit(limit);
             setIsFromCache(true);
             setLoading(false);
             // إذا كان الكاش حديثاً (أقل من 5 دقائق)، نكتفي به لتوفير الاستهلاك التام
@@ -582,17 +625,19 @@ export default function AdminProductsPage() {
       } catch (e) {}
     }
 
-    // 2. إذا لم يوجد كاش أو مضى وقته، نجلب 20 منتج فقط من السيرفر
+    // 2. إذا لم يوجد كاش أو مضى وقته، نجلب البيانات من السيرفر
     try {
       setLoading(true);
       const searchParam = search.trim() ? `&search=${encodeURIComponent(search.trim())}` : '';
-      const res = await fetch(`/api/products?page=${page}&limit=${pageSize}${searchParam}`);
+      const limitParam = limit === 'all' ? '&limit=1000' : `&limit=${effectiveLimit}`;
+      const res = await fetch(`/api/products?page=${page}${limitParam}${searchParam}`);
       const data = await res.json();
       if (data.success && data.products) {
         setProducts(data.products);
         setTotalPages(data.totalPages || 1);
         setTotalProductsCount(data.total || data.products.length);
         setCurrentPage(page);
+        setViewLimit(limit);
         setIsFromCache(false);
 
         // حفظ في كاش المتصفح (localStorage)
@@ -1874,8 +1919,53 @@ export default function AdminProductsPage() {
             </div>
             
             <div className="flex items-center gap-2 flex-wrap">
+              {/* أزرار اختيار كمية العرض في الصفحة */}
+              <div className="flex items-center gap-1 bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs">
+                <span className="text-[10px] text-slate-500 font-bold px-1.5 hidden sm:inline">عرض:</span>
+                <button
+                  type="button"
+                  onClick={() => loadProductsPage(1, searchQuery, true, 20)}
+                  className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                    viewLimit === 20 ? 'bg-brand-700 text-white shadow-2xs' : 'text-slate-600 hover:bg-white'
+                  }`}
+                >
+                  20
+                </button>
+                <button
+                  type="button"
+                  onClick={() => loadProductsPage(1, searchQuery, true, 50)}
+                  className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                    viewLimit === 50 ? 'bg-brand-700 text-white shadow-2xs' : 'text-slate-600 hover:bg-white'
+                  }`}
+                >
+                  50
+                </button>
+                <button
+                  type="button"
+                  onClick={() => loadProductsPage(1, searchQuery, true, 100)}
+                  className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                    viewLimit === 100 ? 'bg-brand-700 text-white shadow-2xs' : 'text-slate-600 hover:bg-white'
+                  }`}
+                >
+                  100
+                </button>
+                <button
+                  type="button"
+                  onClick={() => loadProductsPage(1, searchQuery, true, 'all')}
+                  className={`px-2.5 py-1 rounded-lg font-black text-[11px] transition-all cursor-pointer flex items-center gap-1 ${
+                    viewLimit === 'all'
+                      ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white shadow-xs'
+                      : 'text-purple-700 bg-purple-50 hover:bg-purple-100'
+                  }`}
+                  title="عرض كافة منتجات المنصة دفعة واحدة لتحديدها وإدارتها"
+                >
+                  <span>عرض الكل</span>
+                  {totalProductsCount > 0 && <span className="opacity-80">({totalProductsCount})</span>}
+                </button>
+              </div>
+
               {/* شريط البحث السريع */}
-              <div className="relative w-full sm:w-64">
+              <div className="relative w-full sm:w-60">
                 <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
@@ -1884,7 +1974,7 @@ export default function AdminProductsPage() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
-                      loadProductsPage(1, searchQuery, true);
+                      loadProductsPage(1, searchQuery, true, viewLimit);
                     }
                   }}
                   className="w-full pr-9 pl-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-brand-600 focus:bg-white bg-slate-50 transition-all"
@@ -1893,7 +1983,7 @@ export default function AdminProductsPage() {
 
               <button
                 type="button"
-                onClick={() => loadProductsPage(1, searchQuery, true)}
+                onClick={() => loadProductsPage(1, searchQuery, true, viewLimit)}
                 className="py-2 px-3 bg-brand-700 hover:bg-brand-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
                 title="بحث أو تحديث المنتجات"
               >
@@ -1903,7 +1993,7 @@ export default function AdminProductsPage() {
 
               <button
                 type="button"
-                onClick={() => loadProductsPage(currentPage, searchQuery, true)}
+                onClick={() => loadProductsPage(currentPage, searchQuery, true, viewLimit)}
                 disabled={loading}
                 className="py-2 px-3 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs flex items-center gap-1.5"
                 title="تحديث فوري من قاعدة البيانات"
@@ -1967,33 +2057,74 @@ export default function AdminProductsPage() {
 
           {/* شريط الإجراءات الجماعية عند تحديد منتج أو أكثر */}
           {selectedProductIds.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 animate-fadeIn">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-amber-700" />
-                <span className="text-xs font-black text-amber-900">
-                  تم تحديد {selectedProductIds.length} من أصل {filteredProducts.length} منتج معروض
-                </span>
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 animate-fadeIn shadow-xs">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-amber-700" />
+                  <span className="text-xs font-black text-amber-900">
+                    {selectAllPlatform ? (
+                      <span className="text-red-700 font-black">
+                        تم تحديد كللل منتجات المنصة بالكامل ({totalProductsCount || products.length} منتج)!
+                      </span>
+                    ) : (
+                      <span>تم تحديد {selectedProductIds.length} من أصل {filteredProducts.length} منتج في هذه الصفحة</span>
+                    )}
+                  </span>
+                </div>
+
+                {/* زر تحديد كللل منتجات المنصة بالكامل */}
+                {!selectAllPlatform && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectAllPlatform(true)}
+                    className="py-1 px-3 bg-brand-700 hover:bg-brand-800 text-white text-xs font-black rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer animate-pulse"
+                    title="تحديد كل منتجات المنصة عبر كافة الصفحات دفعة واحدة"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-accent-400" />
+                    <span>تحديد كللل منتجات المنصة ({totalProductsCount || products.length} منتج)</span>
+                  </button>
+                )}
+
+                {/* خيار إلغاء تحديد الكل والرجوع لتحديد الصفحة فقط */}
+                {selectAllPlatform && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectAllPlatform(false)}
+                    className="py-1 px-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-bold rounded-lg transition-all cursor-pointer"
+                  >
+                    إلغاء تحديد كل المنتجات (تحديد هذه الصفحة فقط)
+                  </button>
+                )}
               </div>
+
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setSelectedProductIds([])}
-                  className="py-1.5 px-3 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-colors cursor-pointer"
+                  onClick={() => {
+                    setSelectedProductIds([]);
+                    setSelectAllPlatform(false);
+                  }}
+                  className="py-2 px-3 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-colors cursor-pointer"
                 >
                   إلغاء التحديد
                 </button>
+
                 <button
                   type="button"
                   disabled={deletingBatch}
                   onClick={handleDeleteSelectedProducts}
-                  className="py-1.5 px-3.5 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   {deletingBatch ? (
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                   ) : (
                     <Trash2 className="w-3.5 h-3.5" />
                   )}
-                  <span>حذف المنتجات المحددة ({selectedProductIds.length}) نهائياً</span>
+                  <span>
+                    {selectAllPlatform 
+                      ? `حذف كللل منتجات المنصة (${totalProductsCount || products.length}) نهائياً` 
+                      : `حذف المنتجات المحددة (${selectedProductIds.length}) نهائياً`}
+                  </span>
                 </button>
               </div>
             </div>
