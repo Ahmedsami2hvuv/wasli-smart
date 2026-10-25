@@ -835,9 +835,50 @@
   }
 
   // ========================================================
-  // إدارة قائمة المعرفات المسحوبة الحية من منصة وصلي
+  // إدارة قائمة المعرفات المسحوبة الحية وفحص سياق الإضافة بأمان
   // ========================================================
   const importedCodesSet = new Set();
+  let syncCodesTimer = null;
+
+  function stopSyncCodesTimer() {
+    if (syncCodesTimer) {
+      clearInterval(syncCodesTimer);
+      syncCodesTimer = null;
+    }
+  }
+
+  function isExtensionContextValid() {
+    try {
+      return Boolean(typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function safeChromeSendMessage(payload, callback) {
+    if (!isExtensionContextValid()) {
+      stopSyncCodesTimer();
+      if (typeof callback === 'function') callback(null);
+      return;
+    }
+    try {
+      chrome.runtime.sendMessage(payload, (res) => {
+        if (!isExtensionContextValid() || (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.lastError)) {
+          const errMsg = (chrome?.runtime?.lastError?.message || '').toLowerCase();
+          if (errMsg.includes('context invalidated') || errMsg.includes('connection error')) {
+            stopSyncCodesTimer();
+          }
+          if (typeof callback === 'function') callback(null);
+          return;
+        }
+        if (typeof callback === 'function') callback(res);
+      });
+    } catch (err) {
+      stopSyncCodesTimer();
+      if (typeof callback === 'function') callback(null);
+    }
+  }
+
   // تفريغ أي ذاكرة مؤقتة قديمة فوراً للاعتماد الحصري على الخادم الفعلي
   try {
     localStorage.removeItem('wasli_imported_codes');
@@ -855,49 +896,53 @@
 
   // مزامنة فورية وحية مع الخادم لتحديث قائمة المنتجات المسحوبة وحذف الشارات عن أي منتج محذوف
   function syncImportedCodesWithServer() {
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-      const targetUrl = wasliServerUrl.trim().replace(/\/+$/, '') + '/api/products';
-      chrome.runtime.sendMessage(
-        { action: 'getImportedProductsList', url: targetUrl },
-        (res) => {
-          const activeCodes = new Set();
-          if (!chrome.runtime.lastError && res && res.result && Array.isArray(res.result.products)) {
-            res.result.products.forEach(p => {
-              const c = p.supplierCode || p.id;
-              if (c) activeCodes.add(String(c).trim());
-            });
-          }
+    if (!isExtensionContextValid()) {
+      stopSyncCodesTimer();
+      return;
+    }
 
-          // تحديث الـ Set بالمنتجات الموجودة فعلياً في وصلي فقط
-          importedCodesSet.clear();
-          activeCodes.forEach(c => importedCodesSet.add(c));
-
-          // تنظيف وإزالة الشارات الخضراء فوراً عن كافة الكروت المعروضة في الصفحة
-          document.querySelectorAll('.wasli-card-status-badge').forEach(badge => {
-            const bCode = badge.getAttribute('data-wasli-code');
-            if (bCode && !importedCodesSet.has(bCode)) {
-              badge.remove();
-            }
+    const targetUrl = wasliServerUrl.trim().replace(/\/+$/, '') + '/api/products';
+    safeChromeSendMessage(
+      { action: 'getImportedProductsList', url: targetUrl },
+      (res) => {
+        const activeCodes = new Set();
+        if (res && res.result && Array.isArray(res.result.products)) {
+          res.result.products.forEach(p => {
+            const c = p.supplierCode || p.id;
+            if (c) activeCodes.add(String(c).trim());
           });
+        }
 
-          // تحديث الزر العائم في صفحة المنتج الفردي إذا كان مفتوحاً
-          const currentCode = getCurrentProductCode();
-          const floatingBtn = document.getElementById('wasli-floating-smart-btn');
-          if (floatingBtn) {
-            if (currentCode && importedCodesSet.has(currentCode)) {
-              updateFloatingButtonToImported(floatingBtn);
-            } else {
-              resetFloatingButtonToImport(floatingBtn);
-            }
+        // تحديث الـ Set بالمنتجات الموجودة فعلياً في وصلي فقط
+        importedCodesSet.clear();
+        activeCodes.forEach(c => importedCodesSet.add(c));
+
+        // تنظيف وإزالة الشارات الخضراء فوراً عن كافة الكروت المعروضة في الصفحة
+        document.querySelectorAll('.wasli-card-status-badge').forEach(badge => {
+          const bCode = badge.getAttribute('data-wasli-code');
+          if (bCode && !importedCodesSet.has(bCode)) {
+            badge.remove();
+          }
+        });
+
+        // تحديث الزر العائم في صفحة المنتج الفردي إذا كان مفتوحاً
+        const currentCode = getCurrentProductCode();
+        const floatingBtn = document.getElementById('wasli-floating-smart-btn');
+        if (floatingBtn) {
+          if (currentCode && importedCodesSet.has(currentCode)) {
+            updateFloatingButtonToImported(floatingBtn);
+          } else {
+            resetFloatingButtonToImport(floatingBtn);
           }
         }
-      );
-    }
+      }
+    );
   }
 
   // تشغيل المزامنة فوراً عند تحميل السكربت ودورياً كل 4 ثوانٍ للتأكد التام
   syncImportedCodesWithServer();
-  setInterval(syncImportedCodesWithServer, 4000);
+  stopSyncCodesTimer();
+  syncCodesTimer = setInterval(syncImportedCodesWithServer, 4000);
 
   function resetFloatingButtonToImport(btn) {
     if (!btn) return;
@@ -1190,14 +1235,14 @@
     if (!code) return { exists: false };
 
     // الفحص الحي من خادم وصلي عبر Service Worker
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+    if (isExtensionContextValid()) {
       try {
         const targetUrl = wasliServerUrl.trim().replace(/\/+$/, '') + '/api/products/import-fedshi';
         const bgRes = await new Promise((resolve) => {
-          chrome.runtime.sendMessage(
+          safeChromeSendMessage(
             { action: 'checkProductExists', code, url: targetUrl },
             (res) => {
-              if (chrome.runtime.lastError || !res) {
+              if (!res) {
                 resolve({ exists: false });
               } else {
                 resolve(res.result || { exists: false });
@@ -1899,17 +1944,13 @@
     const endpoint = `${targetUrl}/api/products/import-fedshi`;
 
     // 1. المحاولة أولاً عبر خلفية الإضافة (Service Worker) لتجاوز قيود وحظر الـ CSP في المتصفح
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+    if (isExtensionContextValid()) {
       try {
-        const bgRes = await new Promise((resolve, reject) => {
-          chrome.runtime.sendMessage(
+        const bgRes = await new Promise((resolve) => {
+          safeChromeSendMessage(
             { action: 'importProduct', url: endpoint, payload },
             (response) => {
-              if (chrome.runtime.lastError) {
-                reject(new Error(chrome.runtime.lastError.message));
-              } else {
-                resolve(response);
-              }
+              resolve(response);
             }
           );
         });
