@@ -1313,12 +1313,105 @@
     return p.includes('/products/') || p.includes('/product/') || /\/products?\/[^\/]+/.test(p);
   }
 
+  // ========================================================
+  // المحرك الصامت والفوري للسحب التلقائي وإغلاق النافذة
+  // ========================================================
+  async function executeDirectAutoImportProcess(pageCode, isMojod) {
+    // مؤقت أمان حتمي لإغلاق التبويب بعد 12 ثانية حتى لا تبقى أي نافذة معلقة
+    const safetyTimer = setTimeout(() => {
+      safeChromeSendMessage({ action: 'closeMyTab', code: pageCode });
+      try { window.close(); } catch (e) {}
+    }, 12000);
+
+    try {
+      showFloatingToast('جاري السحب التلقائي للبيانات...', 'loading');
+
+      // انتظار جاهزية البيانات بمرونة حتى 35 محاولة بفاصل 250ms (حوالي 8.5 ثوانٍ)
+      let readyData = null;
+      for (let attempt = 0; attempt < 35; attempt++) {
+        const d = isMojod ? await extractMojodProductDetails() : await extractFedshiProductDetails();
+        if (d) {
+          const hasTitle = Boolean(d.title && d.title !== '—' && d.title !== '...');
+          const hasPrice = Boolean(d.fedshiWholesale > 0);
+          if (hasTitle && hasPrice) {
+            readyData = d;
+            break;
+          }
+        }
+        await new Promise(res => setTimeout(res, 250));
+      }
+
+      if (!readyData) {
+        readyData = isMojod ? await extractMojodProductDetails() : await extractFedshiProductDetails();
+      }
+
+      if (readyData && (readyData.title || readyData.fedshiWholesale > 0)) {
+        const productTitle = readyData.title || 'منتج جديد';
+        const costPrice = parseInt(readyData.fedshiWholesale, 10) || 0;
+        const wholesale = parseInt(readyData.wasliWholesale, 10) || (costPrice + (readyData.wasliProfit || 3000));
+        const minPrice = parseInt(readyData.wasliMinPrice, 10) || (wholesale + 5000);
+        const maxPrice = parseInt(readyData.wasliMaxPrice, 10) || (wholesale + 20000);
+        const storePrice = parseInt(readyData.defaultStorePrice, 10) || (wholesale + 10000);
+        const stock = parseInt(readyData.stock, 10) || 50;
+
+        const payload = {
+          name: productTitle,
+          category: readyData.category || 'عام',
+          subcategory: readyData.subcategory || '',
+          description: readyData.specifications || productTitle,
+          promoDescription: readyData.promoDescription || productTitle,
+          specifications: readyData.specifications || productTitle,
+          wholesalePriceIqd: wholesale,
+          platformPriceIqd: storePrice,
+          minPriceIqd: minPrice,
+          maxPriceIqd: maxPrice,
+          supplierPriceIqd: costPrice,
+          supplierCode: pageCode,
+          supplierSource: isMojod ? 'mojod' : 'fedshi',
+          image: (readyData.images && readyData.images[0]) || '',
+          images: readyData.images || [],
+          colors: readyData.colors || [],
+          stockQuantity: stock,
+          videoUrl: readyData.videoUrl || '',
+        };
+
+        await sendProductPayloadToWasli(payload);
+        markProductAsImported(pageCode);
+      }
+    } catch (err) {
+      console.warn('خطأ في السحب التلقائي الصامت:', err);
+    } finally {
+      clearTimeout(safetyTimer);
+      safeChromeSendMessage({ action: 'closeMyTab', code: pageCode });
+      setTimeout(() => {
+        try { window.close(); } catch (e) {}
+      }, 350);
+    }
+  }
+
   // بناء واجهة الإضافة الذكية
   function initWasliUI() {
     // تشغيل واجهة المنتج الفردي فقط في صفحات المنتجات الفعلية
     if (!isProductPage()) {
       const old = document.getElementById('wasli-importer-container');
       if (old) old.remove();
+      return;
+    }
+
+    const isMojod = window.location.hostname.includes('mojod.app');
+    let pageCode = '';
+    if (isMojod) {
+      const pUrl = new URLSearchParams(window.location.search);
+      pageCode = (pUrl.get('id') || '').trim();
+    } else {
+      const pathParts = window.location.pathname.split('/').filter(Boolean);
+      pageCode = pathParts[pathParts.length - 1] || '';
+    }
+
+    // 1. إذا فُتحت الصفحة بنمط السحب التلقائي (من زر الكارت أو السحب التجميعي)
+    const isAutoImportMode = window.location.hash.includes('wasli-auto-import') || window.location.search.includes('wasli-auto-import');
+    if (isAutoImportMode) {
+      executeDirectAutoImportProcess(pageCode, isMojod);
       return;
     }
 
@@ -1333,7 +1426,6 @@
       existing.remove();
     }
 
-    const isMojod = window.location.hostname.includes('mojod.app');
     const sourceLabel = isMojod ? 'موجود' : 'فدشي';
 
     const container = document.createElement('div');
@@ -2474,8 +2566,14 @@
       // تشغيل سحب هذا المنتج
       triggerAutoImportForProduct(code);
 
-      // انتظار فاصل زمني آمن ومريح (2.5 ثانية) بين كل منتج لضمان اكتمال السحب دون ضغط على المتصفح
-      await new Promise(r => setTimeout(r, 2500));
+      // انتظار اكتمال سحب المنتج وإغلاق تبويبه بالكامل قبل فتح التالي (مهلة مرنة حتى 4 ثوانٍ)
+      const startWaitTime = Date.now();
+      while (Date.now() - startWaitTime < 4000) {
+        if (importedCodesSet.has(code)) break;
+        if (batchShouldStop) break;
+        await new Promise(r => setTimeout(r, 250));
+      }
+      await new Promise(r => setTimeout(r, 400));
     }
 
     isBatchRunning = false;
