@@ -80,14 +80,17 @@ function mapDbProductToModel(item: any): Product {
     isAvailable: item.is_available,
     status: item.status || 'published',
     image: primaryImg || '/placeholder-product.svg',
-    category: item.category?.name || 'عام',
+    category: (() => {
+      const match = (item.description || '').match(/<!--WASLI_CAT_NAMES:([^>]+)-->/);
+      return match ? match[1] : (item.category?.name || 'عام');
+    })(),
     categoryId: item.category_id,
     subcategoryId: (() => {
       const match = (item.description || '').match(/<!--WASLI_SUBCAT_ID:([^>]+)-->/);
       return match ? match[1] : (item.subcategory_id || undefined);
     })(),
     subcategory: (() => {
-      const match = (item.description || '').match(/<!--WASLI_SUBCAT_NAME:([^>]+)-->/);
+      const match = (item.description || '').match(/<!--WASLI_SUBCAT_NAMES?:([^>]+)-->/);
       return match ? match[1] : (item.subcategory || undefined);
     })(),
     promoDescription: (item.description || '').replace(/<!--WASLI_[A-Z_]+:[^>]+-->/g, '').trim(),
@@ -465,7 +468,7 @@ export async function updatePlatformProduct(id: string, updates: Partial<Product
       if (updates.status) updateData.status = updates.status;
       if (updates.isAvailable !== undefined) updateData.is_available = updates.isAvailable;
 
-      if (updates.supplierPriceIqd !== undefined || updates.subcategoryId !== undefined || updates.subcategory !== undefined) {
+      if (updates.supplierPriceIqd !== undefined || updates.subcategoryId !== undefined || updates.subcategory !== undefined || updates.category !== undefined) {
         const { data: curr } = await dbClient.from('products').select('description').eq('id', id).maybeSingle();
         let baseDesc = ((updates.description !== undefined ? updates.description : curr?.description) || '');
         
@@ -473,6 +476,13 @@ export async function updatePlatformProduct(id: string, updates: Partial<Product
           baseDesc = baseDesc.replace(/<!--WASLI_SUPPLIER_PRICE:\d+-->/g, '').trim();
           if (updates.supplierPriceIqd > 0) {
             baseDesc += `\n\n<!--WASLI_SUPPLIER_PRICE:${updates.supplierPriceIqd}-->`;
+          }
+        }
+
+        if (updates.category !== undefined) {
+          baseDesc = baseDesc.replace(/<!--WASLI_CAT_NAMES:[^>]+-->/g, '').trim();
+          if (updates.category && updates.category !== 'عام') {
+            baseDesc += `\n<!--WASLI_CAT_NAMES:${updates.category}-->`;
           }
         }
 
@@ -484,9 +494,9 @@ export async function updatePlatformProduct(id: string, updates: Partial<Product
         }
 
         if (updates.subcategory !== undefined) {
-          baseDesc = baseDesc.replace(/<!--WASLI_SUBCAT_NAME:[^>]+-->/g, '').trim();
+          baseDesc = baseDesc.replace(/<!--WASLI_SUBCAT_NAMES?:[^>]+-->/g, '').trim();
           if (updates.subcategory) {
-            baseDesc += `\n<!--WASLI_SUBCAT_NAME:${updates.subcategory}-->`;
+            baseDesc += `\n<!--WASLI_SUBCAT_NAMES:${updates.subcategory}-->`;
           }
         }
 
