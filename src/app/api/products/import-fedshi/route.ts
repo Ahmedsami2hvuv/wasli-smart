@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPlatformProduct, findProductBySupplierCode } from '@/lib/services/productService';
 import { findOrCreateCategoryAndSubcategory } from '@/lib/services/categoryService';
-import { publishProductToTelegramChannel } from '@/lib/telegram/vault';
+import { publishProductToTelegramChannel, mirrorProductImageToVault } from '@/lib/telegram/vault';
 
 // دعم طلبات CORS المسبقة للمتصفح وإضافة كروم
 export async function OPTIONS() {
@@ -162,12 +162,65 @@ export async function POST(request: NextRequest) {
       console.warn('تعذر إنشاء/ربط القسم آلياً:', catErr);
     }
 
-    // الصورة الرئيسية للمنتج
-    const primaryImage = (images && images.length > 0) 
+    // الصورة الرئيسية الأولية للمنتج
+    const rawPrimaryImage = (images && images.length > 0) 
       ? images[0] 
       : (colors && colors.length > 0 && colors[0].image ? colors[0].image : '/placeholder-product.svg');
 
-    // حفظ المنتج في النظام
+    // نقل وتخزين الصورة الرئيسية في مستودع وصلي (تيليجرام) بصيغة WebP
+    let primaryImage = rawPrimaryImage;
+    if (rawPrimaryImage && (rawPrimaryImage.startsWith('http://') || rawPrimaryImage.startsWith('https://'))) {
+      try {
+        primaryImage = await mirrorProductImageToVault(rawPrimaryImage, `📦 ${name}`);
+      } catch (vaultErr) {
+        console.warn('تعذر حفظ الصورة الأساسية في مستودع وصلي:', vaultErr);
+      }
+    }
+
+    // نقل كافة صور المنتج الأخرى إلى مستودع وصلي
+    let vaultedImages: string[] = [];
+    if (Array.isArray(images) && images.length > 0) {
+      try {
+        // نرفع الصور بالتوازي (بحد أقصى أول 6 صور لسرعة الاستيراد والأداء)
+        const toMirror = images.slice(0, 6);
+        vaultedImages = await Promise.all(
+          toMirror.map(async (imgUrl: string, idx: number) => {
+            if (idx === 0 && primaryImage && primaryImage.startsWith('/api/images/proxy')) {
+              return primaryImage;
+            }
+            if (typeof imgUrl === 'string' && (imgUrl.startsWith('http://') || imgUrl.startsWith('https://'))) {
+              return await mirrorProductImageToVault(imgUrl, `📦 ${name} - صورة ${idx + 1}`);
+            }
+            return imgUrl;
+          })
+        );
+      } catch (imgsErr) {
+        console.warn('تعذر حفظ بعض الصور في المستودع:', imgsErr);
+        vaultedImages = images;
+      }
+    } else if (primaryImage) {
+      vaultedImages = [primaryImage];
+    }
+
+    // تحديث صور الألوان إذا كانت تشتمل على صور خارجية
+    let vaultedColors = colors;
+    if (Array.isArray(colors) && colors.length > 0) {
+      vaultedColors = await Promise.all(
+        colors.map(async (c: any) => {
+          if (c.image && (c.image.startsWith('http://') || c.image.startsWith('https://'))) {
+            try {
+              const mirroredColorImg = await mirrorProductImageToVault(c.image, `🎨 ${name} - ${c.name || 'لون'}`);
+              return { ...c, image: mirroredColorImg };
+            } catch {
+              return c;
+            }
+          }
+          return c;
+        })
+      );
+    }
+
+    // حفظ المنتج في النظام مع الروابط المحلية لمستودع وصلي
     const product = await createPlatformProduct({
       name,
       category: finalCategoryName,
@@ -186,8 +239,8 @@ export async function POST(request: NextRequest) {
       supplierCode: actualSupplierCode,
       supplierSku: actualSupplierSku,
       supplierSource: supplierSource || 'fedshi',
-      colors: colors,
-      variants: colors.map((c: any, idx: number) => ({
+      colors: vaultedColors,
+      variants: vaultedColors.map((c: any, idx: number) => ({
         id: `variant-${idx}`,
         name: c.name,
         image: c.image,
@@ -196,7 +249,7 @@ export async function POST(request: NextRequest) {
       videoUrl: videoUrl || '',
       stockQuantity: Number(stockQuantity) || 50,
       image: primaryImage,
-      images: images,
+      images: vaultedImages,
     });
 
     const platformProfit = wholesalePrice - supplierCost;
@@ -208,14 +261,14 @@ export async function POST(request: NextRequest) {
       telegramResult = await publishProductToTelegramChannel({
         name: product.name,
         image: primaryImage,
-        images: images && images.length > 0 ? images : [primaryImage],
+        images: vaultedImages && vaultedImages.length > 0 ? vaultedImages : [primaryImage],
         wholesalePriceIqd: wholesalePrice,
         minPriceIqd: minPrice,
         maxPriceIqd: maxPrice,
         description: specifications || description || '',
         specifications: specifications || description || '',
         promoDescription: promoDescription || '',
-        supplierCode: fedshiCode || '',
+        supplierCode: actualSupplierCode || '',
         category: finalCategoryName,
         productId: product.id,
       });

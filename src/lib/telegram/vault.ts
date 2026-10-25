@@ -298,6 +298,28 @@ async function fetchAndOptimizeImage(url: string): Promise<Buffer | null> {
 }
 
 /**
+ * نقل وتخزين صورة المنتج الخارجية (فدشي أو موجود) في مستودع وصلي بتيليجرام وتحويل رابطها لرابط وصلي محلي
+ */
+export async function mirrorProductImageToVault(externalUrl: string, caption?: string): Promise<string> {
+  if (!externalUrl || typeof externalUrl !== 'string') return '';
+  const trimmed = externalUrl.trim();
+  if (trimmed.startsWith('/api/images/proxy') || trimmed.startsWith('data:') || trimmed.includes('/placeholder')) {
+    return trimmed;
+  }
+
+  try {
+    const webpBuffer = await fetchAndOptimizeImage(trimmed);
+    if (!webpBuffer) return trimmed;
+
+    const res = await uploadImageToTelegramVault(webpBuffer, 'product.webp', caption);
+    return res.displayUrl || trimmed;
+  } catch (err) {
+    console.warn('تعذر نقل الصورة إلى مستودع تيليجرام:', trimmed, err);
+    return trimmed;
+  }
+}
+
+/**
  * نشر المنتج المستورد تلقائياً في قناة تيليجرام ككتلة صور مجمعة WebP
  */
 export async function publishProductToTelegramChannel(product: {
