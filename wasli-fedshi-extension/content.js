@@ -834,6 +834,26 @@
     };
   }
 
+  function showFloatingToast(message, type = 'info') {
+    let toastType = 'loading';
+    let titleText = 'جاري السحب...';
+    if (type === 'success') {
+      toastType = 'success';
+      titleText = 'تم السحب بنجاح!';
+    } else if (type === 'error' || type === 'warning') {
+      toastType = 'error';
+      titleText = type === 'warning' ? 'تنبيه' : 'تعذر السحب';
+    }
+    return showWasliToast({
+      title: titleText,
+      message: message,
+      type: toastType,
+    });
+  }
+
+  // مرجع عام لمعالج السحب المباشر
+  let globalDirectImportHandler = null;
+
   // ========================================================
   // إدارة قائمة المعرفات المسحوبة الحية وفحص سياق الإضافة بأمان
   // ========================================================
@@ -1610,6 +1630,8 @@
       maxHeight: 600,
       onClick: handleDirectImportAction,
     });
+
+    globalDirectImportHandler = handleDirectImportAction;
   }
 
   // رسم وتعبئة بيانات المنتج والأرباح في المودال
@@ -2342,7 +2364,12 @@
         // 1. إذا كان في صفحة منتج فردي، ينفذ الاستيراد التلقائي الفوري للصفحة
         if (isProductPage()) {
           showFloatingToast('جاري سحب هذا المنتج ونشره في تليغرام...', 'info');
-          handleDirectImportAction();
+          if (typeof globalDirectImportHandler === 'function') {
+            globalDirectImportHandler();
+          } else {
+            const btn = document.querySelector('.wasli-floating-btn') || document.getElementById('wasli-floating-smart-btn');
+            if (btn) btn.click();
+          }
           return;
         }
 
@@ -2399,54 +2426,42 @@
               showFloatingToast(data.message || 'تعذر استيراد المنتج', 'error');
             }
           } else {
-            // استيراد من فدشي عبر جلب بيانات الكارت المباشرة
-            const cards = findVisibleProductCards();
-            const foundCard = cards.find(c => c.code === targetCode);
-            if (foundCard && foundCard.cardData) {
-              const res = await importSingleProductCard(foundCard.cardData);
-              if (res && res.result && res.result.success) {
+            // استيراد من فدشي عبر جلب صفحة المنتج خلفياً وسحبها بكامل التفاصيل
+            const prodPageUrl = `https://web.fedshi.com/products/${targetCode}`;
+            const htmlRes = await fetch(prodPageUrl);
+            const htmlText = await htmlRes.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(htmlText, 'text/html');
+            const details = await extractFedshiProductDetails(doc, prodPageUrl);
+            if (details) {
+              const payload = {
+                name: details.title,
+                category: details.category || 'عام',
+                description: details.specifications || details.title,
+                promoDescription: details.promoDescription || details.title,
+                specifications: details.specifications || details.title,
+                wholesalePriceIqd: details.wasliWholesale,
+                platformPriceIqd: details.defaultStorePrice,
+                minPriceIqd: details.wasliMinPrice,
+                maxPriceIqd: details.wasliMaxPrice,
+                supplierPriceIqd: details.fedshiWholesale,
+                supplierCode: targetCode,
+                supplierSource: 'fedshi',
+                image: details.images[0] || '',
+                images: details.images,
+                colors: details.colors,
+                stockQuantity: details.stock,
+              };
+              const importRes = await sendProductPayloadToWasli(payload);
+              if (importRes && importRes.success) {
                 markProductAsImported(targetCode);
                 showFloatingToast(`تم استيراد منتج فدشي #${targetCode} ونشره بنجاح!`, 'success');
                 injectProductCardButtons();
               } else {
-                showFloatingToast(res?.result?.message || 'تعذر استيراد المنتج', 'error');
+                showFloatingToast(importRes?.message || 'تعذر استيراد المنتج', 'error');
               }
             } else {
-              // جلب صفحة المنتج خلفياً وسحبها بكامل التفاصيل
-              const prodPageUrl = `https://web.fedshi.com/products/${targetCode}`;
-              const htmlRes = await fetch(prodPageUrl);
-              const htmlText = await htmlRes.text();
-              const parser = new DOMParser();
-              const doc = parser.parseFromString(htmlText, 'text/html');
-              const details = await extractFedshiProductDetails(doc, prodPageUrl);
-              if (details) {
-                const payload = {
-                  name: details.title,
-                  category: details.category || 'عام',
-                  description: details.specifications || details.title,
-                  promoDescription: details.promoDescription || details.title,
-                  specifications: details.specifications || details.title,
-                  wholesalePriceIqd: details.wasliWholesale,
-                  platformPriceIqd: details.defaultStorePrice,
-                  minPriceIqd: details.wasliMinPrice,
-                  maxPriceIqd: details.wasliMaxPrice,
-                  supplierPriceIqd: details.fedshiWholesale,
-                  supplierCode: targetCode,
-                  supplierSource: 'fedshi',
-                  image: details.images[0] || '',
-                  images: details.images,
-                  colors: details.colors,
-                  stockQuantity: details.stock,
-                };
-                const importRes = await sendProductPayloadToWasli(payload);
-                if (importRes && importRes.success) {
-                  markProductAsImported(targetCode);
-                  showFloatingToast(`تم استيراد منتج فدشي #${targetCode} ونشره بنجاح!`, 'success');
-                  injectProductCardButtons();
-                } else {
-                  showFloatingToast(importRes?.message || 'تعذر استيراد المنتج', 'error');
-                }
-              }
+              showFloatingToast('تعذر قراءة بيانات وسعر المنتج من فدشي', 'error');
             }
           }
         } catch (err) {
