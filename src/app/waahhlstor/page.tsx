@@ -32,7 +32,9 @@ import {
   Trash2,
   Search,
   Sparkles,
-  Boxes
+  Boxes,
+  ShieldCheck,
+  ShieldAlert
 } from 'lucide-react';
 import Link from 'next/link';
 import { Order, OrderStatus, Store as StoreType } from '@/types';
@@ -57,6 +59,47 @@ export default function AdminDashboardPage() {
   // حالة التحديد الفردي والجماعي للطلبات
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [deletingOrders, setDeletingOrders] = useState(false);
+
+  // حالة درع حماية الصور
+  const [imageShieldActive, setImageShieldActive] = useState(true);
+  const [togglingShield, setTogglingShield] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/admin/settings')
+      .then(r => r.json())
+      .then(d => {
+        if (d && typeof d.imageProtectionShield === 'boolean') {
+          setImageShieldActive(d.imageProtectionShield);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleToggleImageShield = async () => {
+    setTogglingShield(true);
+    try {
+      const nextState = !imageShieldActive;
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: nextState }),
+      });
+      const d = await res.json();
+      if (d.success) {
+        setImageShieldActive(nextState);
+        localStorage.setItem('wasli_image_shield_active', String(nextState));
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('wasli_shield_change', { detail: { active: nextState } }));
+        }
+        setCopiedMessage(nextState ? 'تم تفعيل درع حماية الصور بنجاح' : 'تم إيقاف درع حماية الصور');
+        setTimeout(() => setCopiedMessage(null), 3000);
+      }
+    } catch (e) {
+      console.error('خطأ في تبديل درع حماية الصور:', e);
+    } finally {
+      setTogglingShield(false);
+    }
+  };
 
   const copyToClipboard = (text: string, msg = 'تم النسخ بنجاح') => {
     if (navigator?.clipboard) {
@@ -285,6 +328,27 @@ export default function AdminDashboardPage() {
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>تحديث البيانات</span>
+            </button>
+            {/* زر تبديل درع حماية صور المنتجات */}
+            <button
+              type="button"
+              onClick={handleToggleImageShield}
+              disabled={togglingShield}
+              className={`py-2.5 px-3.5 font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer border ${
+                imageShieldActive 
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500 shadow-emerald-600/20' 
+                  : 'bg-amber-600 hover:bg-amber-700 text-white border-amber-500 shadow-amber-600/20'
+              } disabled:opacity-50`}
+              title="التبديل بين تفعيل وإيقاف درع حماية صور المنتجات من التنزيل"
+            >
+              {togglingShield ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
+              ) : imageShieldActive ? (
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-100" />
+              ) : (
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-100" />
+              )}
+              <span>{imageShieldActive ? 'حماية الصور: مفعّلة' : 'حماية الصور: متوقفة'}</span>
             </button>
             <Link
               href="/"

@@ -14,6 +14,8 @@ import {
   Layers,
   Image as ImageIcon,
   ShieldCheck,
+  ShieldAlert,
+  ShieldOff,
   CheckCircle2,
   Trash2,
   ExternalLink,
@@ -338,8 +340,12 @@ export default function AdminProductsPage() {
       if (d.success) {
         setImageShieldActive(nextState);
         localStorage.setItem('wasli_image_shield_active', String(nextState));
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('wasli_shield_change', { detail: { active: nextState } }));
+        }
       }
     } catch (e) {
+      console.error('خطأ في تبديل حماية الصور:', e);
     } finally {
       setTogglingShield(false);
     }
@@ -1114,6 +1120,28 @@ export default function AdminProductsPage() {
               <Plus className="w-4 h-4 text-accent-400" />
               <span>إضافة منتج جديد للمنصة</span>
             </button>
+
+            {/* زر سريع لدرع حماية الصور */}
+            <button
+              type="button"
+              onClick={handleToggleImageShield}
+              disabled={togglingShield}
+              className={`py-2.5 px-3.5 font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer border ${
+                imageShieldActive 
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500 shadow-emerald-600/20' 
+                  : 'bg-amber-600 hover:bg-amber-700 text-white border-amber-500 shadow-amber-600/20'
+              } disabled:opacity-50`}
+              title="التبديل بين تشغيل وإيقاف درع حماية الصور من التنزيل"
+            >
+              {togglingShield ? (
+                <RefreshCw className="w-4 h-4 animate-spin text-white" />
+              ) : imageShieldActive ? (
+                <ShieldCheck className="w-4 h-4 text-emerald-100" />
+              ) : (
+                <ShieldAlert className="w-4 h-4 text-amber-100" />
+              )}
+              <span>{imageShieldActive ? 'درع الصور: مفعّل' : 'درع الصور: متوقف'}</span>
+            </button>
           </div>
         </div>
 
@@ -1132,12 +1160,71 @@ export default function AdminProductsPage() {
           </div>
         )}
 
-        {/* بطاقة الرأس والتعليمات */}
+        {/* بطاقة الرأس والتعليمات ومفتاح حماية الصور */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md">
-          <h1 className="text-2xl font-black text-slate-900 mb-2">إدارة المنتجات والتسعير ومستودع الصور</h1>
-          <p className="text-slate-600 text-xs leading-relaxed max-w-3xl">
-            هنا تحدد أسعار الجملة، وسعر المنصة، وتضبط الحدين الأدنى والأعلى المسموح بهما للتجار لضمان عدالة التسعير وجدوى الأرباح. كما يتم ضغط الصور ومعالجتها ورفعها لمستودع تيليجرام تلقائياً.
-          </p>
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="max-w-2xl">
+              <h1 className="text-2xl font-black text-slate-900 mb-2">إدارة المنتجات والتسعير ومستودع الصور</h1>
+              <p className="text-slate-600 text-xs leading-relaxed">
+                هنا تحدد أسعار الجملة، وسعر المنصة، وتضبط الحدين الأدنى والأعلى المسموح بهما للتجار لضمان عدالة التسعير وجدوى الأرباح. كما يتم ضغط الصور ومعالجتها ورفعها لمستودع تيليجرام تلقائياً.
+              </p>
+            </div>
+
+            {/* بطاقة التحكم في درع حماية الصور */}
+            <div className={`p-4 rounded-2xl border transition-all ${
+              imageShieldActive 
+                ? 'bg-emerald-50/70 border-emerald-200' 
+                : 'bg-amber-50/70 border-amber-200'
+            } min-w-[290px]`}>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-2">
+                  <div className={`p-2 rounded-xl ${
+                    imageShieldActive ? 'bg-emerald-500/10 text-emerald-700' : 'bg-amber-500/10 text-amber-700'
+                  }`}>
+                    {imageShieldActive ? (
+                      <ShieldCheck className="w-5 h-5" />
+                    ) : (
+                      <ShieldAlert className="w-5 h-5" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-slate-900">حماية الصور من التنزيل</h3>
+                    <span className={`text-[11px] font-bold ${
+                      imageShieldActive ? 'text-emerald-700' : 'text-amber-700'
+                    }`}>
+                      {imageShieldActive ? 'الدرع الشفاف نشط (محمي)' : 'الدرع متوقف (تنزيل متاح)'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* زر التبديل التفاعلي Switch */}
+                <button
+                  type="button"
+                  onClick={handleToggleImageShield}
+                  disabled={togglingShield}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden disabled:opacity-50 ${
+                    imageShieldActive ? 'bg-emerald-600' : 'bg-slate-300'
+                  }`}
+                  role="switch"
+                  aria-checked={imageShieldActive}
+                  title={imageShieldActive ? 'انقر لإيقاف حماية الصور' : 'انقر لتفعيل حماية الصور'}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                      imageShieldActive ? '-translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <p className="text-[11px] text-slate-500 leading-tight">
+                {imageShieldActive
+                  ? 'الطبقة الشفافة تمنع الزوار والتجار من حفظ وتنزيل صور المنتجات بزر الماوس أو اللمس المطول.'
+                  : 'تم إيقاف الحماية مؤقتاً، يمكن الآن تنزيل وحفظ الصور بجودتها الأصلية بدون أي عائق.'}
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* نافذة إضافة منتج جديد (Modal) */}
