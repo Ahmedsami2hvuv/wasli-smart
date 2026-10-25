@@ -13,8 +13,6 @@ import {
   Truck, 
   Filter, 
   Send, 
-  Database, 
-  ShieldCheck, 
   RefreshCw, 
   Plus, 
   Layers, 
@@ -408,24 +406,6 @@ export default function AdminDashboardPage() {
           </Link>
         </div>
 
-        {/* حالة الخدمات المتصلة */}
-        <div className="bg-gradient-to-r from-slate-900 to-brand-950 text-white rounded-2xl p-4 sm:p-5 shadow-sm flex flex-wrap items-center justify-between gap-4 text-xs">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <Database className="w-4 h-4 text-skybrand-400" />
-              <span>قاعدة البيانات: <strong>سوبابيس (Supabase PostgreSQL)</strong></span>
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            </div>
-            <div className="flex items-center gap-2">
-              <Send className="w-4 h-4 text-skybrand-400" />
-              <span>مستودع الصور والإشعارات: <strong>قناة وبوت تيليجرام (Telegram Vault)</strong></span>
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            </div>
-          </div>
-          <div className="text-slate-400">
-            حماية الروابط وتشفير الإحالة: <strong>مفعلة</strong>
-          </div>
-        </div>
 
         {/* جدول الطلبات الشامل */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md">
