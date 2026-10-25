@@ -899,10 +899,17 @@
     }
   }
 
-  // تفريغ أي ذاكرة مؤقتة قديمة فوراً للاعتماد الحصري على الخادم الفعلي
+  // استرجاع الكاش اللحظي للأكواد المسحوبة فوراً في 0 ثانية لعرض الشارات بدون أي تأخير
   try {
-    localStorage.removeItem('wasli_imported_codes');
-    sessionStorage.removeItem('wasli_imported_codes');
+    const saved = localStorage.getItem('wasli_imported_codes');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        parsed.forEach(c => {
+          if (c) importedCodesSet.add(String(c).trim());
+        });
+      }
+    }
   } catch (e) {}
 
   function getCurrentProductCode() {
@@ -933,9 +940,12 @@
           });
         }
 
-        // تحديث الـ Set بالمنتجات الموجودة فعلياً في وصلي فقط
+        // تحديث الـ Set بالمنتجات الموجودة فعلياً في وصلي وحفظها في الكاش الفوري
         importedCodesSet.clear();
         activeCodes.forEach(c => importedCodesSet.add(c));
+        try {
+          localStorage.setItem('wasli_imported_codes', JSON.stringify(Array.from(importedCodesSet)));
+        } catch (e) {}
 
         // تنظيف وإزالة الشارات الخضراء فوراً عن كافة الكروت المعروضة في الصفحة
         document.querySelectorAll('.wasli-card-status-badge').forEach(badge => {
@@ -1321,7 +1331,7 @@
     const safetyTimer = setTimeout(() => {
       safeChromeSendMessage({ action: 'closeMyTab', code: pageCode });
       try { window.close(); } catch (e) {}
-    }, 12000);
+    }, 22000);
 
     try {
       showFloatingToast('جاري السحب التلقائي للبيانات...', 'loading');
@@ -2534,7 +2544,7 @@
     const unimported = cards.filter(c => c.code && !importedCodesSet.has(c.code));
 
     if (unimported.length === 0) {
-      showFloatingToast('جميع منتجات هذه الصفحة مسحوبة مسبقاً بالفعل!', 'warning');
+      showFloatingToast('جميع منتجات هذه الصفحة مسحوبة مسبقاً ومحفوظة بنجاح!', 'warning');
       return;
     }
 
@@ -2553,16 +2563,31 @@
       startBtn.disabled = true;
     }
 
-    showFloatingToast(`بدء السحب المتتابع لـ ${batchQueue.length} منتج بالخلفية...`, 'info');
+    showFloatingToast(`بدء السحب المنظم لـ ${batchQueue.length} منتج بالخلفية... لن يسقط أي منتج!`, 'info');
 
     for (let i = 0; i < batchQueue.length; i++) {
       if (batchShouldStop) {
-        showFloatingToast('تم إيقاف السحب التلقائي بناءً على طلبك.', 'warning');
+        showFloatingToast('تم إيقاف السحب التلقائي بناءً على رغبتك.', 'warning');
         break;
       }
 
       currentBatchIndex = i + 1;
       const code = batchQueue[i];
+
+      // إبراز بطاقة المنتج الحالية وإظهار مؤشر السحب فوق زره فوراً للمستخدم
+      const cardQuickBtn = document.querySelector(`[data-wasli-quick-code="${code}"]`);
+      if (cardQuickBtn) {
+        cardQuickBtn.classList.add('loading');
+        cardQuickBtn.innerHTML = `
+          <span class="wasli-card-btn-spinner"></span>
+          <span>جاري السحب ⚡</span>
+        `;
+        const parentCard = cardQuickBtn.closest('.wasli-card-wrapper') || cardQuickBtn.parentElement;
+        if (parentCard) {
+          parentCard.style.outline = '2px solid #1D4ED8';
+          parentCard.style.outlineOffset = '2px';
+        }
+      }
 
       if (startBtn) {
         startBtn.innerHTML = `
@@ -2571,17 +2596,42 @@
         `;
       }
 
-      // تشغيل سحب هذا المنتج
+      // تشغيل سحب هذا المنتج بتبويب فردي منعزل
       triggerAutoImportForProduct(code);
 
-      // انتظار اكتمال سحب المنتج وإغلاق تبويبه بالكامل قبل فتح التالي (مهلة مرنة حتى 4 ثوانٍ)
+      // انتظار حتمي حتى اكتمال المنتج بالكامل وإغلاق تبويبه قبل الانتقال للتالي (مهلة وافية حتى 14 ثانية)
       const startWaitTime = Date.now();
-      while (Date.now() - startWaitTime < 4000) {
-        if (importedCodesSet.has(code)) break;
+      let isDone = false;
+      while (Date.now() - startWaitTime < 14000) {
+        if (importedCodesSet.has(code)) {
+          isDone = true;
+          break;
+        }
         if (batchShouldStop) break;
         await new Promise(r => setTimeout(r, 250));
       }
-      await new Promise(r => setTimeout(r, 400));
+
+      // فور اكتمال سحب المنتج: إزالة الزر وإظهار الشارة الخضراء فورياً على الكارت
+      if (cardQuickBtn) {
+        const parentCard = cardQuickBtn.closest('.wasli-card-wrapper') || cardQuickBtn.parentElement;
+        if (parentCard) parentCard.style.outline = '';
+        cardQuickBtn.remove();
+
+        const badge = document.createElement('div');
+        badge.className = 'wasli-card-status-badge';
+        badge.setAttribute('data-wasli-code', code);
+        badge.title = 'تم استيراد هذا المنتج مسبقاً في منصة وصلي';
+        badge.innerHTML = `
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>مسحوب مسبقاً ✓</span>
+        `;
+        if (parentCard) parentCard.appendChild(badge);
+      }
+
+      // استراحة تنظيمية خفيفة لمدة 350ms بين التبويبات لمنع أي اختناق في المتصفح
+      await new Promise(r => setTimeout(r, 350));
     }
 
     isBatchRunning = false;
@@ -2594,6 +2644,7 @@
     }
 
     renderBatchToolbar();
+    showFloatingToast('🎉 تم الانتهاء من فحص وسحب منتجات الصفحة بالكامل بنجاح!', 'success');
   }
 
   function stopBatchImport() {
