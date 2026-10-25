@@ -31,7 +31,9 @@ import {
   Calendar,
   FileText,
   Check,
-  Trash2
+  Trash2,
+  Search,
+  Sparkles
 } from 'lucide-react';
 import Link from 'next/link';
 import { Order, OrderStatus, Store as StoreType } from '@/types';
@@ -45,6 +47,7 @@ export default function AdminDashboardPage() {
   const [subcategoriesCount, setSubcategoriesCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [orderSearchQuery, setOrderSearchQuery] = useState<string>('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // حالة فتح نافذة تفاصيل الطلب
@@ -144,37 +147,44 @@ export default function AdminDashboardPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      // الطلبات
+      // جلب الطلبات فقط (المعلومة الحيوية في هذه الصفحة لتقليل استهلاك سوبابيس وفيرسل)
       const ordersRes = await fetch('/api/orders');
       const ordersData = await ordersRes.json();
       if (ordersData.success && ordersData.orders) {
         setOrders(ordersData.orders);
       }
 
-      // المتاجر
-      const storesRes = await fetch('/api/stores');
-      const storesData = await storesRes.json();
-      if (storesData.success && storesData.stores) {
-        setStores(storesData.stores);
-        setStoresCount(storesData.stores.length);
-      }
+      // المتاجر: فحص كاش المتصفح أولاً
+      try {
+        const cachedStores = localStorage.getItem('wasli_stores_count');
+        if (cachedStores) {
+          setStoresCount(Number(cachedStores));
+        } else {
+          const storesRes = await fetch('/api/stores');
+          const storesData = await storesRes.json();
+          if (storesData.success && storesData.stores) {
+            setStores(storesData.stores);
+            setStoresCount(storesData.stores.length);
+            localStorage.setItem('wasli_stores_count', String(storesData.stores.length));
+          }
+        }
+      } catch (e) {}
 
-      // المنتجات
-      const prodRes = await fetch('/api/products');
-      const prodData = await prodRes.json();
-      if (prodData.success && prodData.products) {
-        setProductsCount(prodData.products.length);
-        setProductsList(prodData.products);
-      }
+      // المنتجات: قراءة العدد من كاش المتصفح فقط بدون جلب كائنات المنتجات وصورها من سوبابيس وفيرسل!
+      try {
+        const cachedProdCount = localStorage.getItem('wasli_total_products_count');
+        if (cachedProdCount) {
+          setProductsCount(Number(cachedProdCount));
+        }
+      } catch (e) {}
 
-      // الأقسام والأفرع
-      const catRes = await fetch('/api/categories');
-      const catData = await catRes.json();
-      if (catData.success && catData.categories) {
-        setCategoriesCount(catData.categories.length);
-        const subsCount = catData.categories.reduce((acc: number, c: any) => acc + (c.subcategories?.length || 0), 0);
-        setSubcategoriesCount(subsCount);
-      }
+      // الأقسام: قراءة من كاش المتصفح إن وجد
+      try {
+        const cachedCatsCount = localStorage.getItem('wasli_categories_count');
+        if (cachedCatsCount) {
+          setCategoriesCount(Number(cachedCatsCount));
+        }
+      } catch (e) {}
     } catch (err) {
       console.error('خطأ في جلب بيانات الإدارة:', err);
     } finally {
@@ -211,7 +221,20 @@ export default function AdminDashboardPage() {
   const totalPlatformProfit = orders.reduce((sum, o) => sum + (o.status !== 'cancelled' ? o.platformProfit : 0), 0);
   const totalMerchantProfit = orders.reduce((sum, o) => sum + (o.status !== 'cancelled' ? o.merchantProfit : 0), 0);
 
-  const filteredOrders = orders.filter(o => filterStatus === 'all' || o.status === filterStatus);
+  const filteredOrders = orders.filter(o => {
+    const matchesStatus = filterStatus === 'all' || o.status === filterStatus;
+    if (!matchesStatus) return false;
+    if (!orderSearchQuery.trim()) return true;
+    const q = orderSearchQuery.toLowerCase();
+    return (
+      (o.orderNumber && o.orderNumber.toLowerCase().includes(q)) ||
+      (o.customerName && o.customerName.toLowerCase().includes(q)) ||
+      (o.customerPhone && o.customerPhone.toLowerCase().includes(q)) ||
+      (o.storeName && o.storeName.toLowerCase().includes(q)) ||
+      (o.city && o.city.toLowerCase().includes(q)) ||
+      (o.governorate && o.governorate.toLowerCase().includes(q))
+    );
+  });
 
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8 pb-24">
@@ -273,86 +296,112 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* بطاقات المؤشرات المالية والتشغيلية */}
+        {/* بطاقات المؤشرات المالية والتشغيلية المتطورة */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
-          <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-            <div className="text-xs font-bold text-slate-500 mb-1">إجمالي المبيعات</div>
-            <div className="text-xl font-black text-slate-900">
-              {totalGrossSales.toLocaleString('ar-IQ')} <span className="text-xs text-slate-500 font-normal">د.ع</span>
+          <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-4 sm:p-5 border border-slate-700/80 shadow-md flex flex-col justify-between">
+            <div>
+              <div className="text-[11px] font-bold text-slate-300 mb-1 flex items-center justify-between">
+                <span>إجمالي المبيعات</span>
+                <TrendingUp className="w-3.5 h-3.5 text-accent-400" />
+              </div>
+              <div className="text-lg sm:text-xl font-black text-white">
+                {totalGrossSales.toLocaleString('ar-IQ')} <span className="text-[10px] text-slate-400 font-normal">د.ع</span>
+              </div>
             </div>
-            <div className="text-[11px] text-slate-400 mt-2">من كافة متاجر التجار النشطة</div>
+            <div className="text-[10px] text-slate-400 mt-2 font-medium">كافة المتاجر النشطة</div>
           </div>
 
-          <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-            <div className="text-xs font-bold text-slate-500 mb-1">صافي أرباح المنصة</div>
-            <div className="text-xl font-black text-brand-800">
-              {totalPlatformProfit.toLocaleString('ar-IQ')} <span className="text-xs text-slate-500 font-normal">د.ع</span>
+          <div className="bg-gradient-to-br from-brand-900 to-brand-800 text-white rounded-2xl p-4 sm:p-5 border border-brand-700/80 shadow-md flex flex-col justify-between">
+            <div>
+              <div className="text-[11px] font-bold text-sky-200 mb-1 flex items-center justify-between">
+                <span>صافي أرباح المنصة</span>
+                <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+              </div>
+              <div className="text-lg sm:text-xl font-black text-white">
+                {totalPlatformProfit.toLocaleString('ar-IQ')} <span className="text-[10px] text-sky-300 font-normal">د.ع</span>
+              </div>
             </div>
-            <div className="text-[11px] text-brand-700 font-medium mt-2">فرق سعر المنصة عن الجملة</div>
+            <div className="text-[10px] text-sky-200/80 mt-2 font-medium">هامش ربح وصلي الصافي</div>
           </div>
 
-          <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-            <div className="text-xs font-bold text-slate-500 mb-1">أرباح التجار</div>
-            <div className="text-xl font-black text-emerald-600">
-              {totalMerchantProfit.toLocaleString('ar-IQ')} <span className="text-xs text-slate-500 font-normal">د.ع</span>
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
+            <div>
+              <div className="text-[11px] font-bold text-emerald-700 mb-1 flex items-center justify-between">
+                <span>أرباح التجار</span>
+                <Users className="w-3.5 h-3.5 text-emerald-600" />
+              </div>
+              <div className="text-lg sm:text-xl font-black text-emerald-700">
+                {totalMerchantProfit.toLocaleString('ar-IQ')} <span className="text-[10px] text-slate-400 font-normal">د.ع</span>
+              </div>
             </div>
-            <div className="text-[11px] text-emerald-600 font-medium mt-2">المستحقة للتجار الشركاء</div>
+            <div className="text-[10px] text-slate-400 mt-2 font-medium">مستحقات الشركاء</div>
           </div>
 
-          <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-            <div className="text-xs font-bold text-slate-500 mb-1">إجمالي الطلبات</div>
-            <div className="text-xl font-black text-slate-900">
-              {orders.length} <span className="text-xs text-slate-500 font-normal">طلب</span>
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
+            <div>
+              <div className="text-[11px] font-bold text-slate-600 mb-1 flex items-center justify-between">
+                <span>إجمالي الطلبات</span>
+                <ShoppingBag className="w-3.5 h-3.5 text-slate-500" />
+              </div>
+              <div className="text-lg sm:text-xl font-black text-slate-900">
+                {orders.length} <span className="text-[10px] text-slate-400 font-normal">طلب</span>
+              </div>
             </div>
-            <div className="text-[11px] text-slate-400 mt-2">جميع الحالات</div>
+            <div className="text-[10px] text-slate-400 mt-2 font-medium">كافة الحالات الواردة</div>
           </div>
 
           <Link 
             href="/waahhlstor/merchants"
-            className="bg-white hover:bg-emerald-50/50 transition-colors rounded-2xl p-5 border border-slate-200/80 shadow-xs group block"
+            className="bg-white hover:bg-emerald-50/40 transition-all rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs group flex flex-col justify-between hover:border-emerald-300"
           >
-            <div className="text-xs font-bold text-emerald-800 mb-1 flex items-center justify-between">
-              <span>حسابات التجار</span>
-              <Users className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
+            <div>
+              <div className="text-[11px] font-bold text-emerald-800 mb-1 flex items-center justify-between">
+                <span>حسابات التجار</span>
+                <Users className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
+              </div>
+              <div className="text-lg sm:text-xl font-black text-slate-900">
+                {storesCount > 0 ? storesCount : 'عرض'} <span className="text-[10px] text-slate-400 font-normal">تاجر</span>
+              </div>
             </div>
-            <div className="text-xl font-black text-slate-900">
-              {storesCount} <span className="text-xs text-slate-400 font-normal">تاجر</span>
-            </div>
-            <div className="text-[11px] text-emerald-700 font-bold mt-2 flex items-center gap-1">
-              <span>عرض حسابات التجار</span>
+            <div className="text-[10px] text-emerald-700 font-bold mt-2 flex items-center gap-1">
+              <span>التفاصيل والأرباح</span>
               <span>&larr;</span>
             </div>
           </Link>
 
           <Link 
             href="/waahhlstor/products"
-            className="bg-white hover:bg-brand-50/50 transition-colors rounded-2xl p-5 border border-slate-200/80 shadow-xs group block"
+            className="bg-white hover:bg-brand-50/40 transition-all rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs group flex flex-col justify-between hover:border-brand-300"
           >
-            <div className="text-xs font-bold text-brand-800 mb-1 flex items-center justify-between">
-              <span>المنتجات المنشورة</span>
-              <Package className="w-3.5 h-3.5 text-brand-600 group-hover:scale-110 transition-transform" />
+            <div>
+              <div className="text-[11px] font-bold text-brand-800 mb-1 flex items-center justify-between">
+                <span>المنتجات</span>
+                <Package className="w-3.5 h-3.5 text-brand-600 group-hover:scale-110 transition-transform" />
+              </div>
+              <div className="text-lg sm:text-xl font-black text-slate-900">
+                {productsCount > 0 ? productsCount : 'إدارة'} <span className="text-[10px] text-slate-400 font-normal">منتج</span>
+              </div>
             </div>
-            <div className="text-xl font-black text-slate-900">
-              {productsCount} <span className="text-xs text-slate-400 font-normal">منتج</span>
-            </div>
-            <div className="text-[11px] text-brand-700 font-bold mt-2 flex items-center gap-1">
-              <span>إدارة وتعديل المنتجات</span>
+            <div className="text-[10px] text-brand-700 font-bold mt-2 flex items-center gap-1">
+              <span>تعديل الأسعار والمخزون</span>
               <span>&larr;</span>
             </div>
           </Link>
 
           <Link 
             href="/waahhlstor/categories"
-            className="bg-white hover:bg-sky-50/50 transition-colors rounded-2xl p-5 border border-slate-200/80 shadow-xs group block"
+            className="bg-white hover:bg-sky-50/40 transition-all rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs group flex flex-col justify-between hover:border-sky-300"
           >
-            <div className="text-xs font-bold text-sky-700 mb-1 flex items-center justify-between">
-              <span>الأقسام والأفرع</span>
-              <Layers className="w-3.5 h-3.5 text-sky-600 group-hover:scale-110 transition-transform" />
+            <div>
+              <div className="text-[11px] font-bold text-sky-700 mb-1 flex items-center justify-between">
+                <span>الأقسام والأفرع</span>
+                <Layers className="w-3.5 h-3.5 text-sky-600 group-hover:scale-110 transition-transform" />
+              </div>
+              <div className="text-lg sm:text-xl font-black text-slate-900">
+                {categoriesCount > 0 ? categoriesCount : 'إدارة'} <span className="text-[10px] text-slate-400 font-normal">قسم</span>
+              </div>
             </div>
-            <div className="text-xl font-black text-slate-900">
-              {categoriesCount} <span className="text-xs text-slate-400 font-normal">قسم</span>
-            </div>
-            <div className="text-[11px] text-sky-600 font-bold mt-2 flex items-center gap-1">
+            <div className="text-[10px] text-sky-600 font-bold mt-2 flex items-center gap-1">
               <span>تعديل وإضافة أفرع</span>
               <span>&larr;</span>
             </div>
@@ -388,25 +437,43 @@ export default function AdminDashboardPage() {
               </p>
             </div>
 
-            {/* فلتر الحالات */}
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-slate-400" />
-              <select
-                value={filterStatus}
-                onChange={(e) => {
-                  setFilterStatus(e.target.value);
-                  setSelectedOrderIds([]);
-                }}
-                className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 outline-none bg-slate-50"
-              >
-                <option value="all">كافة الطلبات ({orders.length})</option>
-                <option value="new">طلبات جديدة</option>
-                <option value="reviewed">تمت المراجعة</option>
-                <option value="processing">قيد التجهيز</option>
-                <option value="shipped">خرج للتوصيل</option>
-                <option value="delivered">تم التسليم</option>
-                <option value="cancelled">ملغي</option>
-              </select>
+            {/* أدوات البحث وفلترة الطلبات */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="relative min-w-[220px]">
+                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="ابحث بالاسم، الهاتف، رقم الطلب..."
+                  value={orderSearchQuery}
+                  onChange={(e) => setOrderSearchQuery(e.target.value)}
+                  className="w-full pr-9 pl-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 outline-none focus:border-brand-600 bg-slate-50 transition-all"
+                />
+              </div>
+
+              {/* فلتر الحالات */}
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1">
+                <Filter className="w-3.5 h-3.5 text-slate-400" />
+                <select
+                  value={filterStatus}
+                  onChange={(e) => {
+                    setFilterStatus(e.target.value);
+                    setSelectedOrderIds([]);
+                  }}
+                  className="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                >
+                  <option value="all">كافة الطلبات ({orders.length})</option>
+                  <option value="new">طلبات جديدة</option>
+                  <option value="reviewed">تمت المراجعة</option>
+                  <option value="processing">قيد التجهيز</option>
+                  <option value="shipped">خرج للتوصيل</option>
+                  <option value="delivered">تم التسليم</option>
+                  <option value="cancelled">ملغي</option>
+                </select>
+              </div>
+
+              <span className="text-[11px] font-bold bg-slate-100 text-slate-600 px-2.5 py-1.5 rounded-xl">
+                معروض: {filteredOrders.length}
+              </span>
             </div>
           </div>
 

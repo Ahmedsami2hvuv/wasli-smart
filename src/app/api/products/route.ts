@@ -1,10 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllProducts, createPlatformProduct, updatePlatformProduct, deleteOrArchiveProduct, deleteProducts } from '@/lib/services/productService';
+import { getAllProducts, getProductsPaginated, createPlatformProduct, updatePlatformProduct, deleteOrArchiveProduct, deleteProducts } from '@/lib/services/productService';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const page = searchParams.get('page');
+    const limit = searchParams.get('limit');
+    const search = searchParams.get('search');
+    const paginated = searchParams.get('paginated');
+
+    // إذا طلب تقسيم الصفحات، نجلب بالصفحة فقط (افتراضياً 20 منتج)
+    if (page || limit || paginated === 'true') {
+      const pageNum = parseInt(page || '1', 10) || 1;
+      const limitNum = parseInt(limit || '20', 10) || 20;
+      const result = await getProductsPaginated({
+        page: pageNum,
+        limit: limitNum,
+        search: search || undefined,
+      });
+      return NextResponse.json({ success: true, ...result });
+    }
+
     const products = await getAllProducts();
-    return NextResponse.json({ success: true, products });
+    return NextResponse.json({ success: true, products, total: products.length });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }

@@ -83,6 +83,13 @@ export default function AdminProductsPage() {
   const [deletingBatch, setDeletingBatch] = useState(false);
   const [batchMsg, setBatchMsg] = useState<string | null>(null);
 
+  // حالات تقسيم الصفحات (20 منتج في الصفحة) وكاش المتصفح لتوفير استهلاك سوبابيس وفيرسل
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalProductsCount, setTotalProductsCount] = useState(0);
+  const [isFromCache, setIsFromCache] = useState(false);
+  const pageSize = 20;
+
   // حالات ودوال الربط المباشر مع API موجود
   const [showMojodModal, setShowMojodModal] = useState(false);
   const [mojodProducts, setMojodProducts] = useState<any[]>([]);
@@ -367,6 +374,7 @@ export default function AdminProductsPage() {
         } : p));
         setShowEditModal(false);
         setEditingProduct(null);
+        invalidateProductsCache();
       }
     } catch (err) {
       console.error('خطأ في حفظ التعديلات:', err);
@@ -385,6 +393,7 @@ export default function AdminProductsPage() {
       // حذف بؤري فوري من الشاشة
       setProducts(prev => prev.filter(p => p.id !== prodId));
       setSelectedProductIds(prev => prev.filter(id => id !== prodId));
+      invalidateProductsCache();
 
       const res = await fetch(`/api/products/${prodId}`, {
         method: 'DELETE',
@@ -392,11 +401,11 @@ export default function AdminProductsPage() {
       const data = await res.json();
       if (!data.success) {
         console.warn('تنبيه أثناء الحذف:', data.message);
-        fetchInitialData();
+        loadProductsPage(currentPage, searchQuery, true);
       }
     } catch (err) {
       console.error('خطأ في حذف المنتج:', err);
-      fetchInitialData();
+      loadProductsPage(currentPage, searchQuery, true);
     } finally {
       setDeletingId(null);
     }
@@ -442,16 +451,17 @@ export default function AdminProductsPage() {
         body: JSON.stringify({ ids: idsToDelete }),
       });
       const data = await res.json();
+      invalidateProductsCache();
       if (data.success) {
         setBatchMsg(`تم حذف ${count} منتج بنجاح من المنصة`);
         setTimeout(() => setBatchMsg(null), 3000);
-        fetchInitialData();
+        loadProductsPage(1, searchQuery, true);
       } else {
-        fetchInitialData();
+        loadProductsPage(1, searchQuery, true);
       }
     } catch (err) {
       console.error('خطأ في حذف المنتجات:', err);
-      fetchInitialData();
+      loadProductsPage(1, searchQuery, true);
     } finally {
       setDeletingBatch(false);
     }
@@ -532,33 +542,101 @@ export default function AdminProductsPage() {
     }
   };
 
-  const fetchInitialData = async () => {
+  // تفريغ كاش المنتجات عند التعديل أو الحذف أو الإضافة
+  const invalidateProductsCache = () => {
     try {
-      setLoading(true);
-      const [prodRes, catRes] = await Promise.all([
-        fetch('/api/products'),
-        fetch('/api/categories'),
-      ]);
-      const prodData = await prodRes.json();
-      if (prodData.success && prodData.products) {
-        setProducts(prodData.products);
-      }
-
-      const catData = await catRes.json();
-      if (catData.success && catData.categories && catData.categories.length > 0) {
-        setCategories(catData.categories);
-        // تعيين أول قسم كافتراضي
-        setCategory(catData.categories[0].name);
-        setCategoryId(catData.categories[0].id);
-        if (catData.categories[0].subcategories?.length > 0) {
-          setSubcategory(catData.categories[0].subcategories[0].name);
-          setSubcategoryId(catData.categories[0].subcategories[0].id);
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('wasli_admin_products_') || k === 'wasli_total_products_count')) {
+          keysToRemove.push(k);
         }
       }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch (e) {}
+  };
+
+  // جلب المنتجات مع الكاش والتقسيم إلى 20 منتج في الصفحة لتوفير استهلاك سوبابيس وفيرسل
+  const loadProductsPage = async (page = 1, search = '', forceRefresh = false) => {
+    const cacheKey = `wasli_admin_products_p${page}_s_${encodeURIComponent(search.trim().toLowerCase())}`;
+
+    // 1. فحص كاش المتصفح أولاً إذا لم يُطلب تحديث قسري
+    if (!forceRefresh) {
+      try {
+        const cachedStr = localStorage.getItem(cacheKey);
+        if (cachedStr) {
+          const cached = JSON.parse(cachedStr);
+          if (cached.products && Array.isArray(cached.products)) {
+            setProducts(cached.products);
+            setTotalPages(cached.totalPages || 1);
+            setTotalProductsCount(cached.total || cached.products.length);
+            setCurrentPage(page);
+            setIsFromCache(true);
+            setLoading(false);
+            // إذا كان الكاش حديثاً (أقل من 5 دقائق)، نكتفي به لتوفير الاستهلاك التام
+            if (Date.now() - (cached.timestamp || 0) < 5 * 60 * 1000) {
+              return;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 2. إذا لم يوجد كاش أو مضى وقته، نجلب 20 منتج فقط من السيرفر
+    try {
+      setLoading(true);
+      const searchParam = search.trim() ? `&search=${encodeURIComponent(search.trim())}` : '';
+      const res = await fetch(`/api/products?page=${page}&limit=${pageSize}${searchParam}`);
+      const data = await res.json();
+      if (data.success && data.products) {
+        setProducts(data.products);
+        setTotalPages(data.totalPages || 1);
+        setTotalProductsCount(data.total || data.products.length);
+        setCurrentPage(page);
+        setIsFromCache(false);
+
+        // حفظ في كاش المتصفح (localStorage)
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify({
+            products: data.products,
+            totalPages: data.totalPages,
+            total: data.total,
+            timestamp: Date.now(),
+          }));
+          localStorage.setItem('wasli_total_products_count', String(data.total));
+        } catch (e) {}
+      }
     } catch (err) {
-      console.error('خطأ في جلب البيانات:', err);
+      console.error('خطأ في جلب صفحة المنتجات:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchInitialData = async (forceRefresh = false) => {
+    try {
+      await Promise.all([
+        loadProductsPage(currentPage, searchQuery, forceRefresh),
+        (async () => {
+          if (categories.length === 0) {
+            try {
+              const catRes = await fetch('/api/categories');
+              const catData = await catRes.json();
+              if (catData.success && catData.categories && catData.categories.length > 0) {
+                setCategories(catData.categories);
+                setCategory(catData.categories[0].name);
+                setCategoryId(catData.categories[0].id);
+                if (catData.categories[0].subcategories?.length > 0) {
+                  setSubcategory(catData.categories[0].subcategories[0].name);
+                  setSubcategoryId(catData.categories[0].subcategories[0].id);
+                }
+              }
+            } catch (err) {}
+          }
+        })()
+      ]);
+    } catch (err) {
+      console.error('خطأ في جلب البيانات:', err);
     }
   };
 
@@ -1778,26 +1856,61 @@ export default function AdminProductsPage() {
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
             <div>
-              <h2 className="text-lg font-black text-slate-900">قائمة المنتجات الحالية ({products.length})</h2>
-              <p className="text-xs text-slate-500 mt-0.5">عرض وتعديل أسعار ومخزون وحالة كافة المنتجات في المنصة</p>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-black text-slate-900">قائمة المنتجات الحالية</h2>
+                {isFromCache ? (
+                  <span className="bg-sky-50 text-sky-700 text-[10px] font-black px-2 py-0.5 rounded-full border border-sky-200">
+                    كاش المتصفح (توفير سوبابيس)
+                  </span>
+                ) : (
+                  <span className="bg-emerald-50 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-200">
+                    مباشر من السيرفر
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                يتم جلب 20 منتج في الصفحة وحفظها في كاش المتصفح لتوفير الاستهلاك وسرعة التصفح الفورية
+              </p>
             </div>
             
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
               {/* شريط البحث السريع */}
               <div className="relative w-full sm:w-64">
                 <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
-                  placeholder="ابحث باسم المنتج، القسم، كود فدشي..."
+                  placeholder="ابحث بالاسم أو الكود (Enter للبحث)..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      loadProductsPage(1, searchQuery, true);
+                    }
+                  }}
                   className="w-full pr-9 pl-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-brand-600 focus:bg-white bg-slate-50 transition-all"
                 />
               </div>
 
-              <span className="text-xs bg-slate-100 text-slate-600 font-bold px-3 py-2 rounded-xl shrink-0">
-                يعرض: {filteredProducts.length} منتج
-              </span>
+              <button
+                type="button"
+                onClick={() => loadProductsPage(1, searchQuery, true)}
+                className="py-2 px-3 bg-brand-700 hover:bg-brand-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                title="بحث أو تحديث المنتجات"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>بحث</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => loadProductsPage(currentPage, searchQuery, true)}
+                disabled={loading}
+                className="py-2 px-3 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs flex items-center gap-1.5"
+                title="تحديث فوري من قاعدة البيانات"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">تحديث</span>
+              </button>
             </div>
           </div>
 
@@ -1896,192 +2009,259 @@ export default function AdminProductsPage() {
               لا توجد منتجات مطابقة لخيارات البحث أو التصفية الحالية.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-right text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-400 uppercase">
-                    <th className="py-3 px-3 w-10 text-center">
-                      <input
-                        type="checkbox"
-                        checked={filteredProducts.length > 0 && filteredProducts.every(p => selectedProductIds.includes(p.id))}
-                        onChange={handleSelectAllFiltered}
-                        className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 cursor-pointer accent-brand-600"
-                        title="تحديد الكل / إلغاء تحديد الكل"
-                      />
-                    </th>
-                    <th className="py-3 px-3">المنتج والمصدر</th>
-                    <th className="py-3 px-3">التصنيف</th>
-                    <th className="py-3 px-3">تكلفة المورد</th>
-                    <th className="py-3 px-3">سعر الجملة (للتاجر)</th>
-                    <th className="py-3 px-3">ربح المنصة الصافي</th>
-                    <th className="py-3 px-3">حدود بيع الزبون</th>
-                    <th className="py-3 px-3">المخزون والخيارات</th>
-                    <th className="py-3 px-3">الحالة</th>
-                    <th className="py-3 px-3">الإجراءات والتحكم</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredProducts.map((p) => {
-                    const wholesale = Number(p.wholesalePriceIqd) || 0;
-                    const supplier = Number(p.supplierPriceIqd) || 0;
-                    const platformProfit = wholesale - supplier;
-                    const isLowProfit = platformProfit < 3000;
-                    const isDeleting = deletingId === p.id;
-                    const isSelected = selectedProductIds.includes(p.id);
-                    return (
-                      <tr key={p.id} className={`hover:bg-slate-50/80 transition-colors ${isSelected ? 'bg-amber-50/40' : ''}`}>
-                        <td className="py-3.5 px-3 text-center">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleToggleSelectProduct(p.id)}
-                            className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 cursor-pointer accent-brand-600"
-                            title={`تحديد ${p.name}`}
-                          />
-                        </td>
-                        <td className="py-3.5 px-3">
-                          <div className="flex items-center gap-3">
-                            <img src={p.image} alt={p.name} className="w-11 h-11 rounded-xl object-cover border border-slate-200 shrink-0" />
-                            <div>
-                              <div className="font-bold text-slate-900 line-clamp-1">{p.name}</div>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                {p.supplierCode ? (
-                                  (() => {
-                                    const isMojod = p.supplierSource === 'mojod' || /^\d+$/.test(String(p.supplierCode).trim());
-                                    return isMojod ? (
-                                      <span className="bg-purple-50 text-purple-700 text-[10px] font-black px-1.5 py-0.5 rounded border border-purple-200 flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-purple-600"></span>
-                                        <span>موجود: {p.supplierCode}</span>
-                                      </span>
-                                    ) : (
-                                      <span className="bg-sky-50 text-sky-700 text-[10px] font-bold px-1.5 py-0.5 rounded border border-sky-200 flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-sky-600"></span>
-                                        <span>فدشي: {p.supplierCode}</span>
-                                      </span>
-                                    );
-                                  })()
-                                ) : (
-                                  <span className="text-[10px] text-slate-400 font-mono">{p.id}</span>
-                                )}
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-right text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-400 uppercase">
+                      <th className="py-3 px-3 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          checked={filteredProducts.length > 0 && filteredProducts.every(p => selectedProductIds.includes(p.id))}
+                          onChange={handleSelectAllFiltered}
+                          className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 cursor-pointer accent-brand-600"
+                          title="تحديد الكل / إلغاء تحديد الكل"
+                        />
+                      </th>
+                      <th className="py-3 px-3">المنتج والمصدر</th>
+                      <th className="py-3 px-3">التصنيف</th>
+                      <th className="py-3 px-3">تكلفة المورد</th>
+                      <th className="py-3 px-3">سعر الجملة (للتاجر)</th>
+                      <th className="py-3 px-3">ربح المنصة الصافي</th>
+                      <th className="py-3 px-3">حدود بيع الزبون</th>
+                      <th className="py-3 px-3">المخزون والخيارات</th>
+                      <th className="py-3 px-3">الحالة</th>
+                      <th className="py-3 px-3">الإجراءات والتحكم</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredProducts.map((p) => {
+                      const wholesale = Number(p.wholesalePriceIqd) || 0;
+                      const supplier = Number(p.supplierPriceIqd) || 0;
+                      const platformProfit = wholesale - supplier;
+                      const isLowProfit = platformProfit < 3000;
+                      const isDeleting = deletingId === p.id;
+                      const isSelected = selectedProductIds.includes(p.id);
+                      return (
+                        <tr key={p.id} className={`hover:bg-slate-50/80 transition-colors ${isSelected ? 'bg-amber-50/40' : ''}`}>
+                          <td className="py-3.5 px-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleSelectProduct(p.id)}
+                              className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 cursor-pointer accent-brand-600"
+                              title={`تحديد ${p.name}`}
+                            />
+                          </td>
+                          <td className="py-3.5 px-3">
+                            <div className="flex items-center gap-3">
+                              <img src={p.image} alt={p.name} className="w-11 h-11 rounded-xl object-cover border border-slate-200 shrink-0" />
+                              <div>
+                                <div className="font-bold text-slate-900 line-clamp-1">{p.name}</div>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  {p.supplierCode ? (
+                                    (() => {
+                                      const isMojod = p.supplierSource === 'mojod' || /^\d+$/.test(String(p.supplierCode).trim());
+                                      return isMojod ? (
+                                        <span className="bg-purple-50 text-purple-700 text-[10px] font-black px-1.5 py-0.5 rounded border border-purple-200 flex items-center gap-1">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-purple-600"></span>
+                                          <span>موجود: {p.supplierCode}</span>
+                                        </span>
+                                      ) : (
+                                        <span className="bg-sky-50 text-sky-700 text-[10px] font-bold px-1.5 py-0.5 rounded border border-sky-200 flex items-center gap-1">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-sky-600"></span>
+                                          <span>فدشي: {p.supplierCode}</span>
+                                        </span>
+                                      );
+                                    })()
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 font-mono">{p.id}</span>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-3">
-                          <span className="font-bold text-slate-800 block">{p.category}</span>
-                          {p.subcategory && (
-                            <span className="text-[10px] text-slate-400 block">{p.subcategory}</span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-3 font-semibold text-slate-600">
-                          {p.supplierPriceIqd ? `${p.supplierPriceIqd.toLocaleString('ar-IQ')} د.ع` : '-'}
-                        </td>
-                        <td className="py-3.5 px-3 font-bold text-brand-800">
-                          {p.wholesalePriceIqd?.toLocaleString('ar-IQ')} د.ع
-                        </td>
-                        <td className="py-3.5 px-3">
-                          {p.supplierPriceIqd ? (
-                            isLowProfit ? (
-                              <div className="inline-flex flex-col items-start gap-1">
-                                <span className="font-black text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-xl text-xs flex items-center gap-1 shadow-2xs">
-                                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                                  <span>+{platformProfit.toLocaleString('ar-IQ')} د.ع</span>
+                          </td>
+                          <td className="py-3.5 px-3">
+                            <span className="font-bold text-slate-800 block">{p.category}</span>
+                            {p.subcategory && (
+                              <span className="text-[10px] text-slate-400 block">{p.subcategory}</span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-3 font-semibold text-slate-600">
+                            {p.supplierPriceIqd ? `${p.supplierPriceIqd.toLocaleString('ar-IQ')} د.ع` : '-'}
+                          </td>
+                          <td className="py-3.5 px-3 font-bold text-brand-800">
+                            {p.wholesalePriceIqd?.toLocaleString('ar-IQ')} د.ع
+                          </td>
+                          <td className="py-3.5 px-3">
+                            {p.supplierPriceIqd ? (
+                              isLowProfit ? (
+                                <div className="inline-flex flex-col items-start gap-1">
+                                  <span className="font-black text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-xl text-xs flex items-center gap-1 shadow-2xs">
+                                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                    <span>+{platformProfit.toLocaleString('ar-IQ')} د.ع</span>
+                                  </span>
+                                  <span className="text-[10px] text-rose-600 font-black">
+                                    أقل من 3 آلاف د.ع
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="font-black text-emerald-700 bg-emerald-50/80 border border-emerald-200 px-2.5 py-1 rounded-xl text-xs inline-block">
+                                  +{platformProfit.toLocaleString('ar-IQ')} د.ع
                                 </span>
-                                <span className="text-[10px] text-rose-600 font-black">
-                                  أقل من 3 آلاف د.ع
-                                </span>
-                              </div>
+                              )
                             ) : (
-                              <span className="font-black text-emerald-700 bg-emerald-50/80 border border-emerald-200 px-2.5 py-1 rounded-xl text-xs inline-block">
-                                +{platformProfit.toLocaleString('ar-IQ')} د.ع
-                              </span>
-                            )
-                          ) : (
-                            <span className="text-slate-400 font-bold">-</span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-3 text-slate-600 font-mono text-[11px]">
-                          {p.minPriceIqd?.toLocaleString('ar-IQ')} - {p.maxPriceIqd?.toLocaleString('ar-IQ')} د.ع
-                        </td>
-                        <td className="py-3.5 px-3">
-                          <div className="font-bold text-slate-800">{p.stockQuantity || 50} قطعة</div>
-                          {p.colors && p.colors.length > 0 && (
-                            <div className="text-[10px] text-slate-400 mt-0.5">
-                              {p.colors.length} ألوان ({p.colors.map(c => c.name).slice(0, 2).join('، ')}{p.colors.length > 2 ? '...' : ''})
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-3">
-                          {(() => {
-                            const isVisible = p.status === 'published' && p.isAvailable !== false;
-                            const isUpdating = togglingStatusId === p.id;
-                            return (
+                              <span className="text-slate-400 font-bold">-</span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-3 text-slate-600 font-mono text-[11px]">
+                            {p.minPriceIqd?.toLocaleString('ar-IQ')} - {p.maxPriceIqd?.toLocaleString('ar-IQ')} د.ع
+                          </td>
+                          <td className="py-3.5 px-3">
+                            <div className="font-bold text-slate-800">{p.stockQuantity || 50} قطعة</div>
+                            {p.colors && p.colors.length > 0 && (
+                              <div className="text-[10px] text-slate-400 mt-0.5">
+                                {p.colors.length} ألوان ({p.colors.map(c => c.name).slice(0, 2).join('، ')}{p.colors.length > 2 ? '...' : ''})
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-3">
+                            {(() => {
+                              const isVisible = p.status === 'published' && p.isAvailable !== false;
+                              const isUpdating = togglingStatusId === p.id;
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleProductStatus(p.id, p.status, p.isAvailable)}
+                                  disabled={isUpdating}
+                                  title={isVisible ? 'انقر للتحويل إلى مخفي' : 'انقر للتحويل إلى منشور'}
+                                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer shadow-2xs ${
+                                    isVisible 
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100' 
+                                      : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'
+                                  }`}
+                                >
+                                  {isUpdating ? (
+                                    <RefreshCw className="w-3 h-3 animate-spin text-slate-500" />
+                                  ) : isVisible ? (
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                                  ) : (
+                                    <EyeOff className="w-3 h-3 text-slate-400" />
+                                  )}
+                                  <span>{isVisible ? 'منشور' : 'مخفي'}</span>
+                                </button>
+                              );
+                            })()}
+                          </td>
+                          <td className="py-3.5 px-3">
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => handleOpenEditModal(p)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-xl text-xs border border-amber-200 transition-all cursor-pointer shadow-2xs"
+                                title="تعديل بيانات المنتج وأسعاره ومخزونه"
+                              >
+                                <Edit3 className="w-3.5 h-3.5 text-amber-600" />
+                                <span>تعديل</span>
+                              </button>
+
+                              <Link
+                                href={`/p/${p.id}`}
+                                target="_blank"
+                                className="inline-flex items-center gap-1 px-2 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs border border-slate-200 transition-all"
+                                title="معاينة صفحة المنتج كما تظهر للزبائن"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                                <span>معاينة</span>
+                              </Link>
+
                               <button
                                 type="button"
-                                onClick={() => handleToggleProductStatus(p.id, p.status, p.isAvailable)}
-                                disabled={isUpdating}
-                                title={isVisible ? 'انقر للتحويل إلى مخفي' : 'انقر للتحويل إلى منشور'}
-                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer shadow-2xs ${
-                                  isVisible 
-                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100' 
-                                    : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'
-                                }`}
+                                onClick={() => handleDeleteProduct(p.id, p.name)}
+                                disabled={isDeleting}
+                                className="inline-flex items-center gap-1 px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-xl text-xs border border-red-200 transition-all cursor-pointer disabled:opacity-50"
+                                title="حذف هذا المنتج نهائياً من المنصة"
                               >
-                                {isUpdating ? (
-                                  <RefreshCw className="w-3 h-3 animate-spin text-slate-500" />
-                                ) : isVisible ? (
-                                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                                {isDeleting ? (
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                                 ) : (
-                                  <EyeOff className="w-3 h-3 text-slate-400" />
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 )}
-                                <span>{isVisible ? 'منشور' : 'مخفي'}</span>
+                                <span>حذف</span>
                               </button>
-                            );
-                          })()}
-                        </td>
-                        <td className="py-3.5 px-3">
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => handleOpenEditModal(p)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-xl text-xs border border-amber-200 transition-all cursor-pointer shadow-2xs"
-                              title="تعديل بيانات المنتج وأسعاره ومخزونه"
-                            >
-                              <Edit3 className="w-3.5 h-3.5 text-amber-600" />
-                              <span>تعديل</span>
-                            </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
-                            <Link
-                              href={`/p/${p.id}`}
-                              target="_blank"
-                              className="inline-flex items-center gap-1 px-2 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs border border-slate-200 transition-all"
-                              title="معاينة صفحة المنتج كما تظهر للزبائن"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
-                              <span>معاينة</span>
-                            </Link>
+              {/* شريط ترقيم وتصفح الصفحات (Pagination) وكاش المتصفح */}
+              <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-2 text-xs text-slate-500 font-bold flex-wrap">
+                  <span>عرض {products.length} من أصل {totalProductsCount || products.length} منتج</span>
+                  <span>•</span>
+                  <span>الصفحة {currentPage} من {totalPages}</span>
+                  {isFromCache && (
+                    <span className="bg-sky-50 text-sky-700 text-[10px] font-black px-2 py-0.5 rounded-md border border-sky-200">
+                      محفوظة في كاش المتصفح (توفير سوبابيس وفيرسل)
+                    </span>
+                  )}
+                </div>
 
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    disabled={currentPage <= 1 || loading}
+                    onClick={() => loadProductsPage(currentPage - 1, searchQuery)}
+                    className="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs disabled:opacity-40 disabled:pointer-events-none transition-all flex items-center gap-1 cursor-pointer"
+                    title="الصفحة السابقة"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                    <span>السابق</span>
+                  </button>
+
+                  {/* أرقام الصفحات */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter(pNum => pNum === 1 || pNum === totalPages || Math.abs(pNum - currentPage) <= 1)
+                      .map((pNum, idx, arr) => {
+                        const prev = arr[idx - 1];
+                        return (
+                          <React.Fragment key={pNum}>
+                            {prev && pNum - prev > 1 && (
+                              <span className="px-1 text-slate-400 text-xs">...</span>
+                            )}
                             <button
                               type="button"
-                              onClick={() => handleDeleteProduct(p.id, p.name)}
-                              disabled={isDeleting}
-                              className="inline-flex items-center gap-1 px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-xl text-xs border border-red-200 transition-all cursor-pointer disabled:opacity-50"
-                              title="حذف هذا المنتج نهائياً من المنصة"
+                              onClick={() => loadProductsPage(pNum, searchQuery)}
+                              className={`w-8 h-8 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                                currentPage === pNum
+                                  ? 'bg-brand-700 text-white shadow-xs'
+                                  : 'border border-slate-200 hover:bg-slate-100 text-slate-700'
+                              }`}
                             >
-                              {isDeleting ? (
-                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-3.5 h-3.5" />
-                              )}
-                              <span>حذف</span>
+                              {pNum}
                             </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                          </React.Fragment>
+                        );
+                      })}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={currentPage >= totalPages || loading}
+                    onClick={() => loadProductsPage(currentPage + 1, searchQuery)}
+                    className="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs disabled:opacity-40 disabled:pointer-events-none transition-all flex items-center gap-1 cursor-pointer"
+                    title="الصفحة التالية"
+                  >
+                    <span>التالي</span>
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>

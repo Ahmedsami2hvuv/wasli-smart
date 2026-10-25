@@ -38,6 +38,42 @@ const initialProducts: Product[] = mockProducts.map((p, idx) => {
 
 let localProducts: Product[] = [...initialProducts];
 
+function mapDbProductToModel(item: any): Product {
+  const wholesale = Number(item.wholesale_price) || 0;
+  const platform = Number(item.platform_price) || wholesale;
+  const minP = Number(item.min_price) || platform;
+  const maxP = Number(item.max_price) || Math.round(platform * 1.6);
+
+  return {
+    id: item.id,
+    name: item.title || item.name || '',
+    slug: item.slug,
+    description: item.description || '',
+    shortDescription: item.short_description,
+    priceIqd: platform,
+    wholesalePriceIqd: wholesale,
+    platformPriceIqd: platform,
+    minPriceIqd: minP,
+    maxPriceIqd: maxP,
+    stockQuantity: item.stock_quantity ?? 100,
+    isStockTracked: item.is_stock_tracked,
+    isAvailable: item.is_available,
+    status: item.status || 'published',
+    image: item.images?.[0]?.local_url || '/placeholder-product.svg',
+    category: item.category?.name || 'عام',
+    categoryId: item.category_id,
+    promoDescription: (item.description || '').replace(/<!--WASLI_SUPPLIER_PRICE:\d+-->/g, '').trim(),
+    specifications: (item.description || '').replace(/<!--WASLI_SUPPLIER_PRICE:\d+-->/g, '').trim(),
+    supplierPriceIqd: (() => {
+      const supplierMatch = (item.description || '').match(/<!--WASLI_SUPPLIER_PRICE:(\d+)-->/);
+      if (supplierMatch) return Number(supplierMatch[1]);
+      return wholesale;
+    })(),
+    supplierCode: item.brand || item.metadata?.supplierCode,
+    images: item.images?.map((im: any) => im.local_url) || [],
+  };
+}
+
 /**
  * جلب جميع المنتجات المتاحة للتسويق في المنصة
  */
@@ -55,34 +91,7 @@ export async function getAllProducts(): Promise<Product[]> {
         .order('created_at', { ascending: false });
 
       if (!error && data && data.length > 0) {
-        return data.map(item => ({
-          id: item.id,
-          name: item.title,
-          slug: item.slug,
-          description: item.description,
-          shortDescription: item.short_description,
-          priceIqd: Number(item.platform_price),
-          wholesalePriceIqd: Number(item.wholesale_price),
-          platformPriceIqd: Number(item.platform_price),
-          minPriceIqd: Number(item.min_price),
-          maxPriceIqd: Number(item.max_price),
-          stockQuantity: item.stock_quantity,
-          isStockTracked: item.is_stock_tracked,
-          isAvailable: item.is_available,
-          status: item.status,
-          image: item.images?.[0]?.local_url || '/placeholder-product.svg',
-          category: item.category?.name || 'عام',
-          categoryId: item.category_id,
-          promoDescription: (item.description || '').replace(/<!--WASLI_SUPPLIER_PRICE:\d+-->/g, '').trim(),
-          specifications: (item.description || '').replace(/<!--WASLI_SUPPLIER_PRICE:\d+-->/g, '').trim(),
-          supplierPriceIqd: (() => {
-            const supplierMatch = (item.description || '').match(/<!--WASLI_SUPPLIER_PRICE:(\d+)-->/);
-            if (supplierMatch) return Number(supplierMatch[1]);
-            return Number(item.wholesale_price) || 0;
-          })(),
-          supplierCode: item.brand || item.metadata?.supplierCode,
-          images: item.images?.map((im: any) => im.local_url) || [],
-        }));
+        return data.map(mapDbProductToModel);
       }
     } catch (e) {
       console.warn('استخدام البيانات المحلية للمنتجات كبديل احتياطي:', e);
@@ -90,6 +99,90 @@ export async function getAllProducts(): Promise<Product[]> {
   }
 
   return localProducts;
+}
+
+/**
+ * جلب المنتجات مقسمة لصفحات (20 منتج في الصفحة) لتوفير استهلاك سوبابيس وفيرسل
+ */
+export async function getProductsPaginated(options?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+}): Promise<{
+  products: Product[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}> {
+  const page = Math.max(1, options?.page || 1);
+  const limit = Math.max(1, Math.min(100, options?.limit || 20));
+  const search = options?.search?.trim();
+
+  const dbClient = supabaseAdmin || supabase;
+  if (dbClient) {
+    try {
+      let query = dbClient
+        .from('products')
+        .select(`
+          *,
+          category:categories(name),
+          images:product_images(*)
+        `, { count: 'exact' });
+
+      if (search) {
+        query = query.or(`title.ilike.%${search}%,brand.ilike.%${search}%,slug.ilike.%${search}%`);
+      }
+
+      query = query.order('created_at', { ascending: false });
+
+      const from = (page - 1) * limit;
+      const to = from + limit - 1;
+      query = query.range(from, to);
+
+      const { data, count, error } = await query;
+
+      if (!error && data) {
+        const total = count ?? data.length;
+        const totalPages = Math.ceil(total / limit) || 1;
+        const mappedProducts = data.map(mapDbProductToModel);
+
+        return {
+          products: mappedProducts,
+          total,
+          page,
+          limit,
+          totalPages,
+        };
+      }
+    } catch (e) {
+      console.warn('استخدام البيانات المحلية للمنتجات (تقسيم الصفحات):', e);
+    }
+  }
+
+  // في حال تعذر الاتصال بسوبابيس، نقسم المنتجات المحلية
+  let filtered = [...localProducts];
+  if (search) {
+    const q = search.toLowerCase();
+    filtered = filtered.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      p.category?.toLowerCase().includes(q) ||
+      p.supplierCode?.toLowerCase().includes(q)
+    );
+  }
+
+  const total = filtered.length;
+  const totalPages = Math.ceil(total / limit) || 1;
+  const from = (page - 1) * limit;
+  const products = filtered.slice(from, from + limit);
+
+  return {
+    products,
+    total,
+    page,
+    limit,
+    totalPages,
+  };
 }
 
 /**
