@@ -631,3 +631,144 @@ export async function findProductBySupplierCode(code: string): Promise<any | nul
 
   return null;
 }
+
+export interface DuplicateGroup {
+  id: string;
+  title: string;
+  reason: string;
+  score: number;
+  products: Product[];
+}
+
+export function normalizeArabicText(text: string): string {
+  if (!text) return '';
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[إأآا]/g, 'ا')
+    .replace(/[ىي]/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/[\u064B-\u065F]/g, '')
+    .replace(/[^\w\s\u0600-\u06FF]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function areProductsSimilar(p1: Product, p2: Product): { isSimilar: boolean; reason: string; score: number } {
+  if (p1.id === p2.id) return { isSimilar: false, reason: '', score: 0 };
+
+  // 1. تطابق كود المورد
+  const code1 = (p1.supplierCode || '').trim().toLowerCase();
+  const code2 = (p2.supplierCode || '').trim().toLowerCase();
+  if (code1 && code2 && code1 === code2) {
+    return { isSimilar: true, reason: 'تطابق كود المورد (' + code1 + ')', score: 1.0 };
+  }
+
+  // 2. تطابق رابط الصورة الأساسية أو أي صورة في المعرض
+  const isRealImg = (url: string) => typeof url === 'string' && url.trim().length > 0 && !url.includes('placeholder') && !url.includes('data:image');
+  
+  const getProductImageUrls = (prod: Product): string[] => {
+    const urls: string[] = [];
+    if (prod.image && isRealImg(prod.image)) urls.push(prod.image.trim());
+    if (Array.isArray(prod.images)) {
+      prod.images.forEach((im: any) => {
+        const u = typeof im === 'string' ? im : (im?.localUrl || im?.local_url);
+        if (u && isRealImg(u)) urls.push(u.trim());
+      });
+    }
+    return urls;
+  };
+
+  const imgs1 = getProductImageUrls(p1);
+  const imgs2 = getProductImageUrls(p2);
+
+  if (imgs1.length > 0 && imgs2.length > 0) {
+    const hasSameImg = imgs1.some(u1 => imgs2.includes(u1));
+    if (hasSameImg) {
+      return { isSimilar: true, reason: 'تطابق صورة المنتج مع منتج آخر', score: 0.95 };
+    }
+  }
+
+  // 4. فحص تشابه الأسماء
+  const n1 = normalizeArabicText(p1.name);
+  const n2 = normalizeArabicText(p2.name);
+  if (!n1 || !n2) return { isSimilar: false, reason: '', score: 0 };
+
+  if (n1 === n2) {
+    return { isSimilar: true, reason: 'تطابق تام في اسم المنتج', score: 1.0 };
+  }
+
+  // إذا كان أحد الاسمين يحتوي الآخر كاملاً وطوله أكثر من 7 أحرف
+  if ((n1.includes(n2) || n2.includes(n1)) && Math.min(n1.length, n2.length) >= 7) {
+    return { isSimilar: true, reason: 'تطابق أجزاء الاسم الأساسي', score: 0.88 };
+  }
+
+  const words1 = n1.split(' ').filter(w => w.length > 1);
+  const words2 = n2.split(' ').filter(w => w.length > 1);
+  const set1 = new Set(words1);
+  const set2 = new Set(words2);
+
+  if (set1.size >= 2 && set2.size >= 2) {
+    let intersection = 0;
+    set1.forEach(w => {
+      if (set2.has(w)) intersection++;
+    });
+    const overlap = intersection / Math.min(set1.size, set2.size);
+    const unionSize = new Set(words1.concat(words2)).size;
+    const jaccard = unionSize > 0 ? intersection / unionSize : 0;
+
+    if (overlap >= 0.75 && intersection >= 2) {
+      const pct = Math.round(overlap * 100);
+      return { isSimilar: true, reason: `تشابه قوي في كلمات الاسم (${pct}%)`, score: overlap };
+    }
+
+    if (jaccard >= 0.60) {
+      const pct = Math.round(jaccard * 100);
+      return { isSimilar: true, reason: `تشابه في الاسم بنسبة (${pct}%)`, score: jaccard };
+    }
+  }
+
+  return { isSimilar: false, reason: '', score: 0 };
+}
+
+export function findDuplicateProductGroups(allProducts: Product[]): DuplicateGroup[] {
+  const visited = new Set<string>();
+  const groups: DuplicateGroup[] = [];
+
+  for (let i = 0; i < allProducts.length; i++) {
+    const p1 = allProducts[i];
+    if (visited.has(p1.id)) continue;
+
+    const cluster: Product[] = [p1];
+    let topReason = '';
+    let highestScore = 0;
+
+    for (let j = i + 1; j < allProducts.length; j++) {
+      const p2 = allProducts[j];
+      if (visited.has(p2.id)) continue;
+
+      const res = areProductsSimilar(p1, p2);
+      if (res.isSimilar) {
+        cluster.push(p2);
+        visited.add(p2.id);
+        if (res.score > highestScore) {
+          highestScore = res.score;
+          topReason = res.reason;
+        }
+      }
+    }
+
+    if (cluster.length > 1) {
+      visited.add(p1.id);
+      groups.push({
+        id: `dup-${p1.id}`,
+        title: p1.name,
+        reason: topReason || 'تشابه في تفاصيل المنتج',
+        score: highestScore,
+        products: cluster,
+      });
+    }
+  }
+
+  return groups;
+}

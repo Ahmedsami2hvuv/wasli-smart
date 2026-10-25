@@ -7,16 +7,31 @@ import {
   deleteOrArchiveProduct, 
   deleteProducts,
   deleteAllProducts,
-  fixLowProfitProducts
+  fixLowProfitProducts,
+  findDuplicateProductGroups
 } from '@/lib/services/productService';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const duplicates = searchParams.get('duplicates');
     const page = searchParams.get('page');
     const limit = searchParams.get('limit');
     const search = searchParams.get('search');
     const paginated = searchParams.get('paginated');
+
+    // إذا طلب فحص وكشف المنتجات المتشابهة والمكررة
+    if (duplicates === 'true') {
+      const all = await getAllProducts();
+      const groups = findDuplicateProductGroups(all);
+      const totalDuplicates = groups.reduce((acc, g) => acc + g.products.length, 0);
+      return NextResponse.json({
+        success: true,
+        totalGroups: groups.length,
+        totalDuplicates,
+        groups,
+      });
+    }
 
     // إذا طلب تقسيم الصفحات، نجلب بالصفحة فقط (افتراضياً 20 منتج)
     if (page || limit || paginated === 'true') {

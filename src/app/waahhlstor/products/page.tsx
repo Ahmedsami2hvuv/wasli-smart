@@ -31,7 +31,8 @@ import {
   ChevronRight,
   AlertTriangle,
   Filter,
-  StopCircle
+  StopCircle,
+  Copy
 } from 'lucide-react';
 import Link from 'next/link';
 import { Product, Category, Subcategory } from '@/types';
@@ -642,6 +643,106 @@ export default function AdminProductsPage() {
     }
   };
 
+  // حالات كشف المنتجات المتشابهة والمكررة
+  const [showDuplicatesModal, setShowDuplicatesModal] = useState(false);
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+  const [duplicateGroups, setDuplicateGroups] = useState<any[]>([]);
+  const [totalDuplicatesCount, setTotalDuplicatesCount] = useState<number>(0);
+  const [deletingDuplicateId, setDeletingDuplicateId] = useState<string | null>(null);
+  const [duplicateActionMsg, setDuplicateActionMsg] = useState<string | null>(null);
+
+  // دالة فحص وكشف المنتجات المتشابهة من السيرفر
+  const handleScanDuplicates = async () => {
+    try {
+      setCheckingDuplicates(true);
+      setShowDuplicatesModal(true);
+      const res = await fetch('/api/products?duplicates=true');
+      const data = await res.json();
+      if (data.success) {
+        setDuplicateGroups(data.groups || []);
+        setTotalDuplicatesCount(data.totalDuplicates || 0);
+      } else {
+        setDuplicateGroups([]);
+        setTotalDuplicatesCount(0);
+      }
+    } catch (err) {
+      console.error('خطأ في فحص المنتجات المتشابهة:', err);
+    } finally {
+      setCheckingDuplicates(false);
+    }
+  };
+
+  // حذف منتج مكرر محدد
+  const handleDeleteDuplicateProduct = async (prodId: string, prodName: string) => {
+    if (!confirm(`هل أنت متأكد من حذف هذا المنتج المتشابه (${prodName}) من المنصة نهائياً؟`)) {
+      return;
+    }
+    setDeletingDuplicateId(prodId);
+    try {
+      setDuplicateGroups(prev => {
+        return prev.map(group => ({
+          ...group,
+          products: group.products.filter((p: Product) => p.id !== prodId)
+        })).filter(group => group.products.length > 1);
+      });
+      setTotalDuplicatesCount(prev => Math.max(0, prev - 1));
+
+      setProducts(prev => prev.filter(p => p.id !== prodId));
+      invalidateProductsCache();
+
+      const res = await fetch('/api/products', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [prodId] }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDuplicateActionMsg(`تم حذف النسخة المكررة (${prodName}) بنجاح`);
+        setTimeout(() => setDuplicateActionMsg(null), 3000);
+      }
+    } catch (err) {
+      console.error('خطأ في حذف المنتج المكرر:', err);
+    } finally {
+      setDeletingDuplicateId(null);
+    }
+  };
+
+  // الإبقاء على منتج واحد وحذف باقي النسخ المتشابهة في المجموعة
+  const handleKeepOneAndDeleteRest = async (keepId: string, group: any) => {
+    const toDelete = group.products.filter((p: Product) => p.id !== keepId);
+    if (toDelete.length === 0) return;
+    const deleteIds = toDelete.map((p: Product) => p.id);
+    const keepProd = group.products.find((p: Product) => p.id === keepId);
+
+    if (!confirm(`هل أنت متأكد من الإبقاء على (${keepProd?.name || 'المنتج المحدد'}) وحذف باقي النسخ المتشابهة (${toDelete.length} منتج) نهائياً؟`)) {
+      return;
+    }
+
+    setDeletingDuplicateId(keepId);
+    try {
+      setDuplicateGroups(prev => prev.filter(g => g.id !== group.id));
+      setTotalDuplicatesCount(prev => Math.max(0, prev - deleteIds.length));
+
+      setProducts(prev => prev.filter(p => !deleteIds.includes(p.id)));
+      invalidateProductsCache();
+
+      const res = await fetch('/api/products', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: deleteIds }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDuplicateActionMsg(`تم الإبقاء على المنتج المختار وحذف (${deleteIds.length}) نسخة مكررة`);
+        setTimeout(() => setDuplicateActionMsg(null), 3500);
+      }
+    } catch (err) {
+      console.error('خطأ في حذف النسخ المتشابهة:', err);
+    } finally {
+      setDeletingDuplicateId(null);
+    }
+  };
+
   // حقول إضافة المنتج
   const [name, setName] = useState('');
   const [category, setCategory] = useState('إلكترونيات وهواتف');
@@ -929,6 +1030,21 @@ export default function AdminProductsPage() {
               <Layers className="w-4 h-4 text-sky-600" />
               <span>إدارة الأقسام والأفرع</span>
             </Link>
+
+            <button
+              type="button"
+              onClick={handleScanDuplicates}
+              disabled={checkingDuplicates}
+              className="py-2.5 px-3.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="فحص ومطابقة المنتجات المتشابهة والمكررة في المنصة"
+            >
+              {checkingDuplicates ? (
+                <RefreshCw className="w-4 h-4 animate-spin text-white" />
+              ) : (
+                <Copy className="w-4 h-4 text-amber-200" />
+              )}
+              <span>كشف المنتجات المتشابهة</span>
+            </button>
 
             <button
               onClick={handleOpenMojodModal}
@@ -1980,6 +2096,211 @@ export default function AdminProductsPage() {
             </div>
           </div>
         )}
+
+        {/* نافذة كشف المنتجات المتشابهة والمكررة */}
+        {showDuplicatesModal && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 my-8 max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+              
+              {/* شريط رأس النافذة */}
+              <div className="flex items-start justify-between border-b border-slate-100 pb-4 mb-4 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
+                    <Copy className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                      <span>كاشف المنتجات المتشابهة والمكررة</span>
+                      {!checkingDuplicates && duplicateGroups.length > 0 && (
+                        <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-0.5 rounded-full font-bold">
+                          {duplicateGroups.length} مجموعات ({totalDuplicatesCount} منتج)
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      مطابقة ذكية تعتمد على كود المورد وتطابق الصور والأسماء لكشف التكرار وتنظيم الكتالوج
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleScanDuplicates}
+                    disabled={checkingDuplicates}
+                    className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="إعادة فحص المنتجات المتشابهة"
+                  >
+                    <RefreshCw className={`w-4 h-4 text-slate-500 ${checkingDuplicates ? 'animate-spin text-amber-600' : ''}`} />
+                    <span className="hidden sm:inline">إعادة الفحص</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowDuplicatesModal(false)}
+                    className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* رسالة الإجراء السريع داخل النافذة */}
+              {duplicateActionMsg && (
+                <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2 shrink-0 animate-in fade-in duration-200">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>{duplicateActionMsg}</span>
+                </div>
+              )}
+
+              {/* محتوى النافذة القابل للتمرير */}
+              <div className="overflow-y-auto space-y-4 flex-1 pr-1 pl-1">
+                {checkingDuplicates ? (
+                  <div className="py-16 text-center space-y-3">
+                    <RefreshCw className="w-8 h-8 text-amber-600 animate-spin mx-auto" />
+                    <p className="text-sm font-bold text-slate-700">جاري فحص ومطابقة جميع منتجات المنصة بدقة...</p>
+                    <p className="text-xs text-slate-400">يتم فحص أكواد الموردين، وتطابق الصور، وتقارب أسماء المنتجات</p>
+                  </div>
+                ) : duplicateGroups.length === 0 ? (
+                  <div className="py-16 text-center space-y-3 bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-8">
+                    <div className="w-14 h-14 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center mx-auto">
+                      <CheckCircle2 className="w-8 h-8" />
+                    </div>
+                    <h4 className="text-base font-black text-slate-800">كتالوج المنصة نظيف ومثالي</h4>
+                    <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                      لم يتم العثور على أي منتجات مكررة أو متشابهة في كود المورد أو الصور أو الأسماء، جميع المنتجات فريدة ومنظمة بنجاح.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {duplicateGroups.map((group, gIdx) => (
+                      <div key={group.id || gIdx} className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 sm:p-5 space-y-3 shadow-2xs">
+                        
+                        {/* رأس المجموعة المتشابهة */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-lg bg-amber-500 text-white font-black text-xs flex items-center justify-center shrink-0">
+                              {gIdx + 1}
+                            </span>
+                            <div>
+                              <h4 className="text-xs sm:text-sm font-black text-slate-900 line-clamp-1">
+                                {group.title}
+                              </h4>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-md border border-amber-200">
+                                  سبب التشابه: {group.reason}
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-semibold">
+                                  ({group.products.length} نسخ مكررة)
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* قائمة المنتجات المتشابهة في هذه المجموعة */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                          {group.products.map((p: Product, pIdx: number) => {
+                            const pWholesale = Number(p.wholesalePriceIqd) || 0;
+                            const pSupplier = Number(p.supplierPriceIqd) || 0;
+                            const pProfit = pWholesale - pSupplier;
+                            const isDeleting = deletingDuplicateId === p.id;
+
+                            return (
+                              <div
+                                key={p.id}
+                                className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs flex flex-col justify-between space-y-2 relative"
+                              >
+                                {pIdx === 0 && (
+                                  <span className="absolute top-2 left-2 bg-brand-50 text-brand-700 text-[9px] font-black px-1.5 py-0.5 rounded border border-brand-200">
+                                    النسخة الأصلية
+                                  </span>
+                                )}
+
+                                <div className="flex gap-2.5 items-start">
+                                  <img
+                                    src={p.image || '/placeholder-product.svg'}
+                                    alt={p.name}
+                                    className="w-14 h-14 rounded-lg object-cover border border-slate-100 shrink-0 bg-slate-50"
+                                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-product.svg'; }}
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <h5 className="text-xs font-bold text-slate-900 line-clamp-2" title={p.name}>
+                                      {p.name}
+                                    </h5>
+                                    {p.supplierCode && (
+                                      <p className="text-[10px] text-purple-700 font-mono font-semibold mt-0.5">
+                                        كود: {p.supplierCode}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="pt-2 border-t border-slate-100 text-[10px] space-y-1">
+                                  <div className="flex justify-between text-slate-500">
+                                    <span>تكلفة المورد:</span>
+                                    <span className="font-semibold text-slate-700">{pSupplier.toLocaleString('ar-IQ')} د.ع</span>
+                                  </div>
+                                  <div className="flex justify-between font-bold text-slate-800">
+                                    <span>سعر جملة التاجر:</span>
+                                    <span>{pWholesale.toLocaleString('ar-IQ')} د.ع</span>
+                                  </div>
+                                  <div className="flex justify-between text-emerald-700 font-bold">
+                                    <span>ربح المنصة:</span>
+                                    <span>+{pProfit.toLocaleString('ar-IQ')} د.ع</span>
+                                  </div>
+                                </div>
+
+                                <div className="pt-2 border-t border-slate-100 flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    disabled={isDeleting}
+                                    onClick={() => handleKeepOneAndDeleteRest(p.id, group)}
+                                    className="flex-1 py-1.5 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold border border-emerald-200 transition-all cursor-pointer disabled:opacity-40"
+                                    title="الإبقاء على هذا المنتج وحذف باقي المكررات في هذه المجموعة"
+                                  >
+                                    الإبقاء على هذا وحذف البقية
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={isDeleting}
+                                    onClick={() => handleDeleteDuplicateProduct(p.id, p.name)}
+                                    className="py-1.5 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg text-[10px] font-bold border border-rose-200 transition-all cursor-pointer disabled:opacity-40"
+                                    title="حذف هذا المنتج فقط"
+                                  >
+                                    {isDeleting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* شريط أسفل النافذة */}
+              <div className="pt-4 border-t border-slate-100 mt-4 flex items-center justify-between shrink-0">
+                <span className="text-xs text-slate-500 font-semibold">
+                  {duplicateGroups.length > 0 
+                    ? `تم رصد ${duplicateGroups.length} مجموعة متشابهة بإجمالي ${totalDuplicatesCount} منتج مكرر` 
+                    : 'لا توجد منتجات متشابهة حالياً'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowDuplicatesModal(false)}
+                  className="py-2 px-5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  إغلاق
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md space-y-6">
           
           {/* بطاقة تنبيه بارزة للمنتجات ذات الربح الأقل من 3,000 د.ع */}
@@ -2165,7 +2486,7 @@ export default function AdminProductsPage() {
               }`}
             >
               <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-              <span>⚠️ ربح المنصة أقل من 3,000 د.ع ({lowProfitProducts.length})</span>
+              <span>ربح المنصة أقل من 3,000 د.ع ({lowProfitProducts.length})</span>
             </button>
 
             {lowProfitProducts.length > 0 && (
@@ -2191,7 +2512,23 @@ export default function AdminProductsPage() {
               }`}
             >
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span>✅ ربح 3,000 د.ع وأكثر ({products.length - lowProfitProducts.length})</span>
+              <span>ربح 3,000 د.ع وأكثر ({products.length - lowProfitProducts.length})</span>
+            </button>
+
+            {/* زر كشف ومطابقة المنتجات المتشابهة */}
+            <button
+              type="button"
+              onClick={handleScanDuplicates}
+              disabled={checkingDuplicates}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs mr-auto"
+              title="فحص الكتالوج وكشف المنتجات المتطابقة في كود المورد أو الصورة أو الاسم"
+            >
+              {checkingDuplicates ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-700" />
+              ) : (
+                <Copy className="w-3.5 h-3.5 text-amber-700" />
+              )}
+              <span>كشف المنتجات المتشابهة والمكررة</span>
             </button>
           </div>
 
