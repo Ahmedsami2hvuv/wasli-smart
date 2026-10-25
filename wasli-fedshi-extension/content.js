@@ -2334,6 +2334,174 @@
         }
       }
     });
+
+    // تحديث وإظهار الشريط العلوي لسحب منتجات الصفحة بالكامل
+    renderBatchToolbar();
+  }
+
+  // ========================================================
+  // الشريط العلوي التجميعي الذكي لسحب كل منتجات الصفحة بضغطة واحدة
+  // ========================================================
+  let isBatchRunning = false;
+  let batchShouldStop = false;
+  let currentBatchIndex = 0;
+  let batchQueue = [];
+
+  function renderBatchToolbar() {
+    if (isProductPage()) {
+      const tb = document.getElementById('wasli-batch-toolbar');
+      if (tb) tb.remove();
+      return;
+    }
+
+    const cards = findVisibleProductCards();
+    if (cards.length === 0) {
+      const tb = document.getElementById('wasli-batch-toolbar');
+      if (tb) tb.remove();
+      return;
+    }
+
+    const unimportedCards = cards.filter(c => c.code && !importedCodesSet.has(c.code));
+    const unimportedCount = unimportedCards.length;
+    let toolbar = document.getElementById('wasli-batch-toolbar');
+
+    if (!toolbar) {
+      toolbar = document.createElement('div');
+      toolbar.id = 'wasli-batch-toolbar';
+      toolbar.className = 'wasli-batch-toolbar';
+      document.body.appendChild(toolbar);
+    }
+
+    if (isBatchRunning) return; // عدم إعادة بناء المحتوى أثناء عمل الطابور
+
+    const isAllDone = unimportedCount === 0;
+
+    toolbar.innerHTML = `
+      <div class="wasli-batch-brand">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D4ED8" stroke-width="2.5">
+          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <path d="M16 10a4 4 0 0 1-8 0"></path>
+        </svg>
+        <span>وصلي الذكي</span>
+      </div>
+
+      <div class="wasli-batch-count">
+        المنتجات بالصفحة: <strong>${cards.length}</strong>
+        ${!isAllDone ? ` | غير مسحوبة: <strong style="color: #ea580c;">${unimportedCount}</strong>` : ''}
+      </div>
+
+      <button type="button" class="wasli-batch-btn ${isAllDone ? 'wasli-completed' : ''}" id="wasli-btn-batch-start" title="${isAllDone ? 'كافة المنتجات مسحوبة' : 'سحب كافة المنتجات غير المسحوبة في هذه الصفحة'}">
+        ${isAllDone ? `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>كافة منتجات الصفحة مسحوبة ✓</span>
+        ` : `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+          <span>سحب كل منتجات الصفحة (${unimportedCount})</span>
+        `}
+      </button>
+
+      <button type="button" class="wasli-batch-stop-btn" id="wasli-btn-batch-stop" title="إيقاف عملية السحب التلقائي">
+        إيقاف 🛑
+      </button>
+    `;
+
+    const startBtn = toolbar.querySelector('#wasli-btn-batch-start');
+    if (startBtn && !isAllDone) {
+      startBtn.onclick = (e) => {
+        e.preventDefault();
+        startBatchImport();
+      };
+    }
+
+    const stopBtn = toolbar.querySelector('#wasli-btn-batch-stop');
+    if (stopBtn) {
+      stopBtn.onclick = (e) => {
+        e.preventDefault();
+        stopBatchImport();
+      };
+    }
+  }
+
+  async function startBatchImport() {
+    if (isBatchRunning) return;
+
+    const cards = findVisibleProductCards();
+    const unimported = cards.filter(c => c.code && !importedCodesSet.has(c.code));
+
+    if (unimported.length === 0) {
+      showFloatingToast('جميع منتجات هذه الصفحة مسحوبة مسبقاً بالفعل!', 'warning');
+      return;
+    }
+
+    isBatchRunning = true;
+    batchShouldStop = false;
+    batchQueue = unimported.map(c => c.code);
+    currentBatchIndex = 0;
+
+    const toolbar = document.getElementById('wasli-batch-toolbar');
+    const startBtn = toolbar?.querySelector('.wasli-batch-btn');
+    const stopBtn = toolbar?.querySelector('.wasli-batch-stop-btn');
+
+    if (stopBtn) stopBtn.style.display = 'inline-flex';
+    if (startBtn) {
+      startBtn.classList.add('wasli-working');
+      startBtn.disabled = true;
+    }
+
+    showFloatingToast(`بدء السحب المتتابع لـ ${batchQueue.length} منتج بالخلفية...`, 'info');
+
+    for (let i = 0; i < batchQueue.length; i++) {
+      if (batchShouldStop) {
+        showFloatingToast('تم إيقاف السحب التلقائي بناءً على طلبك.', 'warning');
+        break;
+      }
+
+      currentBatchIndex = i + 1;
+      const code = batchQueue[i];
+
+      if (startBtn) {
+        startBtn.innerHTML = `
+          <span class="wasli-card-btn-spinner"></span>
+          <span>جاري سحب (${currentBatchIndex} من ${batchQueue.length})...</span>
+        `;
+      }
+
+      // تشغيل سحب هذا المنتج
+      triggerAutoImportForProduct(code);
+
+      // انتظار فاصل زمني آمن ومريح (2.5 ثانية) بين كل منتج لضمان اكتمال السحب دون ضغط على المتصفح
+      await new Promise(r => setTimeout(r, 2500));
+    }
+
+    isBatchRunning = false;
+    batchShouldStop = false;
+
+    if (stopBtn) stopBtn.style.display = 'none';
+    if (startBtn) {
+      startBtn.classList.remove('wasli-working');
+      startBtn.disabled = false;
+    }
+
+    renderBatchToolbar();
+  }
+
+  function stopBatchImport() {
+    batchShouldStop = true;
+    isBatchRunning = false;
+    const toolbar = document.getElementById('wasli-batch-toolbar');
+    const stopBtn = toolbar?.querySelector('.wasli-batch-stop-btn');
+    const startBtn = toolbar?.querySelector('.wasli-batch-btn');
+    if (stopBtn) stopBtn.style.display = 'none';
+    if (startBtn) {
+      startBtn.classList.remove('wasli-working');
+      startBtn.disabled = false;
+    }
+    renderBatchToolbar();
   }
 
   // ========================================================
@@ -2341,10 +2509,6 @@
   // ========================================================
   let debounceTimeout = null;
   function scheduleSafeCatalogUpdate() {
-    // التأكد من إزالة أي شريط تجميعي قديم إن وجد
-    const oldToolbar = document.getElementById('wasli-batch-toolbar');
-    if (oldToolbar) oldToolbar.remove();
-
     if (debounceTimeout) clearTimeout(debounceTimeout);
     debounceTimeout = setTimeout(() => {
       injectProductCardButtons();
