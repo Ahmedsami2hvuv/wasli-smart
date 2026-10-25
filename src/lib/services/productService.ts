@@ -46,11 +46,20 @@ function mapDbProductToModel(item: any): Product {
 
   const resolveImage = (im: any): string => {
     if (!im) return '';
-    if (typeof im === 'string') return im;
+    if (typeof im === 'string') {
+      if (im.includes('fedshi.com') || im.includes('mojod.app')) {
+        return `/api/images/proxy?url=${encodeURIComponent(im)}`;
+      }
+      return im;
+    }
     if (im.telegram_file_id) {
       return `/api/images/proxy?fileId=${encodeURIComponent(im.telegram_file_id)}`;
     }
-    return im.local_url || im.localUrl || im.image_url || '';
+    const raw = im.local_url || im.localUrl || im.image_url || '';
+    if (typeof raw === 'string' && (raw.includes('fedshi.com') || raw.includes('mojod.app'))) {
+      return `/api/images/proxy?url=${encodeURIComponent(raw)}`;
+    }
+    return raw;
   };
 
   const sortedImages = Array.isArray(item.images)

@@ -4,25 +4,50 @@ import { getTelegramFileStream } from '@/lib/telegram/vault';
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const fileId = searchParams.get('fileId');
+  const externalUrl = searchParams.get('url');
 
-  if (!fileId) {
-    return new NextResponse('معرّف الصورة مفقود', { status: 400 });
+  // 1. إذا كان الطلب لمعرّف ملف تيليجرام
+  if (fileId) {
+    try {
+      const { buffer, contentType } = await getTelegramFileStream(fileId);
+
+      return new Response(new Uint8Array(buffer), {
+        status: 200,
+        headers: {
+          'Content-Type': contentType || 'image/jpeg',
+          'Content-Disposition': 'inline', // إجبار المتصفح على عرض الصورة بداخله كصورة مباشرة ومنع تنزيلها كملف
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          'X-Content-Type-Options': 'nosniff',
+        },
+      });
+    } catch (error: any) {
+      console.error('خطأ في جلب صورة تيليجرام الوسيطة:', error);
+      return new NextResponse('تعذر تحميل الصورة المطلوبة', { status: 502 });
+    }
   }
 
-  try {
-    const { buffer, contentType } = await getTelegramFileStream(fileId);
-
-    return new Response(new Uint8Array(buffer), {
-      status: 200,
-      headers: {
-        'Content-Type': contentType || 'image/jpeg',
-        'Content-Disposition': 'inline', // إجبار المتصفح على عرض الصورة بداخله كصورة مباشرة ومنع تنزيلها كملف
-        'Cache-Control': 'public, max-age=31536000, immutable',
-        'X-Content-Type-Options': 'nosniff',
-      },
-    });
-  } catch (error: any) {
-    console.error('خطأ في جلب صورة تيليجرام الوسيطة:', error);
-    return new NextResponse('تعذر تحميل الصورة المطلوبة', { status: 502 });
+  // 2. إذا كان الطلب لرابط وسيط محمي (لإخفاء روابط فدشي القديمة)
+  if (externalUrl && (externalUrl.startsWith('http://') || externalUrl.startsWith('https://'))) {
+    try {
+      const res = await fetch(externalUrl, { signal: AbortSignal.timeout(10000) });
+      if (!res.ok) {
+        return new NextResponse('تعذر جلب الصورة', { status: 404 });
+      }
+      const arrayBuffer = await res.arrayBuffer();
+      return new Response(new Uint8Array(arrayBuffer), {
+        status: 200,
+        headers: {
+          'Content-Type': res.headers.get('content-type') || 'image/jpeg',
+          'Content-Disposition': 'inline',
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          'X-Content-Type-Options': 'nosniff',
+        },
+      });
+    } catch (proxyErr) {
+      console.error('خطأ في جلب الصورة الوسيطة:', proxyErr);
+      return new NextResponse('تعذر جلب الصورة', { status: 502 });
+    }
   }
+
+  return new NextResponse('معرّف الصورة مفقود', { status: 400 });
 }
