@@ -1712,10 +1712,16 @@ export default function AdminProductsPage() {
                       const isAlreadyImported = products.some(
                         p => String(p.supplierCode).trim() === String(idNum).trim()
                       );
-                      const rawPrice = Number(item.price) || 0;
-                      // سعر الجملة المقترح للتاجر
-                      const wholesalePrice = rawPrice > 0 ? rawPrice : 10000;
-                      const supplierCost = Math.round(wholesalePrice * 0.7);
+                      const supplierCost = Number(item.price) || 0;
+                      // سعر جملة وصلي للتاجر = أقل سعر مسموح للبيع من موجود
+                      const wholesalePrice = (item.lowPrice && Number(item.lowPrice) > supplierCost)
+                        ? Number(item.lowPrice)
+                        : (supplierCost > 0 ? supplierCost + 3000 : 10000);
+                      // أعلى سعر مسموح لبيع الزبون
+                      const maxCustomerPrice = (item.highPrice && Number(item.highPrice) >= wholesalePrice)
+                        ? Number(item.highPrice)
+                        : (wholesalePrice + 13000);
+                      const platformProfit = Math.max(0, wholesalePrice - supplierCost);
 
                       // استخراج أول صورة بدقة
                       const itemImg = Array.isArray(item.img) 
@@ -1790,12 +1796,20 @@ export default function AdminProductsPage() {
 
                             <div className="pt-2 border-t border-slate-100 space-y-1 text-[11px]">
                               <div className="flex items-center justify-between text-slate-500">
-                                <span>سعر المورد:</span>
-                                <span className="font-semibold">{supplierCost.toLocaleString('ar-IQ')} د.ع</span>
+                                <span>تكلفة المورد:</span>
+                                <span className="font-semibold text-slate-700">{supplierCost.toLocaleString('ar-IQ')} د.ع</span>
                               </div>
                               <div className="flex items-center justify-between font-black text-purple-900">
                                 <span>جملة التاجر:</span>
                                 <span>{wholesalePrice.toLocaleString('ar-IQ')} د.ع</span>
+                              </div>
+                              <div className="flex items-center justify-between text-[10px]">
+                                <span className="text-emerald-700 font-bold">ربح المنصة:</span>
+                                <span className="font-black text-emerald-600">+{platformProfit.toLocaleString('ar-IQ')} د.ع</span>
+                              </div>
+                              <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                                <span>سقف بيع الزبون:</span>
+                                <span>حتى {maxCustomerPrice.toLocaleString('ar-IQ')} د.ع</span>
                               </div>
                             </div>
                           </div>

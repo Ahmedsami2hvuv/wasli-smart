@@ -60,4 +60,29 @@ document.addEventListener('DOMContentLoaded', () => {
       testBtn.textContent = 'فحص الاتصال';
     }
   });
+
+  // تصفير ومزامنة ذاكرة المنتجات المسحوبة كلياً
+  const clearMemoryBtn = document.getElementById('clearMemoryBtn');
+  if (clearMemoryBtn) {
+    clearMemoryBtn.addEventListener('click', () => {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs && tabs[0] && tabs[0].id) {
+          chrome.scripting.executeScript({
+            target: { tabId: tabs[0].id },
+            func: () => {
+              try {
+                localStorage.removeItem('wasli_imported_codes');
+                sessionStorage.removeItem('wasli_imported_codes');
+              } catch (e) {}
+              location.reload();
+            }
+          }, () => {
+            showAlert('تم تصفير ذاكرة المنتجات وتحديث الصفحة بنجاح!', true);
+          });
+        } else {
+          showAlert('تم تصفير الذاكرة!', true);
+        }
+      });
+    });
+  }
 });

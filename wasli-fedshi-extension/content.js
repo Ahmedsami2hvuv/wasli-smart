@@ -625,24 +625,27 @@
         }
       }
 
-      // 4. تطبيق معادلة التسعير المطلوبة لمنصة وصلي:
-      // سعر جملة وصلي للتاجر = إذا كان أقل سعر حدده المورد أعلى من تكلفة الجملة نأخذه، وإلا نضيف هامش ربح منصة أدنى 3000 د.ع
+      // 4. تطبيق معادلة التسعير الرسمية الدقيقة لمنصة موجود:
+      // wholesaleCost: تكلفة المورد بالجملة (مثال: 6,000 د.ع)
+      // lowPrice: أقل سعر مسموح للبيع = سعر جملة وصلي للتاجر (مثال: 12,000 د.ع)
+      // highPrice: أعلى سعر مسموح للبيع = سقف بيع الزبون (مثال: 25,000 د.ع)
       let wasliWholesale = 0;
       if (lowPrice && lowPrice > wholesaleCost) {
         wasliWholesale = lowPrice;
       } else if (wholesaleCost > 0) {
         wasliWholesale = wholesaleCost + 3000;
+      } else {
+        wasliWholesale = 10000;
       }
 
       const wasliProfit = wholesaleCost > 0 ? Math.max(0, wasliWholesale - wholesaleCost) : 0;
-      const wasliMinPrice = wasliWholesale + 5000;
-      const wasliMaxPrice = highPrice && highPrice > wasliMinPrice ? highPrice : (wasliMinPrice + 15000);
-      let defaultStorePrice = wasliMinPrice;
-      if (wasliMaxPrice >= wasliWholesale + 10000) {
-        defaultStorePrice = wasliWholesale + 10000;
-      } else {
-        defaultStorePrice = Math.round(((wasliMinPrice + wasliMaxPrice) / 2) / 1000) * 1000;
-      }
+      const wasliMinPrice = wasliWholesale; // أقل سعر مسموح لبيع الزبون
+      const wasliMaxPrice = (highPrice && highPrice >= wasliWholesale) ? highPrice : (wasliWholesale + 13000); // سقف البيع الرسمي
+
+      // السعر الافتراضي للزبون (في المنتصف وبشرط عدم تجاوز سقف موجود إطلاقاً)
+      let defaultStorePrice = Math.round(((wasliWholesale + wasliMaxPrice) / 2) / 1000) * 1000;
+      if (defaultStorePrice > wasliMaxPrice) defaultStorePrice = wasliMaxPrice;
+      if (defaultStorePrice < wasliMinPrice) defaultStorePrice = wasliMinPrice;
 
       // 5. استخراج كافة صور المنتج
       const images = [];
@@ -832,7 +835,7 @@
   }
 
   // ========================================================
-  // إدارة قائمة المعرفات المسحوبة محلياً ودائماً لمنع التكرار
+  // إدارة قائمة المعرفات المسحوبة محلياً ودائماً لمنع التكرار مع المزامنة الحية
   // ========================================================
   const importedCodesSet = new Set();
   try {
@@ -842,6 +845,70 @@
       if (c) importedCodesSet.add(c);
     });
   } catch (e) {}
+
+  function getCurrentProductCode() {
+    if (window.location.hostname.includes('mojod.app')) {
+      const pUrl = new URLSearchParams(window.location.search);
+      return (pUrl.get('id') || '').trim();
+    }
+    const pathParts = window.location.pathname.split('/').filter(Boolean);
+    return pathParts[pathParts.length - 1] || '';
+  }
+
+  // مزامنة فورية مع الخادم الحي لتحديث قائمة المنتجات المسحوبة بدقة وحذف ما تم مسحه
+  function syncImportedCodesWithServer() {
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+      const targetUrl = wasliServerUrl.trim().replace(/\/+$/, '') + '/api/products';
+      chrome.runtime.sendMessage(
+        { action: 'fetchUrl', url: targetUrl },
+        (res) => {
+          if (!chrome.runtime.lastError && res && res.result && res.result.products) {
+            const activeCodes = new Set();
+            res.result.products.forEach(p => {
+              const c = p.supplierCode || p.id;
+              if (c) activeCodes.add(String(c).trim());
+            });
+            // إذا كانت المنصة فارغة أو المنتجات تغيرت، نحدث الذاكرة المحلية فوراً
+            importedCodesSet.clear();
+            activeCodes.forEach(c => importedCodesSet.add(c));
+            try {
+              localStorage.setItem('wasli_imported_codes', JSON.stringify(Array.from(activeCodes)));
+              sessionStorage.removeItem('wasli_imported_codes');
+            } catch (e) {}
+
+            // تحديث حالة الزر في الصفحة إذا كان مفتوحاً
+            const currentCode = getCurrentProductCode();
+            if (currentCode && !importedCodesSet.has(currentCode)) {
+              const floatingBtn = document.getElementById('wasli-floating-smart-btn');
+              if (floatingBtn) resetFloatingButtonToImport(floatingBtn);
+            }
+          }
+        }
+      );
+    }
+  }
+  // تشغيل المزامنة تلقائياً
+  setTimeout(syncImportedCodesWithServer, 500);
+
+  function resetFloatingButtonToImport(btn) {
+    if (!btn) return;
+    btn.classList.remove('wasli-already-imported');
+    const contentBox = btn.querySelector('.wasli-btn-content-box');
+    const inner = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      <div class="wasli-btn-text-group">
+        <span class="wasli-btn-main-text">استيراد ذكي إلى وصلي</span>
+        <span class="wasli-btn-sub-text">سحب وتجهيز ونشر فوري</span>
+      </div>
+    `;
+    if (contentBox) contentBox.innerHTML = inner;
+    else btn.innerHTML = `<div class="wasli-btn-content-box">${inner}</div>`;
+    btn.title = 'انقر لاستيراد هذا المنتج مباشرة إلى منصة وصلي ونشره في تليغرام';
+  }
 
   function updateFloatingButtonToImported(btn, productInfo) {
     if (!btn) return;
@@ -1109,16 +1176,11 @@
     }
   }
 
-  // فحص حالة استيراد المنتج (محلياً وفورياً من خادم وصلي)
+  // فحص حالة استيراد المنتج (مع التأكيد الحي الحاسم من خادم وصلي)
   async function checkIfProductImported(code) {
     if (!code) return { exists: false };
 
-    // 1. الفحص الفوري من الذاكرة المحلية (0ms)
-    if (importedCodesSet.has(code)) {
-      return { exists: true, source: 'local' };
-    }
-
-    // 2. الفحص الحي من خادم وصلي عبر Service Worker لتجاوز أي قيود حظر
+    // الفحص الحي من خادم وصلي عبر Service Worker
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
       try {
         const targetUrl = wasliServerUrl.trim().replace(/\/+$/, '') + '/api/products/import-fedshi';
@@ -1138,10 +1200,29 @@
         if (bgRes && bgRes.exists) {
           markProductAsImported(code);
           return { exists: true, product: bgRes.product, source: 'server' };
+        } else {
+          // المنتج غير موجود بالخادم (حُذف من وصلي): إزالته فوراً من الذاكرة المحلية والـ Set
+          importedCodesSet.delete(code);
+          try {
+            const savedLocal = JSON.parse(localStorage.getItem('wasli_imported_codes') || '[]');
+            const filtered = savedLocal.filter(c => c !== code);
+            localStorage.setItem('wasli_imported_codes', JSON.stringify(filtered));
+            sessionStorage.removeItem('wasli_imported_codes');
+          } catch (e) {}
+
+          const floatingBtn = document.getElementById('wasli-floating-smart-btn');
+          if (floatingBtn) resetFloatingButtonToImport(floatingBtn);
+
+          return { exists: false };
         }
       } catch (e) {
         console.warn('تعذر فحص وجود المنتج من الخادم:', e);
       }
+    }
+
+    // fallback إذا لم يكن هناك إنترنت أو تعذر الاتصال بالخادم
+    if (importedCodesSet.has(code)) {
+      return { exists: true, source: 'local' };
     }
 
     return { exists: false };
