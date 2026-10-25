@@ -464,58 +464,8 @@ export async function publishProductToTelegramChannel(product: {
       .filter(img => typeof img === 'string' && (img.startsWith('http://') || img.startsWith('https://')))
       .slice(0, 10);
 
-    // 1. إذا كان لدينا أكثر من صورة: تنزيلها وضغطها WebP وإرسالها كألبوم صور مجمع (sendMediaGroup)
+    // 1. إذا كان لدينا أكثر من صورة: إرسالها فوراً كألبوم مجمع بروابطها المباشرة فائقة السرعة (0.3 ثانية)
     if (validUrls.length > 1) {
-      try {
-        const formData = new FormData();
-        formData.append('chat_id', String(channelId));
-
-        const mediaMeta: Array<{ type: string; media: string; caption?: string }> = [];
-        let addedCount = 0;
-
-        for (let i = 0; i < validUrls.length; i++) {
-          const webpBuffer = await fetchAndOptimizeImage(validUrls[i]);
-          if (webpBuffer) {
-            const fieldName = `photo_${addedCount}`;
-            const blob = new Blob([new Uint8Array(webpBuffer)], { type: 'image/webp' });
-            formData.append(fieldName, blob, `product_${addedCount}.webp`);
-
-            mediaMeta.push({
-              type: 'photo',
-              media: `attach://${fieldName}`,
-              caption: addedCount === 0 ? caption.slice(0, 1024) : undefined,
-            });
-            addedCount++;
-          }
-        }
-
-        if (mediaMeta.length > 1) {
-          formData.append('media', JSON.stringify(mediaMeta));
-
-          const groupRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMediaGroup`, {
-            method: 'POST',
-            body: formData,
-          });
-
-          const groupData = await groupRes.json();
-          if (groupData.ok) {
-            await sendExtraPromoIfNeeded();
-            const proxyUrls = extractProxyUrlsFromTelegramResult(groupData.result);
-            return {
-              success: true,
-              messageId: Array.isArray(groupData.result) ? groupData.result[0]?.message_id : undefined,
-              proxyUrls,
-              primaryProxyUrl: proxyUrls[0],
-            };
-          } else {
-            console.warn('تعذر إرسال ألبوم الصور المضغوط كـ FormData، جاري التجربة بروابط الصور:', groupData.description);
-          }
-        }
-      } catch (albumErr) {
-        console.warn('خطأ في معالجة ألبوم الصور المضغوط:', albumErr);
-      }
-
-      // بديل إضافي: إرسال ألبوم الصور بروابطها المباشرة
       try {
         const mediaUrls = validUrls.map((url, idx) => ({
           type: 'photo',
@@ -542,61 +492,41 @@ export async function publishProductToTelegramChannel(product: {
             proxyUrls,
             primaryProxyUrl: proxyUrls[0],
           };
+        } else {
+          console.warn('تعذر إرسال ألبوم الصور بروابطه المباشرة، جاري المحاولة بالبديل:', groupUrlData.description);
         }
       } catch (groupFallbackErr) {
-        console.warn('تعذر إرسال ألبوم الروابط:', groupFallbackErr);
+        console.warn('خطأ في إرسال ألبوم تليغرام المباشر:', groupFallbackErr);
       }
     }
 
-    // 2. إذا كانت صورة واحدة فقط: ضغطها بصيغة WebP وإرسالها
+    // 2. إذا كانت صورة واحدة فقط (أو كبديل سريع): إرسالها برابطها المباشر في أجزاء من الثانية
     const singleImageUrl = validUrls[0] || product.image;
     if (singleImageUrl && (singleImageUrl.startsWith('http://') || singleImageUrl.startsWith('https://'))) {
-      const singleWebp = await fetchAndOptimizeImage(singleImageUrl);
-      if (singleWebp) {
-        const formData = new FormData();
-        formData.append('chat_id', String(channelId));
-        formData.append('caption', caption.slice(0, 1024));
-        formData.append('photo', new Blob([new Uint8Array(singleWebp)], { type: 'image/webp' }), 'product.webp');
-
-        const singleRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+      try {
+        const photoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
           method: 'POST',
-          body: formData,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: channelId,
+            photo: singleImageUrl,
+            caption: caption.slice(0, 1024),
+          }),
         });
 
-        const singleData = await singleRes.json();
-        if (singleData.ok) {
+        const photoData = await photoRes.json();
+        if (photoData.ok) {
           await sendExtraPromoIfNeeded();
-          const proxyUrls = extractProxyUrlsFromTelegramResult(singleData.result);
+          const proxyUrls = extractProxyUrlsFromTelegramResult(photoData.result);
           return { 
             success: true, 
-            messageId: singleData.result?.message_id,
+            messageId: photoData.result?.message_id,
             proxyUrls,
             primaryProxyUrl: proxyUrls[0],
           };
         }
-      }
-
-      // بديل مباشر للصورة الواحدة
-      const photoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: channelId,
-          photo: singleImageUrl,
-          caption: caption.slice(0, 1024),
-        }),
-      });
-
-      const photoData = await photoRes.json();
-      if (photoData.ok) {
-        await sendExtraPromoIfNeeded();
-        const proxyUrls = extractProxyUrlsFromTelegramResult(photoData.result);
-        return { 
-          success: true, 
-          messageId: photoData.result?.message_id,
-          proxyUrls,
-          primaryProxyUrl: proxyUrls[0],
-        };
+      } catch (singleErr) {
+        console.warn('خطأ في إرسال الصورة الفردية المباشرة:', singleErr);
       }
     }
 

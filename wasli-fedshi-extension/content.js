@@ -1408,18 +1408,18 @@
   // المحرك الصامت والفوري للسحب التلقائي وإغلاق النافذة
   // ========================================================
   async function executeDirectAutoImportProcess(pageCode, isMojod) {
-    // مؤقت أمان حتمي لإغلاق التبويب بعد 12 ثانية حتى لا تبقى أي نافذة معلقة
+    // مؤقت أمان حتمي لإغلاق التبويب بعد 8 ثوانٍ كحد أقصى لمنع أي تعليق
     const safetyTimer = setTimeout(() => {
       safeChromeSendMessage({ action: 'closeMyTab', code: pageCode });
       try { window.close(); } catch (e) {}
-    }, 22000);
+    }, 8000);
 
     try {
-      showFloatingToast('جاري السحب التلقائي للبيانات...', 'loading');
+      showFloatingToast('جاري السحب الفوري للبيانات...', 'loading');
 
-      // انتظار جاهزية البيانات بمرونة حتى 35 محاولة بفاصل 250ms (حوالي 8.5 ثوانٍ)
+      // قراءة فائقة السرعة للبيانات بفاصل 80ms فقط (تكتمل غالباً في أول 100ms)
       let readyData = null;
-      for (let attempt = 0; attempt < 35; attempt++) {
+      for (let attempt = 0; attempt < 20; attempt++) {
         const d = isMojod ? await extractMojodProductDetails() : await extractFedshiProductDetails();
         if (d) {
           const hasTitle = Boolean(d.title && d.title !== '—' && d.title !== '...');
@@ -1429,7 +1429,7 @@
             break;
           }
         }
-        await new Promise(res => setTimeout(res, 250));
+        await new Promise(res => setTimeout(res, 80));
       }
 
       if (!readyData) {
@@ -1486,7 +1486,7 @@
       safeChromeSendMessage({ action: 'closeMyTab', code: pageCode });
       setTimeout(() => {
         try { window.close(); } catch (e) {}
-      }, 350);
+      }, 100);
     }
   }
 
@@ -2679,21 +2679,21 @@
       // تشغيل سحب هذا المنتج بتبويب فردي منعزل
       triggerAutoImportForProduct(code);
 
-      // انتظار استجابة السحب الذكية (بمجرد وصول إشعار النجاح ينتهي فوراً في 0 ثانية)
+      // انتظار استجابة السحب الذكية الفورية (بمجرد وصول إشعار النجاح ينتهي فوراً في 0 ثانية)
       const startWaitTime = Date.now();
-      while (Date.now() - startWaitTime < 10000) {
+      while (Date.now() - startWaitTime < 7000) {
         if (importedCodesSet.has(code)) {
           break;
         }
         if (batchShouldStop) break;
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 100));
       }
 
       // قفل المنتج وتثبيت الشارة الخضراء الدائمة بدون أي وميض
       markProductAsImported(code);
 
-      // استراحة خفيفة 300ms قبل التبويب التالي لمنع أي ضغط على المتصفح
-      await new Promise(r => setTimeout(r, 300));
+      // استراحة تنظيمية خفيفة 150ms قبل التبويب التالي
+      await new Promise(r => setTimeout(r, 150));
     }
 
     isBatchRunning = false;
