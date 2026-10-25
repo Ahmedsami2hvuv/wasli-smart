@@ -2389,16 +2389,26 @@
         if (seenCodes.has(code)) return;
         seenCodes.add(code);
 
-        // العثور على بطاقة المنتج الأنسب التي تحتضن الرابط والصورة
+        // العثور على بطاقة المنتج الفردية المنفصلة حصراً (التوقف فور الوصول للحاوية الجامعة)
         let cardEl = link;
         let curr = link;
-        for (let i = 0; i < 6; i++) {
-          if (!curr || curr === document.body) break;
-          // بطاقة المنتج تحتوي على صورة أو مؤشر سعر
-          if (curr.querySelector && (curr.querySelector('img') || curr.querySelector('[data-amount="true"]') || curr.textContent.includes('د.ع') || curr.textContent.includes('سعر الجملة'))) {
+        while (curr && curr !== document.body) {
+          const parent = curr.parentElement;
+          if (!parent || parent === document.body) break;
+
+          // إذا كان الأب يحتوي على أكثر من رابط منتج، نتوقف عند curr لأنه هو الكارت المنفصل
+          const siblingLinks = parent.querySelectorAll('a[href*="/products/"], a[href*="/product/"], a[href*="/p/"]');
+          if (siblingLinks.length > 1) {
             cardEl = curr;
+            break;
           }
-          curr = curr.parentElement;
+          cardEl = curr;
+          curr = parent;
+        }
+
+        // أمان حتمي: كارت المنتج لا يتجاوز عرضه 380px لمنع أي تمدد لحاوية الشبكة الكبيرة
+        if (cardEl && cardEl.offsetWidth > 380 && link) {
+          cardEl = link.closest('div') || link;
         }
 
         cards.push({
