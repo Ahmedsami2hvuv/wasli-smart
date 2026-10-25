@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Store, Product } from '@/types';
+import { ProtectedImage } from '@/components/store/ProtectedImage';
 
 // مكون الصورة الذكية التدريجية المتوافقة مع كاش المتصفح
 function ProgressiveProductImage({
@@ -47,17 +48,16 @@ function ProgressiveProductImage({
           <div className="w-5 h-5 border-2 border-slate-300 border-t-brand-600 rounded-full animate-spin opacity-40" />
         </div>
       )}
-      <img
+      <ProtectedImage
         src={src}
         alt={alt}
         loading={priority ? 'eager' : 'lazy'}
         decoding="async"
-        // @ts-ignore
-        fetchPriority={priority ? 'high' : 'low'}
         onLoad={() => setLoaded(true)}
         className={`w-full h-full object-cover group-hover:scale-105 transition-all duration-300 ${
           loaded ? 'opacity-100' : 'opacity-0'
         }`}
+        containerClassName="w-full h-full"
       />
     </div>
   );

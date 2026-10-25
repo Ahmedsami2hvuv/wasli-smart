@@ -375,12 +375,13 @@ function ProductDetailContent() {
                           : 'border-slate-200 hover:border-slate-400 opacity-80 hover:opacity-100'
                       }`}
                     >
-                      <img 
+                      <ProtectedImage 
                         src={imgUrl} 
                         alt={`صورة ${idx + 1}`} 
                         loading="lazy" 
                         decoding="async"
                         className="w-full h-full object-cover" 
+                        containerClassName="w-full h-full"
                       />
                     </button>
                   );

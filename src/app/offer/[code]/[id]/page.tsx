@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { IRAQ_GOVERNORATES } from '@/data/iraqCities';
 import { Product, Store } from '@/types';
+import { ProtectedImage } from '@/components/store/ProtectedImage';
 
 // بطاقة صورة بنمط الزجاج الأبيض النقي ثلاثي الأبعاد أثناء التمرير
 function WhiteGlass3DCard({
@@ -144,10 +145,11 @@ function WhiteGlass3DCard({
           style={{ transform: 'translateZ(25px)' }}
           onClick={() => onOpenZoom(image)}
         >
-          <img
+          <ProtectedImage
             src={image}
             alt={`${productTitle} - صورة ${index + 1}`}
             className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover/img:scale-104"
+            containerClassName="w-full h-full"
             loading="lazy"
           />
 
