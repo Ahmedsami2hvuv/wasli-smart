@@ -85,9 +85,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       name,
-      fedshiCode,
-      fedshiSku,
-      fedshiPrice,
       fedshiProfit,
       minSuggestedPrice,
       maxSuggestedPrice,
@@ -109,17 +106,20 @@ export async function POST(request: NextRequest) {
       supplierSource = 'fedshi',
     } = body;
 
-    if (!name || (!fedshiPrice && !customWholesale)) {
+    // استخراج موحد لكود المورد وتكلفته بأي تسمية مدعومة
+    const actualSupplierCode = String(body.fedshiCode || body.supplierCode || body.code || '').trim();
+    const actualSupplierSku = String(body.fedshiSku || body.supplierSku || body.sku || '').trim();
+    const supplierCost = Number(body.fedshiPrice || body.supplierPriceIqd || body.supplierPrice || 0);
+
+    if (!name || (!supplierCost && !customWholesale)) {
       return NextResponse.json(
-        { success: false, message: 'بيانات المنتج الأساسية (الاسم وسعر فدشي) مطلوبة.' },
+        { success: false, message: 'بيانات المنتج الأساسية (الاسم وسعر المنتج) مطلوبة.' },
         { 
           status: 400,
           headers: { 'Access-Control-Allow-Origin': '*' }
         }
       );
     }
-
-    const supplierCost = Number(fedshiPrice || 0);
 
     // تطبيق المعادلة المالية المعتمدة لمنصة وصلي:
     // 1. سعر جملة وصلي للتاجر = أقل سعر بيع حددته منصة فدشي (minSuggestedPrice)
@@ -183,8 +183,8 @@ export async function POST(request: NextRequest) {
       minPriceIqd: minPrice,
       maxPriceIqd: maxPrice,
       supplierPriceIqd: supplierCost,
-      supplierCode: fedshiCode || '',
-      supplierSku: fedshiSku || '',
+      supplierCode: actualSupplierCode,
+      supplierSku: actualSupplierSku,
       supplierSource: supplierSource || 'fedshi',
       colors: colors,
       variants: colors.map((c: any, idx: number) => ({

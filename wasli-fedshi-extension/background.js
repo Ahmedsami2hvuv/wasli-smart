@@ -45,10 +45,17 @@ if (chrome.contextMenus && chrome.contextMenus.onClicked) {
 // خلفية العمل لإضافة وصلي الذكية (Service Worker - Manifest V3)
 // تتولى إرسال الطلبات وتجاوز أي قيود CSP أو حظر تفرضه صفحة الويب المضيفة
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  // فتح تبويب خلفي صامت للسحب التلقائي
+  // فتح تبويب خلفي صامت للسحب التلقائي في نفس النافذة الحالية حصراً
   if (request.action === 'openAutoImportTab') {
     if (chrome.tabs && chrome.tabs.create) {
-      chrome.tabs.create({ url: request.url, active: false }, (newTab) => {
+      const createOpts = {
+        url: request.url,
+        active: false,
+      };
+      if (sender && sender.tab && sender.tab.windowId) {
+        createOpts.windowId = sender.tab.windowId;
+      }
+      chrome.tabs.create(createOpts, (newTab) => {
         sendResponse({ ok: true, tabId: newTab?.id });
       });
       return true;

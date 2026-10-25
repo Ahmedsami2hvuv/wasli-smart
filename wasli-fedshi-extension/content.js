@@ -1356,27 +1356,36 @@
 
         const payload = {
           name: productTitle,
-          category: readyData.category || 'عام',
-          subcategory: readyData.subcategory || '',
-          description: readyData.specifications || productTitle,
-          promoDescription: readyData.promoDescription || productTitle,
-          specifications: readyData.specifications || productTitle,
+          fedshiCode: pageCode,
+          supplierCode: pageCode,
+          fedshiSku: readyData.skuCode || pageCode,
+          supplierSku: readyData.skuCode || pageCode,
+          fedshiPrice: costPrice,
+          supplierPriceIqd: costPrice,
+          fedshiProfit: readyData.fedshiProfit || 0,
+          minSuggestedPrice: readyData.minSuggested || minPrice,
+          maxSuggestedPrice: maxPrice,
           wholesalePriceIqd: wholesale,
-          platformPriceIqd: storePrice,
+          platformPriceIqd: wholesale,
+          defaultPriceIqd: storePrice,
           minPriceIqd: minPrice,
           maxPriceIqd: maxPrice,
-          supplierPriceIqd: costPrice,
-          supplierCode: pageCode,
-          supplierSource: isMojod ? 'mojod' : 'fedshi',
-          image: (readyData.images && readyData.images[0]) || '',
-          images: readyData.images || [],
+          category: readyData.category || 'عام',
+          subcategory: readyData.subcategory || '',
+          description: readyData.specifications || readyData.promoDescription || productTitle,
+          promoDescription: readyData.promoDescription || '',
+          specifications: readyData.specifications || '',
           colors: readyData.colors || [],
-          stockQuantity: stock,
+          images: readyData.images || [],
           videoUrl: readyData.videoUrl || '',
+          stockQuantity: stock,
+          supplierSource: isMojod ? 'mojod' : 'fedshi',
         };
 
-        await sendProductPayloadToWasli(payload);
-        markProductAsImported(pageCode);
+        const importRes = await sendProductPayloadToWasli(payload);
+        if (importRes && importRes.success) {
+          markProductAsImported(pageCode);
+        }
       }
     } catch (err) {
       console.warn('خطأ في السحب التلقائي الصامت:', err);
@@ -2341,10 +2350,10 @@
       url: targetUrl,
       code: code,
     }, (res) => {
-      // احتياط في حال عدم عمل Service Worker
+      // احتياط في حال عدم عمل Service Worker يفتح كتاب عادي بنفس المتصفح
       if (!res || !res.ok) {
         try {
-          window.open(targetUrl, `wasli_auto_${code}`, 'width=500,height=500,left=2500,top=2500');
+          window.open(targetUrl, '_blank');
         } catch (e) {}
       }
     });
