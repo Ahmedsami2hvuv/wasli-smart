@@ -445,28 +445,42 @@ export async function updateSubcategory(
 }
 
 /**
- * البحث عن قسم وفرع أو إنشاؤهما تلقائياً إذا لم يكونا موجودين
+ * البحث عن قسم وفرع أو ربطهما بالقسم المعتمد المناسب لمنع التكرار العشوائي للأقسام
  */
 export async function findOrCreateCategoryAndSubcategory(
   categoryName: string, 
   subcategoryName?: string
 ): Promise<{ categoryId: string; categoryName: string; subcategoryId?: string; subcategoryName?: string }> {
   const categories = await getCategoriesWithSubcategories();
-  const cleanCatName = (categoryName || 'عام').trim();
+  const cleanCatName = (categoryName || 'عام').trim().toLowerCase();
   
-  let targetCat = categories.find(c => c.name.toLowerCase() === cleanCatName.toLowerCase());
-  
+  // 1. البحث عن تطابق مباشر في أسماء الأقسام الحالية
+  let targetCat = categories.find(c => c.name.toLowerCase() === cleanCatName);
+
+  // 2. إذا لم يتطابق الاسم تماماً، نقوم بمطابقته بذكاء مع الأقسام الرسمية المعتمدة لمنع تكرار إنشاء الأقسام
   if (!targetCat) {
-    targetCat = await createMainCategory({
-      name: cleanCatName,
-      description: `قسم ${cleanCatName} المنشأ تلقائياً للمنتجات المستوردة`,
-      iconName: 'Package',
-    });
+    if (cleanCatName.includes('منزل') || cleanCatName.includes('أجهز') || cleanCatName.includes('اجهز') || cleanCatName.includes('مطبخ') || cleanCatName.includes('home')) {
+      targetCat = categories.find(c => c.id === '11111111-1111-1111-1111-111111111104' || c.id === 'cat-home' || c.name.includes('منزل'));
+    } else if (cleanCatName.includes('إلكترون') || cleanCatName.includes('الكترون') || cleanCatName.includes('هاتف') || cleanCatName.includes('سماع') || cleanCatName.includes('تقني')) {
+      targetCat = categories.find(c => c.id === '11111111-1111-1111-1111-111111111101' || c.id === 'cat-electronics' || c.name.includes('إلكترون'));
+    } else if (cleanCatName.includes('أزياء') || cleanCatName.includes('ازياء') || cleanCatName.includes('ملابس') || cleanCatName.includes('حذاء') || cleanCatName.includes('أحذية') || cleanCatName.includes('حقائب')) {
+      targetCat = categories.find(c => c.id === '11111111-1111-1111-1111-111111111102' || c.id === 'cat-fashion' || c.name.includes('أزياء'));
+    } else if (cleanCatName.includes('عطور') || cleanCatName.includes('تجميل') || cleanCatName.includes('عناية') || cleanCatName.includes('بشرة') || cleanCatName.includes('مكياج')) {
+      targetCat = categories.find(c => c.id === '11111111-1111-1111-1111-111111111103' || c.id === 'cat-perfumes' || c.name.includes('عطور'));
+    } else if (cleanCatName.includes('ساعة') || cleanCatName.includes('ساعات') || cleanCatName.includes('نظارة') || cleanCatName.includes('هدايا')) {
+      targetCat = categories.find(c => c.id === 'cat-watches-gifts' || c.name.includes('ساعات'));
+    }
+  }
+
+  // 3. كخيار أخير: استخدام أول قسم معتمد بدلاً من إنشاء أقسام مكررة جديدة
+  if (!targetCat) {
+    targetCat = categories[0] || initialCategories[0];
   }
 
   let subId: string | undefined = undefined;
   let subName: string | undefined = undefined;
 
+  // ربط الفرع إن وجد داخل القسم المعتمد
   if (subcategoryName && subcategoryName.trim()) {
     const cleanSubName = subcategoryName.trim();
     const existingSub = targetCat.subcategories?.find(s => s.name.toLowerCase() === cleanSubName.toLowerCase());
