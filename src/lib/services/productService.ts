@@ -44,6 +44,26 @@ function mapDbProductToModel(item: any): Product {
   const minP = Number(item.min_price) || platform;
   const maxP = Number(item.max_price) || Math.round(platform * 1.6);
 
+  const resolveImage = (im: any): string => {
+    if (!im) return '';
+    if (typeof im === 'string') return im;
+    if (im.telegram_file_id) {
+      return `/api/images/proxy?fileId=${encodeURIComponent(im.telegram_file_id)}`;
+    }
+    return im.local_url || im.localUrl || im.image_url || '';
+  };
+
+  const sortedImages = Array.isArray(item.images)
+    ? [...item.images].sort((a, b) => {
+        if (a.is_primary && !b.is_primary) return -1;
+        if (!a.is_primary && b.is_primary) return 1;
+        return (a.sort_order || 0) - (b.sort_order || 0);
+      })
+    : [];
+
+  const primaryImg = sortedImages.length > 0 ? resolveImage(sortedImages[0]) : (item.image || '/placeholder-product.svg');
+  const allImages = sortedImages.length > 0 ? sortedImages.map(resolveImage) : (item.images?.map(resolveImage) || []);
+
   return {
     id: item.id,
     name: item.title || item.name || '',
@@ -59,7 +79,7 @@ function mapDbProductToModel(item: any): Product {
     isStockTracked: item.is_stock_tracked,
     isAvailable: item.is_available,
     status: item.status || 'published',
-    image: item.images?.[0]?.local_url || '/placeholder-product.svg',
+    image: primaryImg || '/placeholder-product.svg',
     category: item.category?.name || 'عام',
     categoryId: item.category_id,
     promoDescription: (item.description || '').replace(/<!--WASLI_SUPPLIER_PRICE:\d+-->/g, '').trim(),
@@ -70,7 +90,7 @@ function mapDbProductToModel(item: any): Product {
       return wholesale;
     })(),
     supplierCode: item.brand || item.metadata?.supplierCode,
-    images: item.images?.map((im: any) => im.local_url) || [],
+    images: allImages,
   };
 }
 

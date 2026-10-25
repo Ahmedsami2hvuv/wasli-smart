@@ -814,16 +814,26 @@ export default function AdminProductsPage() {
         if (cachedStr) {
           const cached = JSON.parse(cachedStr);
           if (cached.products && Array.isArray(cached.products)) {
-            setProducts(cached.products);
-            setTotalPages(cached.totalPages || 1);
-            setTotalProductsCount(cached.total || cached.products.length);
-            setCurrentPage(page);
-            setViewLimit(limit);
-            setIsFromCache(true);
-            setLoading(false);
-            // إذا كان الكاش حديثاً (أقل من 5 دقائق)، نكتفي به لتوفير الاستهلاك التام
-            if (Date.now() - (cached.timestamp || 0) < 5 * 60 * 1000) {
-              return;
+            // التحقق مما إذا كان الكاش يحتوي على روابط فدشي قديمة لتجاوزه وتحديثه تلقائياً
+            const hasOldFedshiLinks = cached.products.some((p: any) => 
+              typeof p.image === 'string' && p.image.includes('fedshi.com')
+            );
+
+            if (hasOldFedshiLinks) {
+              // مسح الكاش القديم قسرياً ليتم جلب الروابط المحدثة لخزانة وصلي
+              localStorage.removeItem(cacheKey);
+            } else {
+              setProducts(cached.products);
+              setTotalPages(cached.totalPages || 1);
+              setTotalProductsCount(cached.total || cached.products.length);
+              setCurrentPage(page);
+              setViewLimit(limit);
+              setIsFromCache(true);
+              setLoading(false);
+              // إذا كان الكاش حديثاً (أقل من دقيقتين)، نكتفي به لتوفير الاستهلاك
+              if (Date.now() - (cached.timestamp || 0) < 2 * 60 * 1000) {
+                return;
+              }
             }
           }
         }
