@@ -30,7 +30,8 @@ import {
   MapPin,
   Calendar,
   FileText,
-  Check
+  Check,
+  AlertTriangle
 } from 'lucide-react';
 import Link from 'next/link';
 import { Order, OrderStatus, Store as StoreType } from '@/types';
@@ -129,7 +130,16 @@ export default function AdminDashboardPage() {
   const totalPlatformProfit = orders.reduce((sum, o) => sum + (o.status !== 'cancelled' ? o.platformProfit : 0), 0);
   const totalMerchantProfit = orders.reduce((sum, o) => sum + (o.status !== 'cancelled' ? o.merchantProfit : 0), 0);
 
-  const filteredOrders = orders.filter(o => filterStatus === 'all' || o.status === filterStatus);
+  // الطلبات التي يكون فيها ربح المنصة أقل من 3,000 د.ع
+  const lowProfitOrders = orders.filter(o => o.status !== 'cancelled' && (Number(o.platformProfit) || 0) < 3000);
+
+  const filteredOrders = orders.filter(o => {
+    if (filterStatus === 'low_platform_profit') {
+      return (Number(o.platformProfit) || 0) < 3000 && o.status !== 'cancelled';
+    }
+    if (filterStatus === 'all') return true;
+    return o.status === filterStatus;
+  });
 
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8 pb-24">
@@ -315,6 +325,9 @@ export default function AdminDashboardPage() {
                 className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 outline-none bg-slate-50"
               >
                 <option value="all">كافة الطلبات ({orders.length})</option>
+                <option value="low_platform_profit" className="text-amber-800 font-bold bg-amber-50">
+                  ⚠️ ربح المنصة أقل من 3,000 د.ع ({lowProfitOrders.length})
+                </option>
                 <option value="new">طلبات جديدة</option>
                 <option value="reviewed">تمت المراجعة</option>
                 <option value="processing">قيد التجهيز</option>
@@ -324,6 +337,34 @@ export default function AdminDashboardPage() {
               </select>
             </div>
           </div>
+
+          {/* شريط تنبيه الطلبات التي ربح المنصة فيها أقل من 3000 د.ع */}
+          {lowProfitOrders.length > 0 && (
+            <div className="mb-4 p-3.5 bg-amber-50/90 border border-amber-200/90 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                </div>
+                <div>
+                  <div className="font-black text-slate-800">تنبيه هام لهامش ربح المنصة</div>
+                  <div className="text-[11px] text-amber-800">
+                    يوجد <strong className="font-bold underline">{lowProfitOrders.length}</strong> طلبات ربح المنصة فيها أقل من 3,000 د.ع.
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFilterStatus(filterStatus === 'low_platform_profit' ? 'all' : 'low_platform_profit')}
+                className={`px-3.5 py-2 rounded-xl font-bold transition-all text-xs cursor-pointer shadow-2xs ${
+                  filterStatus === 'low_platform_profit'
+                    ? 'bg-amber-700 text-white hover:bg-amber-800'
+                    : 'bg-white border border-amber-300 text-amber-900 hover:bg-amber-100'
+                }`}
+              >
+                {filterStatus === 'low_platform_profit' ? 'عرض كافة الطلبات' : 'عرض الطلبات منخفضة الربح فقط'}
+              </button>
+            </div>
+          )}
 
           {loading ? (
             <div className="text-center py-12">
@@ -384,8 +425,17 @@ export default function AdminDashboardPage() {
                       <td className="py-3.5 px-3 font-bold text-emerald-600">
                         +{order.merchantProfit.toLocaleString('ar-IQ')} د.ع
                       </td>
-                      <td className="py-3.5 px-3 font-bold text-brand-800">
-                        +{order.platformProfit.toLocaleString('ar-IQ')} د.ع
+                      <td className="py-3.5 px-3">
+                        {order.platformProfit < 3000 && order.status !== 'cancelled' ? (
+                          <div className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-300 px-2 py-1 rounded-lg font-black text-xs shadow-2xs" title="تنبيه: ربح المنصة من هذا الطلب أقل من 3,000 د.ع">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span>+{order.platformProfit.toLocaleString('ar-IQ')} د.ع</span>
+                          </div>
+                        ) : (
+                          <span className="font-bold text-brand-800">
+                            +{order.platformProfit.toLocaleString('ar-IQ')} د.ع
+                          </span>
+                        )}
                       </td>
                       <td className="py-3.5 px-3">
                         <select
@@ -828,6 +878,21 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
+            {/* تنبيه ربح المنصة المنخفض إن وجد */}
+            {selectedOrder.platformProfit < 3000 && selectedOrder.status !== 'cancelled' && (
+              <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-2xl flex items-center gap-3 text-xs text-amber-900 shadow-2xs">
+                <div className="w-8 h-8 rounded-xl bg-amber-200/80 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-4 h-4 text-amber-700" />
+                </div>
+                <div>
+                  <div className="font-bold text-amber-950">تنبيه لمدير المنصة: هامش الربح منخفض</div>
+                  <div className="text-[11px] text-amber-800">
+                    صافي ربح المنصة من هذا الطلب هو (+{selectedOrder.platformProfit.toLocaleString('ar-IQ')} د.ع) وهو أقل من الحد المعتاد (3,000 د.ع).
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* الحسبة المالية المفصلة */}
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 text-xs">
               <div className="flex justify-between text-slate-600">
@@ -847,9 +912,18 @@ export default function AdminDashboardPage() {
                   <span className="block text-[10px] text-emerald-600">ربح التاجر المستحق:</span>
                   <strong className="font-black">+{selectedOrder.merchantProfit.toLocaleString('ar-IQ')} د.ع</strong>
                 </div>
-                <div className="bg-blue-50 text-blue-800 p-2 rounded-xl border border-blue-200">
-                  <span className="block text-[10px] text-blue-600">صافي ربح المنصة:</span>
-                  <strong className="font-black">+{selectedOrder.platformProfit.toLocaleString('ar-IQ')} د.ع</strong>
+                <div className={`p-2 rounded-xl border ${
+                  selectedOrder.platformProfit < 3000 && selectedOrder.status !== 'cancelled'
+                    ? 'bg-amber-100 text-amber-900 border-amber-300'
+                    : 'bg-blue-50 text-blue-800 border-blue-200'
+                }`}>
+                  <span className="block text-[10px] text-slate-600">صافي ربح المنصة:</span>
+                  <div className="flex items-center gap-1">
+                    {selectedOrder.platformProfit < 3000 && selectedOrder.status !== 'cancelled' && (
+                      <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                    )}
+                    <strong className="font-black">+{selectedOrder.platformProfit.toLocaleString('ar-IQ')} د.ع</strong>
+                  </div>
                 </div>
               </div>
             </div>
