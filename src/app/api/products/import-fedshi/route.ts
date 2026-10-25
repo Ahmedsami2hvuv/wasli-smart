@@ -121,6 +121,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // منع التكرار الحاسم: إذا كان المنتج بنفس كود المورد موجوداً مسبقاً في المنصة، نمنع إنشاء نسخة مكررة!
+    if (actualSupplierCode) {
+      const existingProduct = await findProductBySupplierCode(actualSupplierCode);
+      if (existingProduct) {
+        return NextResponse.json(
+          {
+            success: true,
+            isExisting: true,
+            message: 'هذا المنتج مسحوب وموجود مسبقاً في منصة وصلي، تم تجنب التكرار',
+            product: existingProduct,
+            financials: {
+              supplierCost: existingProduct.supplierPriceIqd || supplierCost,
+              wholesalePrice: existingProduct.wholesalePriceIqd,
+              minCustomerPrice: existingProduct.minPriceIqd,
+              maxCustomerPrice: existingProduct.maxPriceIqd,
+            }
+          },
+          {
+            status: 200,
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            }
+          }
+        );
+      }
+    }
+
     // تطبيق المعادلة المالية المعتمدة لمنصة وصلي:
     // 1. سعر جملة وصلي للتاجر = أقل سعر بيع حددته منصة فدشي (minSuggestedPrice)
     // وبذلك يكون ربح المدير = (سعر جملة وصلي - تكلفة فدشي)
@@ -162,65 +191,45 @@ export async function POST(request: NextRequest) {
       console.warn('تعذر إنشاء/ربط القسم آلياً:', catErr);
     }
 
-    // الصورة الرئيسية الأولية للمنتج
+    // الصورة الرئيسية وقائمة الصور الأولية للمنتج
     const rawPrimaryImage = (images && images.length > 0) 
       ? images[0] 
       : (colors && colors.length > 0 && colors[0].image ? colors[0].image : '/placeholder-product.svg');
 
-    // نقل وتخزين الصورة الرئيسية في مستودع وصلي (تيليجرام) بصيغة WebP
-    let primaryImage = rawPrimaryImage;
-    if (rawPrimaryImage && (rawPrimaryImage.startsWith('http://') || rawPrimaryImage.startsWith('https://'))) {
-      try {
-        primaryImage = await mirrorProductImageToVault(rawPrimaryImage, `📦 ${name}`);
-      } catch (vaultErr) {
-        console.warn('تعذر حفظ الصورة الأساسية في مستودع وصلي:', vaultErr);
+    const rawImagesList = Array.isArray(images) && images.length > 0 
+      ? images 
+      : (rawPrimaryImage ? [rawPrimaryImage] : []);
+
+    // 1. نشر المنتج المستورد فوراً في قناة تيليجرام ككتلة صور مجمعة WebP (ألبوم واحد أنيق كامل مع الشرح والأسعار)
+    let telegramResult = null;
+    let finalPrimaryImage = rawPrimaryImage;
+    let finalImagesList = rawImagesList;
+
+    try {
+      telegramResult = await publishProductToTelegramChannel({
+        name,
+        image: rawPrimaryImage,
+        images: rawImagesList,
+        wholesalePriceIqd: wholesalePrice,
+        minPriceIqd: minPrice,
+        maxPriceIqd: maxPrice,
+        description: specifications || description || '',
+        specifications: specifications || description || '',
+        promoDescription: promoDescription || '',
+        supplierCode: actualSupplierCode || '',
+        category: finalCategoryName,
+      });
+
+      // إذا نجح نشر الألبوم في القناة وتوفرت روابط البروكسي المحلية لوصلي، نعتمدها مباشرة للواجهة والمتجر!
+      if (telegramResult && telegramResult.success && Array.isArray(telegramResult.proxyUrls) && telegramResult.proxyUrls.length > 0) {
+        finalImagesList = telegramResult.proxyUrls;
+        finalPrimaryImage = telegramResult.primaryProxyUrl || telegramResult.proxyUrls[0];
       }
+    } catch (tgErr) {
+      console.warn('تعذر النشر في تيليجرام:', tgErr);
     }
 
-    // نقل كافة صور المنتج الأخرى إلى مستودع وصلي
-    let vaultedImages: string[] = [];
-    if (Array.isArray(images) && images.length > 0) {
-      try {
-        // نرفع الصور بالتوازي (بحد أقصى أول 6 صور لسرعة الاستيراد والأداء)
-        const toMirror = images.slice(0, 6);
-        vaultedImages = await Promise.all(
-          toMirror.map(async (imgUrl: string, idx: number) => {
-            if (idx === 0 && primaryImage && primaryImage.startsWith('/api/images/proxy')) {
-              return primaryImage;
-            }
-            if (typeof imgUrl === 'string' && (imgUrl.startsWith('http://') || imgUrl.startsWith('https://'))) {
-              return await mirrorProductImageToVault(imgUrl, `📦 ${name} - صورة ${idx + 1}`);
-            }
-            return imgUrl;
-          })
-        );
-      } catch (imgsErr) {
-        console.warn('تعذر حفظ بعض الصور في المستودع:', imgsErr);
-        vaultedImages = images;
-      }
-    } else if (primaryImage) {
-      vaultedImages = [primaryImage];
-    }
-
-    // تحديث صور الألوان إذا كانت تشتمل على صور خارجية
-    let vaultedColors = colors;
-    if (Array.isArray(colors) && colors.length > 0) {
-      vaultedColors = await Promise.all(
-        colors.map(async (c: any) => {
-          if (c.image && (c.image.startsWith('http://') || c.image.startsWith('https://'))) {
-            try {
-              const mirroredColorImg = await mirrorProductImageToVault(c.image, `🎨 ${name} - ${c.name || 'لون'}`);
-              return { ...c, image: mirroredColorImg };
-            } catch {
-              return c;
-            }
-          }
-          return c;
-        })
-      );
-    }
-
-    // حفظ المنتج في النظام مع الروابط المحلية لمستودع وصلي
+    // 2. حفظ المنتج في النظام
     const product = await createPlatformProduct({
       name,
       category: finalCategoryName,
@@ -239,8 +248,8 @@ export async function POST(request: NextRequest) {
       supplierCode: actualSupplierCode,
       supplierSku: actualSupplierSku,
       supplierSource: supplierSource || 'fedshi',
-      colors: vaultedColors,
-      variants: vaultedColors.map((c: any, idx: number) => ({
+      colors: colors,
+      variants: colors.map((c: any, idx: number) => ({
         id: `variant-${idx}`,
         name: c.name,
         image: c.image,
@@ -248,33 +257,12 @@ export async function POST(request: NextRequest) {
       })),
       videoUrl: videoUrl || '',
       stockQuantity: Number(stockQuantity) || 50,
-      image: primaryImage,
-      images: vaultedImages,
+      image: finalPrimaryImage,
+      images: finalImagesList,
     });
 
     const platformProfit = wholesalePrice - supplierCost;
     const merchantProfitRange = `${minPrice - wholesalePrice} - ${maxPrice - wholesalePrice}`;
-
-    // نشر المنتج المستورد فوراً في قناة تيليجرام للمسوقين ككتلة صور مجمعة WebP
-    let telegramResult = null;
-    try {
-      telegramResult = await publishProductToTelegramChannel({
-        name: product.name,
-        image: primaryImage,
-        images: vaultedImages && vaultedImages.length > 0 ? vaultedImages : [primaryImage],
-        wholesalePriceIqd: wholesalePrice,
-        minPriceIqd: minPrice,
-        maxPriceIqd: maxPrice,
-        description: specifications || description || '',
-        specifications: specifications || description || '',
-        promoDescription: promoDescription || '',
-        supplierCode: actualSupplierCode || '',
-        category: finalCategoryName,
-        productId: product.id,
-      });
-    } catch (tgErr) {
-      console.warn('تعذر النشر في تيليجرام:', tgErr);
-    }
 
     return NextResponse.json(
       { 

@@ -2073,7 +2073,15 @@
   // ========================================================
   // نظام الاستيراد وإرسال البيانات المركزي لخادم وصلي
   // ========================================================
+  const activeSendingCodes = new Set();
   async function sendProductPayloadToWasli(payload) {
+    const code = String(payload?.fedshiCode || payload?.supplierCode || '').trim();
+    if (code && activeSendingCodes.has(code)) {
+      console.warn('تم منع إرسال مكرر لنفس كود المنتج في نفس اللحظة:', code);
+      return { success: true, message: 'المنتج قيد الإرسال مسبقاً' };
+    }
+    if (code) activeSendingCodes.add(code);
+
     let targetUrl = wasliServerUrl.trim().replace(/\/+$/, '');
     const endpoint = `${targetUrl}/api/products/import-fedshi`;
 

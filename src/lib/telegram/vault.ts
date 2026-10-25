@@ -320,6 +320,25 @@ export async function mirrorProductImageToVault(externalUrl: string, caption?: s
 }
 
 /**
+ * استخراج روابط البروكسي المحلية لصور الألبوم من نتيجة رسائل تيليجرام
+ */
+function extractProxyUrlsFromTelegramResult(result: any): string[] {
+  const fileIds: string[] = [];
+  if (Array.isArray(result)) {
+    for (const msg of result) {
+      if (msg.photo && Array.isArray(msg.photo) && msg.photo.length > 0) {
+        const best = msg.photo[msg.photo.length - 1];
+        if (best.file_id) fileIds.push(best.file_id);
+      }
+    }
+  } else if (result && result.photo && Array.isArray(result.photo) && result.photo.length > 0) {
+    const best = result.photo[result.photo.length - 1];
+    if (best.file_id) fileIds.push(best.file_id);
+  }
+  return fileIds.map(fid => `/api/images/proxy?fileId=${encodeURIComponent(fid)}`);
+}
+
+/**
  * نشر المنتج المستورد تلقائياً في قناة تيليجرام ككتلة صور مجمعة WebP
  */
 export async function publishProductToTelegramChannel(product: {
@@ -335,7 +354,13 @@ export async function publishProductToTelegramChannel(product: {
   supplierCode?: string;
   category?: string;
   productId?: string;
-}): Promise<{ success: boolean; messageId?: number; error?: string }> {
+}): Promise<{ 
+  success: boolean; 
+  messageId?: number; 
+  error?: string;
+  proxyUrls?: string[];
+  primaryProxyUrl?: string;
+}> {
   const botToken = getVaultBotToken() || getOrdersBotToken();
   const rawChannelId = getVaultChannelId() || process.env.TELEGRAM_ADMIN_CHAT_ID;
   const channelId = cleanTelegramChatId(rawChannelId);
@@ -457,9 +482,12 @@ export async function publishProductToTelegramChannel(product: {
           const groupData = await groupRes.json();
           if (groupData.ok) {
             await sendExtraPromoIfNeeded();
+            const proxyUrls = extractProxyUrlsFromTelegramResult(groupData.result);
             return {
               success: true,
               messageId: Array.isArray(groupData.result) ? groupData.result[0]?.message_id : undefined,
+              proxyUrls,
+              primaryProxyUrl: proxyUrls[0],
             };
           } else {
             console.warn('تعذر إرسال ألبوم الصور المضغوط كـ FormData، جاري التجربة بروابط الصور:', groupData.description);
@@ -489,9 +517,12 @@ export async function publishProductToTelegramChannel(product: {
         const groupUrlData = await groupUrlRes.json();
         if (groupUrlData.ok) {
           await sendExtraPromoIfNeeded();
+          const proxyUrls = extractProxyUrlsFromTelegramResult(groupUrlData.result);
           return {
             success: true,
             messageId: Array.isArray(groupUrlData.result) ? groupUrlData.result[0]?.message_id : undefined,
+            proxyUrls,
+            primaryProxyUrl: proxyUrls[0],
           };
         }
       } catch (groupFallbackErr) {
@@ -517,7 +548,13 @@ export async function publishProductToTelegramChannel(product: {
         const singleData = await singleRes.json();
         if (singleData.ok) {
           await sendExtraPromoIfNeeded();
-          return { success: true, messageId: singleData.result?.message_id };
+          const proxyUrls = extractProxyUrlsFromTelegramResult(singleData.result);
+          return { 
+            success: true, 
+            messageId: singleData.result?.message_id,
+            proxyUrls,
+            primaryProxyUrl: proxyUrls[0],
+          };
         }
       }
 
@@ -535,7 +572,13 @@ export async function publishProductToTelegramChannel(product: {
       const photoData = await photoRes.json();
       if (photoData.ok) {
         await sendExtraPromoIfNeeded();
-        return { success: true, messageId: photoData.result?.message_id };
+        const proxyUrls = extractProxyUrlsFromTelegramResult(photoData.result);
+        return { 
+          success: true, 
+          messageId: photoData.result?.message_id,
+          proxyUrls,
+          primaryProxyUrl: proxyUrls[0],
+        };
       }
     }
 
