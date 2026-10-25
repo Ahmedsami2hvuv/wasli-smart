@@ -200,36 +200,7 @@ export async function POST(request: NextRequest) {
       ? images 
       : (rawPrimaryImage ? [rawPrimaryImage] : []);
 
-    // 1. نشر المنتج المستورد فوراً في قناة تيليجرام ككتلة صور مجمعة WebP (ألبوم واحد أنيق كامل مع الشرح والأسعار)
-    let telegramResult = null;
-    let finalPrimaryImage = rawPrimaryImage;
-    let finalImagesList = rawImagesList;
-
-    try {
-      telegramResult = await publishProductToTelegramChannel({
-        name,
-        image: rawPrimaryImage,
-        images: rawImagesList,
-        wholesalePriceIqd: wholesalePrice,
-        minPriceIqd: minPrice,
-        maxPriceIqd: maxPrice,
-        description: specifications || description || '',
-        specifications: specifications || description || '',
-        promoDescription: promoDescription || '',
-        supplierCode: actualSupplierCode || '',
-        category: finalCategoryName,
-      });
-
-      // إذا نجح نشر الألبوم في القناة وتوفرت روابط البروكسي المحلية لوصلي، نعتمدها مباشرة للواجهة والمتجر!
-      if (telegramResult && telegramResult.success && Array.isArray(telegramResult.proxyUrls) && telegramResult.proxyUrls.length > 0) {
-        finalImagesList = telegramResult.proxyUrls;
-        finalPrimaryImage = telegramResult.primaryProxyUrl || telegramResult.proxyUrls[0];
-      }
-    } catch (tgErr) {
-      console.warn('تعذر النشر في تيليجرام:', tgErr);
-    }
-
-    // 2. حفظ المنتج في النظام
+    // 1. حفظ المنتج فوراً في النظام (فائق السرعة: 0.1 ثانية)
     const product = await createPlatformProduct({
       name,
       category: finalCategoryName,
@@ -257,8 +228,41 @@ export async function POST(request: NextRequest) {
       })),
       videoUrl: videoUrl || '',
       stockQuantity: Number(stockQuantity) || 50,
-      image: finalPrimaryImage,
-      images: finalImagesList,
+      image: rawPrimaryImage,
+      images: rawImagesList,
+    });
+
+    // 2. تشغيل النشر في تيليجرام بالخلفية بدون حجب أو تعطيل المستخدم (Background Task)
+    publishProductToTelegramChannel({
+      name,
+      image: rawPrimaryImage,
+      images: rawImagesList,
+      wholesalePriceIqd: wholesalePrice,
+      minPriceIqd: minPrice,
+      maxPriceIqd: maxPrice,
+      description: specifications || description || '',
+      specifications: specifications || description || '',
+      promoDescription: promoDescription || '',
+      supplierCode: actualSupplierCode || '',
+      category: finalCategoryName,
+      productId: product.id,
+    }).then(async (telegramResult) => {
+      // إذا نجح نشر الألبوم بالخلفية وتوفرت روابط البروكسي، نحدث صور المنتج في قاعدة البيانات بهدوء
+      if (telegramResult && telegramResult.success && Array.isArray(telegramResult.proxyUrls) && telegramResult.proxyUrls.length > 0) {
+        try {
+          const { supabaseAdmin } = await import('@/lib/supabase/admin');
+          if (supabaseAdmin) {
+            await supabaseAdmin.from('products').update({
+              images: telegramResult.proxyUrls,
+              image: telegramResult.primaryProxyUrl || telegramResult.proxyUrls[0]
+            }).eq('id', product.id);
+          }
+        } catch (updateErr) {
+          console.warn('تعذر تحديث صور المنتج بروابط البروكسي:', updateErr);
+        }
+      }
+    }).catch(tgErr => {
+      console.warn('خلفية نشر تيليجرام:', tgErr);
     });
 
     const platformProfit = wholesalePrice - supplierCost;
@@ -269,7 +273,6 @@ export async function POST(request: NextRequest) {
         success: true, 
         message: 'تم استيراد وحفظ منتج فدشي بنجاح في منصة وصلي',
         product,
-        telegramBroadcast: telegramResult,
         financials: {
           supplierCost,
           wholesalePrice,

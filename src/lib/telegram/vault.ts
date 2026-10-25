@@ -455,16 +455,16 @@ export async function publishProductToTelegramChannel(product: {
   };
 
   try {
-    // جمع الصور وتصفيتها (بحد أقصى 10 صور لتيليجرام)
+    // جمع الصور وتصفيتها (بحد أقصى 6 صور للألبوم لضمان سرعة نشر خارقة)
     const rawImages = (product.images && product.images.length > 0)
       ? product.images
       : (product.image ? [product.image] : []);
 
     const validUrls = rawImages
       .filter(img => typeof img === 'string' && (img.startsWith('http://') || img.startsWith('https://')))
-      .slice(0, 10);
+      .slice(0, 6);
 
-    // 1. إذا كان لدينا أكثر من صورة: إرسالها فوراً كألبوم مجمع بروابطها المباشرة فائقة السرعة (0.3 ثانية)
+    // 1. إذا كان لدينا أكثر من صورة: إرسالها فوراً كألبوم مجمع بروابطها المباشرة فائقة السرعة
     if (validUrls.length > 1) {
       try {
         const mediaUrls = validUrls.map((url, idx) => ({
@@ -476,6 +476,7 @@ export async function publishProductToTelegramChannel(product: {
         const groupUrlRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMediaGroup`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(25000),
           body: JSON.stringify({
             chat_id: channelId,
             media: mediaUrls,
