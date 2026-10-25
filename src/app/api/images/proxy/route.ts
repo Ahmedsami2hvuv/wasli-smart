@@ -15,8 +15,10 @@ export async function GET(request: NextRequest) {
     return new Response(new Uint8Array(buffer), {
       status: 200,
       headers: {
-        'Content-Type': contentType,
+        'Content-Type': contentType || 'image/jpeg',
+        'Content-Disposition': 'inline', // إجبار المتصفح على عرض الصورة بداخله كصورة مباشرة ومنع تنزيلها كملف
         'Cache-Control': 'public, max-age=31536000, immutable',
+        'X-Content-Type-Options': 'nosniff',
       },
     });
   } catch (error: any) {

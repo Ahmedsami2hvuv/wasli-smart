@@ -145,7 +145,25 @@ export async function getTelegramFileStream(fileId: string): Promise<{ buffer: B
 
   const arrayBuffer = await downloadRes.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
-  const contentType = downloadRes.headers.get('content-type') || 'image/webp';
+
+  // تحديد نوع الصورة الفعلي بدقة لعرضها داخل المتصفح مباشرة ومنع تنزيلها كملف
+  let contentType = 'image/jpeg';
+  const lowerPath = filePath.toLowerCase();
+  if (lowerPath.endsWith('.webp')) {
+    contentType = 'image/webp';
+  } else if (lowerPath.endsWith('.png')) {
+    contentType = 'image/png';
+  } else if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg')) {
+    contentType = 'image/jpeg';
+  } else if (buffer.length > 4) {
+    if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+      contentType = 'image/jpeg';
+    } else if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+      contentType = 'image/png';
+    } else if (buffer.subarray(0, 4).toString() === 'RIFF' && buffer.subarray(8, 12).toString() === 'WEBP') {
+      contentType = 'image/webp';
+    }
+  }
 
   return { buffer, contentType };
 }
