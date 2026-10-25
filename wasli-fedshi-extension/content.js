@@ -928,32 +928,29 @@
       return;
     }
 
+    // تجنب المزامنة أثناء تشغيل السحب الجماعي لمنع أي تشويش أو وميض في الشارات
+    if (isBatchRunning) {
+      return;
+    }
+
     const targetUrl = wasliServerUrl.trim().replace(/\/+$/, '') + '/api/products';
     safeChromeSendMessage(
       { action: 'getImportedProductsList', url: targetUrl },
       (res) => {
-        const activeCodes = new Set();
         if (res && res.result && Array.isArray(res.result.products)) {
+          // دمج الأكواد الجديدة القادمة من السيرفر مع الحفاظ الحتمي على أي كود تم سحبه محلياً
           res.result.products.forEach(p => {
             const c = p.supplierCode || p.id;
-            if (c) activeCodes.add(String(c).trim());
+            if (c) importedCodesSet.add(String(c).trim());
           });
+
+          try {
+            localStorage.setItem('wasli_imported_codes', JSON.stringify(Array.from(importedCodesSet)));
+          } catch (e) {}
+
+          // تحديث الكروت على الشاشة بدون وميض
+          injectProductCardButtons();
         }
-
-        // تحديث الـ Set بالمنتجات الموجودة فعلياً في وصلي وحفظها في الكاش الفوري
-        importedCodesSet.clear();
-        activeCodes.forEach(c => importedCodesSet.add(c));
-        try {
-          localStorage.setItem('wasli_imported_codes', JSON.stringify(Array.from(importedCodesSet)));
-        } catch (e) {}
-
-        // تنظيف وإزالة الشارات الخضراء فوراً عن كافة الكروت المعروضة في الصفحة
-        document.querySelectorAll('.wasli-card-status-badge').forEach(badge => {
-          const bCode = badge.getAttribute('data-wasli-code');
-          if (bCode && !importedCodesSet.has(bCode)) {
-            badge.remove();
-          }
-        });
 
         // تحديث الزر العائم في صفحة المنتج الفردي إذا كان مفتوحاً
         const currentCode = getCurrentProductCode();
@@ -1233,15 +1230,41 @@
 
   function markProductAsImported(code) {
     if (!code) return;
-    importedCodesSet.add(code);
+    const cleanCode = String(code).trim();
+    importedCodesSet.add(cleanCode);
     try {
       const arr = Array.from(importedCodesSet);
       localStorage.setItem('wasli_imported_codes', JSON.stringify(arr));
       sessionStorage.setItem('wasli_imported_codes', JSON.stringify(arr));
     } catch (e) {}
 
-    // تحديث أو إظهار شارة "مسحوب مسبقاً ✓" الخضراء فوق بطاقة المنتج في القوائم
-    const badges = document.querySelectorAll(`[data-wasli-code="${code}"]`);
+    // 1. تحويل وإزالة أي زر سحب فوري لهذا الكود واستبداله بالشارة الخضراء الدائمة
+    const quickBtns = document.querySelectorAll(`[data-wasli-quick-code="${cleanCode}"]`);
+    quickBtns.forEach(btn => {
+      const parentCard = btn.closest('.wasli-card-wrapper') || btn.parentElement;
+      if (parentCard) {
+        parentCard.style.outline = '';
+        parentCard.setAttribute('data-wasli-locked', 'true');
+      }
+      btn.remove();
+
+      if (parentCard && !parentCard.querySelector('.wasli-card-status-badge')) {
+        const badge = document.createElement('div');
+        badge.className = 'wasli-card-status-badge';
+        badge.setAttribute('data-wasli-code', cleanCode);
+        badge.title = 'تم استيراد هذا المنتج مسبقاً في منصة وصلي';
+        badge.innerHTML = `
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>مسحوب مسبقاً ✓</span>
+        `;
+        parentCard.appendChild(badge);
+      }
+    });
+
+    // 2. تحديث الشارات القائمة إن وجدت
+    const badges = document.querySelectorAll(`[data-wasli-code="${cleanCode}"]`);
     badges.forEach(el => {
       el.className = 'wasli-card-status-badge';
       el.innerHTML = `
@@ -1253,9 +1276,9 @@
       el.title = 'تم استيراد هذا المنتج مسبقاً في منصة وصلي';
     });
 
-    // تحديث الزر العائم في صفحة المنتج الفردي إذا كان يخص هذا الكود
+    // 3. تحديث الزر العائم في صفحة المنتج الفردي إذا كان يخص هذا الكود
     const floatingBtn = document.querySelector('.wasli-floating-btn');
-    if (floatingBtn && window.location.pathname.includes(code)) {
+    if (floatingBtn && window.location.pathname.includes(cleanCode)) {
       updateFloatingButtonToImported(floatingBtn);
     }
   }
@@ -2385,7 +2408,8 @@
         cardEl.style.position = 'relative';
       }
 
-      const isImported = Boolean(code && importedCodesSet.has(code));
+      const isLocked = cardEl.getAttribute('data-wasli-locked') === 'true';
+      const isImported = Boolean(isLocked || (code && importedCodesSet.has(code)));
       let badge = cardEl.querySelector('.wasli-card-status-badge');
       let quickBtn = cardEl.querySelector('.wasli-card-quick-btn');
 
@@ -2550,6 +2574,7 @@
 
     isBatchRunning = true;
     batchShouldStop = false;
+    stopSyncCodesTimer(); // إيقاف المزامنة أثناء السحب الجماعي لمنع أي تداخل
     batchQueue = unimported.map(c => c.code);
     currentBatchIndex = 0;
 
@@ -2636,6 +2661,7 @@
 
     isBatchRunning = false;
     batchShouldStop = false;
+    syncCodesTimer = setInterval(syncImportedCodesWithServer, 5000); // إعادة تشغيل المزامنة
 
     if (stopBtn) stopBtn.style.display = 'none';
     if (startBtn) {
