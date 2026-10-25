@@ -85,6 +85,8 @@ export default function AdminProductsPage() {
   const [mojodSearch, setMojodSearch] = useState('');
   const [mojodPage, setMojodPage] = useState(1);
   const [mojodTotalPages, setMojodTotalPages] = useState(1);
+  const [mojodTotalCount, setMojodTotalCount] = useState(0);
+  const [mojodViewLimit, setMojodViewLimit] = useState<number | 'all'>(50);
   const [selectedMojodIds, setSelectedMojodIds] = useState<number[]>([]);
   const [importingMojod, setImportingMojod] = useState(false);
   const [mojodImportMsg, setMojodImportMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -103,19 +105,25 @@ export default function AdminProductsPage() {
 
   const handleCancelImport = () => {
     cancelImportRef.current = true;
+    if (importProgress) {
+      setImportProgress(prev => prev ? { ...prev, isCancelled: true } : null);
+    }
   };
 
-  const loadMojodProducts = async (page = 1, search = '') => {
+  const loadMojodProducts = async (page = 1, search = '', limit: number | 'all' = mojodViewLimit) => {
     setMojodLoading(true);
     setMojodImportMsg(null);
     try {
       const q = search ? `&search=${encodeURIComponent(search)}` : '';
-      const res = await fetch(`/api/suppliers/mojod?page=${page}&limit=24${q}`);
+      const limitParam = limit === 'all' ? '&all=true' : `&limit=${limit}`;
+      const res = await fetch(`/api/suppliers/mojod?page=${page}${limitParam}${q}`);
       const data = await res.json();
       if (data.success && data.products) {
         setMojodProducts(data.products);
         setMojodPage(data.page || 1);
         setMojodTotalPages(data.pages || 1);
+        setMojodTotalCount(data.total || data.products.length);
+        setMojodViewLimit(limit);
       } else {
         setMojodImportMsg({ text: data.message || 'تعذر جلب المنتجات من سيرفر موجود', type: 'error' });
       }
@@ -129,7 +137,7 @@ export default function AdminProductsPage() {
   const handleOpenMojodModal = () => {
     setShowMojodModal(true);
     if (mojodProducts.length === 0) {
-      loadMojodProducts(1, '');
+      loadMojodProducts(1, '', 50);
     }
   };
 
@@ -1235,7 +1243,43 @@ export default function AdminProductsPage() {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* أزرار اختيار كمية العرض: 50، 100، أو كل المنتجات */}
+                  <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 text-xs">
+                    <span className="text-[10px] text-slate-400 font-bold px-1.5 hidden sm:inline">عرض:</span>
+                    <button
+                      type="button"
+                      onClick={() => loadMojodProducts(1, mojodSearch, 50)}
+                      className={`px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                        mojodViewLimit === 50 ? 'bg-purple-700 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      50
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => loadMojodProducts(1, mojodSearch, 100)}
+                      className={`px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                        mojodViewLimit === 100 ? 'bg-purple-700 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      100
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => loadMojodProducts(1, mojodSearch, 'all')}
+                      className={`px-2.5 py-1 rounded-lg font-black text-[11px] transition-all cursor-pointer flex items-center gap-1 ${
+                        mojodViewLimit === 'all' 
+                          ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white shadow-xs' 
+                          : 'text-purple-700 bg-purple-50 hover:bg-purple-100'
+                      }`}
+                      title="تحميل كافة منتجات موچود المتاحة في قاعدة البيانات دفعة واحدة"
+                    >
+                      <span>عرض الكل</span>
+                      {mojodTotalCount > 0 && <span className="opacity-80">({mojodTotalCount})</span>}
+                    </button>
+                  </div>
+
                   <button
                     type="button"
                     onClick={handleSelectAllMojod}
@@ -1249,35 +1293,37 @@ export default function AdminProductsPage() {
                     ) : (
                       <>
                         <Square className="w-4 h-4 text-slate-400" />
-                        <span>تحديد الكل</span>
+                        <span>تحديد الكل ({mojodProducts.length})</span>
                       </>
                     )}
                   </button>
 
-                  {/* التنقل بين الصفحات */}
-                  <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 text-xs">
-                    <button
-                      type="button"
-                      disabled={mojodPage <= 1 || mojodLoading}
-                      onClick={() => loadMojodProducts(mojodPage - 1, mojodSearch)}
-                      className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-                      title="الصفحة السابقة"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                    <span className="px-2 font-bold text-purple-950 text-[11px]">
-                      صفحة {mojodPage}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={mojodLoading || mojodProducts.length < 24}
-                      onClick={() => loadMojodProducts(mojodPage + 1, mojodSearch)}
-                      className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-                      title="الصفحة التالية"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {/* التنقل بين الصفحات (يظهر فقط إذا لم يكن خيار "عرض الكل" مفعلاً) */}
+                  {mojodViewLimit !== 'all' && (
+                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 text-xs">
+                      <button
+                        type="button"
+                        disabled={mojodPage <= 1 || mojodLoading}
+                        onClick={() => loadMojodProducts(mojodPage - 1, mojodSearch, mojodViewLimit)}
+                        className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                        title="الصفحة السابقة"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                      <span className="px-2 font-bold text-purple-950 text-[11px]">
+                        صفحة {mojodPage} {mojodTotalPages > 1 ? `من ${mojodTotalPages}` : ''}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={mojodLoading || (mojodTotalPages > 0 ? mojodPage >= mojodTotalPages : mojodProducts.length < (typeof mojodViewLimit === 'number' ? mojodViewLimit : 50))}
+                        onClick={() => loadMojodProducts(mojodPage + 1, mojodSearch, mojodViewLimit)}
+                        className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                        title="الصفحة التالية"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1588,10 +1634,24 @@ export default function AdminProductsPage() {
                   <button
                     type="button"
                     onClick={() => setShowMojodModal(false)}
-                    className="py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 cursor-pointer"
+                    disabled={importingMojod}
+                    className="py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 cursor-pointer disabled:opacity-40"
                   >
                     إغلاق
                   </button>
+
+                  {/* زر إيقاف النقل فوراً - يظهر بشكل بارز أثناء الاستيراد */}
+                  {importingMojod && (
+                    <button
+                      type="button"
+                      onClick={handleCancelImport}
+                      className="py-2.5 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-xs shadow-md shadow-red-600/30 transition-all flex items-center gap-2 cursor-pointer animate-pulse"
+                      title="إيقاف عملية الاستيراد الحالية فوراً"
+                    >
+                      <StopCircle className="w-4 h-4 text-white" />
+                      <span>إيقاف النقل فوراً</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"

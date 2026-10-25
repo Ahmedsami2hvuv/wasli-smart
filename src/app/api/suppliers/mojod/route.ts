@@ -8,9 +8,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const token = searchParams.get('token') || DEFAULT_MOJOD_TOKEN;
     const page = Number(searchParams.get('page')) || 1;
-    const limit = Number(searchParams.get('limit')) || 24;
+    const limit = Number(searchParams.get('limit')) || 50;
     const search = searchParams.get('search') || '';
     const productId = searchParams.get('productId') || '';
+    const fetchAll = searchParams.get('all') === 'true';
 
     if (productId) {
       const details = await getMojodProductDetails(productId, token);
@@ -18,6 +19,32 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: false, message: 'تعذر العثور على المنتج في موجود' }, { status: 404 });
       }
       return NextResponse.json({ success: true, product: details });
+    }
+
+    // إذا طلب المستخدم جلب جميع المنتجات دفعة واحدة
+    if (fetchAll) {
+      let allProducts: any[] = [];
+      let currentPage = 1;
+      let totalPages = 1;
+      let totalCount = 0;
+
+      while (currentPage <= totalPages && currentPage <= 15) {
+        const pageData = await getMojodProducts({ token, page: currentPage, limit: 100, search });
+        if (!pageData || !pageData.products) break;
+        allProducts = allProducts.concat(pageData.products);
+        totalPages = pageData.pages || 1;
+        totalCount = pageData.total || allProducts.length;
+        currentPage++;
+      }
+
+      return NextResponse.json({
+        success: true,
+        page: 1,
+        limit: allProducts.length,
+        total: totalCount,
+        pages: 1,
+        products: allProducts,
+      });
     }
 
     const data = await getMojodProducts({ token, page, limit, search });
