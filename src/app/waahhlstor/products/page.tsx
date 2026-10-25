@@ -21,7 +21,14 @@ import {
   Edit3,
   Eye,
   EyeOff,
-  Search
+  Search,
+  Boxes,
+  Globe,
+  CheckSquare,
+  Square,
+  X,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import Link from 'next/link';
 import { Product, Category, Subcategory } from '@/types';
@@ -32,6 +39,91 @@ export default function AdminProductsPage() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // حالات ودوال الربط المباشر مع API موجود
+  const [showMojodModal, setShowMojodModal] = useState(false);
+  const [mojodProducts, setMojodProducts] = useState<any[]>([]);
+  const [mojodLoading, setMojodLoading] = useState(false);
+  const [mojodSearch, setMojodSearch] = useState('');
+  const [mojodPage, setMojodPage] = useState(1);
+  const [mojodTotalPages, setMojodTotalPages] = useState(1);
+  const [selectedMojodIds, setSelectedMojodIds] = useState<number[]>([]);
+  const [importingMojod, setImportingMojod] = useState(false);
+  const [mojodImportMsg, setMojodImportMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  const loadMojodProducts = async (page = 1, search = '') => {
+    setMojodLoading(true);
+    setMojodImportMsg(null);
+    try {
+      const q = search ? `&search=${encodeURIComponent(search)}` : '';
+      const res = await fetch(`/api/suppliers/mojod?page=${page}&limit=24${q}`);
+      const data = await res.json();
+      if (data.success && data.products) {
+        setMojodProducts(data.products);
+        setMojodPage(data.page || 1);
+        setMojodTotalPages(data.pages || 1);
+      } else {
+        setMojodImportMsg({ text: data.message || 'تعذر جلب المنتجات من سيرفر موجود', type: 'error' });
+      }
+    } catch (err: any) {
+      setMojodImportMsg({ text: err.message || 'خطأ في الاتصال بـ API موجود', type: 'error' });
+    } finally {
+      setMojodLoading(false);
+    }
+  };
+
+  const handleOpenMojodModal = () => {
+    setShowMojodModal(true);
+    if (mojodProducts.length === 0) {
+      loadMojodProducts(1, '');
+    }
+  };
+
+  const handleToggleSelectMojod = (id: number) => {
+    setSelectedMojodIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllMojod = () => {
+    if (selectedMojodIds.length === mojodProducts.length) {
+      setSelectedMojodIds([]);
+    } else {
+      setSelectedMojodIds(mojodProducts.map(p => p._id));
+    }
+  };
+
+  const handleImportSelectedMojod = async () => {
+    if (selectedMojodIds.length === 0) return;
+    setImportingMojod(true);
+    setMojodImportMsg(null);
+    try {
+      const selectedItems = mojodProducts.filter(p => selectedMojodIds.includes(p._id));
+      const res = await fetch('/api/suppliers/mojod', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ products: selectedItems }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMojodImportMsg({
+          text: `تم استيراد ${data.importedCount} منتج بنجاح ونشرها في تليغرام وحفظها بالمنصة! ${data.skippedCount > 0 ? `(${data.skippedCount} كانت مسحوبة مسبقاً)` : ''}`,
+          type: 'success'
+        });
+        setSelectedMojodIds([]);
+        // تحديث قائمة المنتجات المعروضة فوراً
+        fetch('/api/products').then(r => r.json()).then(d => {
+          if (d.success && d.products) setProducts(d.products);
+        });
+      } else {
+        setMojodImportMsg({ text: data.message || 'حدث خطأ أثناء الاستيراد', type: 'error' });
+      }
+    } catch (err: any) {
+      setMojodImportMsg({ text: err.message || 'خطأ أثناء تنفيذ الاستيراد', type: 'error' });
+    } finally {
+      setImportingMojod(false);
+    }
+  };
 
   // حالة تعديل المنتج
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -398,6 +490,14 @@ export default function AdminProductsPage() {
               <Layers className="w-4 h-4 text-sky-600" />
               <span>إدارة الأقسام والأفرع</span>
             </Link>
+
+            <button
+              onClick={handleOpenMojodModal}
+              className="py-2.5 px-4 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl shadow-md shadow-purple-700/20 transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <Boxes className="w-4 h-4 text-purple-200" />
+              <span>استيراد ذكي من API موجود</span>
+            </button>
 
             <button
               onClick={() => setShowAddModal(true)}
@@ -931,7 +1031,269 @@ export default function AdminProductsPage() {
           </div>
         )}
 
-        {/* جدول المنتجات الحالي */}
+        {/* نافذة استيراد المنتجات المباشر من API موجود */}
+        {showMojodModal && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+            <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl border border-purple-200 overflow-hidden flex flex-col max-h-[90vh]">
+              {/* ترويسة النافذة */}
+              <div className="bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-900 text-white p-5 sm:p-6 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+                    <Boxes className="w-5 h-5 text-purple-200" />
+                  </div>
+                  <div>
+                    <h2 className="text-base sm:text-lg font-black flex items-center gap-2">
+                      <span>استيراد المنتجات المباشر من API موچود</span>
+                      <span className="text-[10px] bg-purple-500/30 text-purple-200 border border-purple-400/30 px-2 py-0.5 rounded-full font-mono">
+                        Rolemall Integration
+                      </span>
+                    </h2>
+                    <p className="text-xs text-purple-200/80 mt-0.5">
+                      تصفح وسحب منتجات منصة موجود بكامل تفاصيلها وصورها تلقائياً مع النشر في قناة تليغرام
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowMojodModal(false)}
+                  className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* شريط التحكم والبحث */}
+              <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="ابحث في منتجات موچود (اسم المنتج أو المعرف)..."
+                      value={mojodSearch}
+                      onChange={(e) => setMojodSearch(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          loadMojodProducts(1, mojodSearch);
+                        }
+                      }}
+                      className="w-full pr-9 pl-3 py-2 rounded-xl border border-slate-200 text-xs bg-white text-slate-800 outline-none focus:border-purple-600 transition-all"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => loadMojodProducts(1, mojodSearch)}
+                    disabled={mojodLoading}
+                    className="py-2 px-3.5 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {mojodLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                    <span>بحث</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSelectAllMojod}
+                    className="py-2 px-3 rounded-xl border border-slate-200 text-slate-700 hover:bg-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {selectedMojodIds.length === mojodProducts.length && mojodProducts.length > 0 ? (
+                      <>
+                        <CheckSquare className="w-4 h-4 text-purple-700" />
+                        <span>إلغاء تحديد الكل</span>
+                      </>
+                    ) : (
+                      <>
+                        <Square className="w-4 h-4 text-slate-400" />
+                        <span>تحديد الكل</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* التنقل بين الصفحات */}
+                  <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 text-xs">
+                    <button
+                      type="button"
+                      disabled={mojodPage <= 1 || mojodLoading}
+                      onClick={() => loadMojodProducts(mojodPage - 1, mojodSearch)}
+                      className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                      title="الصفحة السابقة"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                    <span className="px-2 font-bold text-purple-950 text-[11px]">
+                      صفحة {mojodPage}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={mojodLoading || mojodProducts.length < 24}
+                      onClick={() => loadMojodProducts(mojodPage + 1, mojodSearch)}
+                      className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                      title="الصفحة التالية"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* تنبيه الحالة إن وُجد */}
+              {mojodImportMsg && (
+                <div className={`p-3 text-xs font-bold border-b flex items-center gap-2 ${
+                  mojodImportMsg.type === 'success' 
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                    : 'bg-red-50 text-red-800 border-red-200'
+                }`}>
+                  {mojodImportMsg.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                  )}
+                  <span>{mojodImportMsg.text}</span>
+                </div>
+              )}
+
+              {/* شبكة المنتجات */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/50">
+                {mojodLoading ? (
+                  <div className="py-20 text-center">
+                    <div className="w-10 h-10 border-3 border-purple-200 border-t-purple-700 rounded-full animate-spin mx-auto mb-3" />
+                    <p className="text-xs text-slate-500 font-bold">جاري الاتصال بـ API موجود وجلب المنتجات...</p>
+                  </div>
+                ) : mojodProducts.length === 0 ? (
+                  <div className="py-20 text-center text-slate-400 text-xs">
+                    لم يتم العثور على أي منتجات مطابقة في موچود.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+                    {mojodProducts.map((item) => {
+                      const idNum = item._id;
+                      const isSelected = selectedMojodIds.includes(idNum);
+                      const isAlreadyImported = products.some(
+                        p => String(p.supplierCode).trim() === String(idNum).trim()
+                      );
+                      const rawPrice = Number(item.price) || 0;
+                      // سعر الجملة المقترح للتاجر
+                      const wholesalePrice = rawPrice > 0 ? rawPrice : 10000;
+                      const supplierCost = Math.round(wholesalePrice * 0.7);
+
+                      return (
+                        <div
+                          key={idNum}
+                          onClick={() => handleToggleSelectMojod(idNum)}
+                          className={`relative rounded-2xl border transition-all cursor-pointer bg-white p-3 flex flex-col justify-between overflow-hidden shadow-xs hover:shadow-md ${
+                            isSelected 
+                              ? 'border-purple-600 ring-2 ring-purple-500/20 bg-purple-50/30' 
+                              : isAlreadyImported 
+                              ? 'border-slate-200 opacity-80' 
+                              : 'border-slate-200/90 hover:border-purple-300'
+                          }`}
+                        >
+                          {/* شارة التحديد بالأعلى */}
+                          <div className="absolute top-2.5 right-2.5 z-10">
+                            {isSelected ? (
+                              <div className="w-6 h-6 rounded-lg bg-purple-700 text-white flex items-center justify-center shadow-sm">
+                                <Check className="w-4 h-4" />
+                              </div>
+                            ) : (
+                              <div className="w-6 h-6 rounded-lg bg-white/80 border border-slate-300 flex items-center justify-center">
+                                <Square className="w-3.5 h-3.5 text-slate-300" />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* صورة المنتج */}
+                          <div className="w-full aspect-square rounded-xl overflow-hidden bg-slate-100 relative mb-2.5">
+                            {item.img ? (
+                              <img
+                                src={item.img}
+                                alt={item.body || 'منتج موچود'}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                <ImageIcon className="w-8 h-8" />
+                              </div>
+                            )}
+
+                            {isAlreadyImported && (
+                              <span className="absolute bottom-1.5 right-1.5 bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-xs">
+                                مسحوب مسبقاً
+                              </span>
+                            )}
+                          </div>
+
+                          {/* تفاصيل المنتج */}
+                          <div className="space-y-1.5 flex-1 flex flex-col justify-between">
+                            <div>
+                              <div className="flex items-center gap-1.5 text-[10px] text-purple-700 font-mono font-bold">
+                                <span># {idNum}</span>
+                              </div>
+                              <h3 className="text-xs font-bold text-slate-900 line-clamp-2 mt-0.5" title={item.body}>
+                                {item.body || 'بدون عنوان'}
+                              </h3>
+                            </div>
+
+                            <div className="pt-2 border-t border-slate-100 space-y-1 text-[11px]">
+                              <div className="flex items-center justify-between text-slate-500">
+                                <span>سعر المورد:</span>
+                                <span className="font-semibold">{supplierCost.toLocaleString('ar-IQ')} د.ع</span>
+                              </div>
+                              <div className="flex items-center justify-between font-black text-purple-900">
+                                <span>جملة التاجر:</span>
+                                <span>{wholesalePrice.toLocaleString('ar-IQ')} د.ع</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* أسفل النافذة: شريط زر الاستيراد */}
+              <div className="p-4 bg-white border-t border-slate-200 flex items-center justify-between gap-4">
+                <div className="text-xs font-bold text-slate-600">
+                  <span>تم تحديد: </span>
+                  <span className="text-purple-700 font-black text-sm">{selectedMojodIds.length}</span>
+                  <span> من أصل {mojodProducts.length} منتج</span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowMojodModal(false)}
+                    className="py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 cursor-pointer"
+                  >
+                    إغلاق
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={selectedMojodIds.length === 0 || importingMojod}
+                    onClick={handleImportSelectedMojod}
+                    className="py-2.5 px-6 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs shadow-md shadow-purple-700/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-40"
+                  >
+                    {importingMojod ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>جاري استيراد المنتجات ونشرها...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-purple-300" />
+                        <span>استيراد المحدد ({selectedMojodIds.length}) إلى وصلي وتليغرام</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
             <div>
