@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Product, Category, Subcategory } from '@/types';
+import FedshiQuickImporter from '@/components/admin/FedshiQuickImporter';
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -1159,6 +1160,9 @@ export default function AdminProductsPage() {
             </button>
           </div>
         )}
+
+        {/* أداة السحب السريع المباشر من فدشي برابط أو كود المنتج */}
+        <FedshiQuickImporter onSuccess={() => { loadProductsPage(currentPage, searchQuery, true, viewLimit); }} />
 
         {/* بطاقة الرأس والتعليمات ومفتاح حماية الصور */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md">

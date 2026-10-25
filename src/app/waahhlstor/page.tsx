@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Order, OrderStatus, Store as StoreType } from '@/types';
+import FedshiQuickImporter from '@/components/admin/FedshiQuickImporter';
 
 export default function AdminDashboardPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -358,6 +359,9 @@ export default function AdminDashboardPage() {
             </Link>
           </div>
         </div>
+
+        {/* أداة السحب السريع المباشر من فدشي */}
+        <FedshiQuickImporter onSuccess={fetchData} />
 
         {/* بطاقات المؤشرات المالية والتشغيلية المتطورة */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
