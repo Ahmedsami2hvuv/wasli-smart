@@ -832,6 +832,7 @@
       };
     }
 
+    container.innerHTML = '';
     container.appendChild(toast);
 
     // يختفي تلقائياً بعد 3 ثوانٍ

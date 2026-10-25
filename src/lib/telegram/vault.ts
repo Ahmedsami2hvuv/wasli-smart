@@ -53,15 +53,15 @@ export async function optimizeProductImage(inputBuffer: Buffer): Promise<Process
  */
 export function getVaultBotToken(): string {
   const envToken = process.env.TELEGRAM_VAULT_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
-  // إذا كانت القيمة في فيرسل مضبوطة على توكن بوت الإشعارات (wasliasharatbot)، نستخدم تلقائياً توكن بوت مستودع المنتجات المشرف في القناة
+  // إذا كانت القيمة في فيرسل مضبوطة على توكن بوت الإشعارات (wasliasharatbot) أو غير معينة، نستخدم تلقائياً توكن بوت مستودع المنتجات المشرف في القناة
   if (!envToken || envToken.startsWith('8664781934')) {
     return '8862218858:AAHPyAOmL4_Y1R3um05z1CXbNd1UmdM-wk4';
   }
   return envToken;
 }
 
-export function getVaultChannelId(): string | undefined {
-  return process.env.TELEGRAM_VAULT_CHANNEL_ID || process.env.TELEGRAM_CHANNEL_ID;
+export function getVaultChannelId(): string {
+  return process.env.TELEGRAM_VAULT_CHANNEL_ID || process.env.TELEGRAM_CHANNEL_ID || '-1003906281269';
 }
 
 export function getOrdersBotToken(): string | undefined {

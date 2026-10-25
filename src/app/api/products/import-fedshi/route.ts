@@ -125,24 +125,28 @@ export async function POST(request: NextRequest) {
     if (actualSupplierCode) {
       const existingProduct = await findProductBySupplierCode(actualSupplierCode);
       if (existingProduct) {
-        // إذا كان المنتج موجوداً، نتأكد أيضاً من إرساله/تحديثه في قناة تيليجرام بالخلفية
+        // إذا كان المنتج موجوداً، نتأكد من إرساله/تحديثه في قناة تيليجرام
         const rawPrimaryImg = (images && images.length > 0) ? images[0] : (existingProduct.image || '/placeholder-product.svg');
         const rawImgsList = Array.isArray(images) && images.length > 0 ? images : [rawPrimaryImg];
 
-        publishProductToTelegramChannel({
-          name: existingProduct.name || name,
-          image: rawPrimaryImg,
-          images: rawImgsList,
-          wholesalePriceIqd: existingProduct.wholesalePriceIqd || customWholesale || 0,
-          minPriceIqd: existingProduct.minPriceIqd || customMin || 0,
-          maxPriceIqd: existingProduct.maxPriceIqd || customMax || 0,
-          description: specifications || description || existingProduct.description || '',
-          specifications: specifications || description || '',
-          promoDescription: promoDescription || '',
-          supplierCode: actualSupplierCode,
-          category: category || 'عام',
-          productId: existingProduct.id,
-        }).catch(err => console.warn('خلفية إعادة نشر المنتج في تيليجرام:', err));
+        try {
+          await publishProductToTelegramChannel({
+            name: existingProduct.name || name,
+            image: rawPrimaryImg,
+            images: rawImgsList,
+            wholesalePriceIqd: existingProduct.wholesalePriceIqd || customWholesale || 0,
+            minPriceIqd: existingProduct.minPriceIqd || customMin || 0,
+            maxPriceIqd: existingProduct.maxPriceIqd || customMax || 0,
+            description: specifications || description || existingProduct.description || '',
+            specifications: specifications || description || '',
+            promoDescription: promoDescription || '',
+            supplierCode: actualSupplierCode,
+            category: category || 'عام',
+            productId: existingProduct.id,
+          });
+        } catch (tgErr) {
+          console.warn('تنبيه نشر تيليجرام للمنتج الموجود:', tgErr);
+        }
 
         return NextResponse.json(
           {
@@ -251,22 +255,23 @@ export async function POST(request: NextRequest) {
       images: rawImagesList,
     });
 
-    // 2. تشغيل النشر في تيليجرام بالخلفية بدون حجب أو تعطيل المستخدم (Background Task)
-    publishProductToTelegramChannel({
-      name,
-      image: rawPrimaryImage,
-      images: rawImagesList,
-      wholesalePriceIqd: wholesalePrice,
-      minPriceIqd: minPrice,
-      maxPriceIqd: maxPrice,
-      description: specifications || description || '',
-      specifications: specifications || description || '',
-      promoDescription: promoDescription || '',
-      supplierCode: actualSupplierCode || '',
-      category: finalCategoryName,
-      productId: product.id,
-    }).then(async (telegramResult) => {
-      // إذا نجح نشر الألبوم بالخلفية وتوفرت روابط البروكسي، نحدث صور المنتج في قاعدة البيانات بهدوء
+    // 2. نشر المنتج في قناة تيليجرام وتحديث الصور بروابط المعاينة
+    try {
+      const telegramResult = await publishProductToTelegramChannel({
+        name,
+        image: rawPrimaryImage,
+        images: rawImagesList,
+        wholesalePriceIqd: wholesalePrice,
+        minPriceIqd: minPrice,
+        maxPriceIqd: maxPrice,
+        description: specifications || description || '',
+        specifications: specifications || description || '',
+        promoDescription: promoDescription || '',
+        supplierCode: actualSupplierCode || '',
+        category: finalCategoryName,
+        productId: product.id,
+      });
+
       if (telegramResult && telegramResult.success && Array.isArray(telegramResult.proxyUrls) && telegramResult.proxyUrls.length > 0) {
         try {
           const { supabaseAdmin } = await import('@/lib/supabase/admin');
@@ -280,9 +285,9 @@ export async function POST(request: NextRequest) {
           console.warn('تعذر تحديث صور المنتج بروابط البروكسي:', updateErr);
         }
       }
-    }).catch(tgErr => {
-      console.warn('خلفية نشر تيليجرام:', tgErr);
-    });
+    } catch (tgErr) {
+      console.warn('تنبيه أثناء نشر تيليجرام:', tgErr);
+    }
 
     const platformProfit = wholesalePrice - supplierCost;
     const merchantProfitRange = `${minPrice - wholesalePrice} - ${maxPrice - wholesalePrice}`;
