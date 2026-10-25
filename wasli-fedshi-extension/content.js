@@ -1450,14 +1450,15 @@
   // المحرك الصامت والفوري للسحب التلقائي وإغلاق النافذة
   // ========================================================
   async function executeDirectAutoImportProcess(pageCode, isMojod) {
-    // مؤقت أمان حتمي لإغلاق التبويب بعد 8 ثوانٍ كحد أقصى لمنع أي تعليق
+    let isSuccess = false;
+    // مؤقت أمان حتمي لإغلاق التبويب بعد 18 ثانية كحد أقصى لمنع أي تعليق
     const safetyTimer = setTimeout(() => {
       safeChromeSendMessage({ action: 'closeMyTab', code: pageCode });
       try { window.close(); } catch (e) {}
-    }, 8000);
+    }, 18000);
 
     try {
-      showFloatingToast('جاري السحب الفوري للبيانات...', 'loading');
+      showFloatingToast('جاري استخراج بيانات المنتج وسحبه...', 'loading');
 
       // قراءة ذكية وسريعة للبيانات بفاصل 80ms مع التحقق من النص الترويجي والمواصفات
       let readyData = null;
@@ -1498,12 +1499,14 @@
         const storePrice = parseInt(readyData.defaultStorePrice, 10) || (wholesale + 10000);
         const stock = parseInt(readyData.stock, 10) || 50;
 
+        const actualCode = readyData.productCode || pageCode;
+
         const payload = {
           name: productTitle,
-          fedshiCode: pageCode,
-          supplierCode: pageCode,
-          fedshiSku: readyData.skuCode || pageCode,
-          supplierSku: readyData.skuCode || pageCode,
+          fedshiCode: actualCode,
+          supplierCode: actualCode,
+          fedshiSku: readyData.skuCode || actualCode,
+          supplierSku: readyData.skuCode || actualCode,
           fedshiPrice: costPrice,
           supplierPriceIqd: costPrice,
           fedshiProfit: readyData.fedshiProfit || 0,
@@ -1526,20 +1529,31 @@
           supplierSource: isMojod ? 'mojod' : 'fedshi',
         };
 
+        showFloatingToast(`جاري إرسال ${productTitle} إلى وصلي...`, 'loading');
         const importRes = await sendProductPayloadToWasli(payload);
+
         if (importRes && importRes.success) {
-          markProductAsImported(pageCode);
-          safeChromeSendMessage({ action: 'productImportedSuccess', code: pageCode, product: importRes.product });
+          isSuccess = true;
+          markProductAsImported(actualCode);
+          safeChromeSendMessage({ action: 'productImportedSuccess', code: actualCode, product: importRes.product });
+          showFloatingToast('تم السحب والنشر في تيليجرام بنجاح ✓', 'success');
+        } else {
+          showFloatingToast(`تعذر السحب: ${importRes?.message || 'خطأ في الخادم'}`, 'error');
         }
+      } else {
+        showFloatingToast('تعذر قراءة بيانات وسعر المنتج', 'error');
       }
     } catch (err) {
       console.warn('خطأ في السحب التلقائي الصامت:', err);
+      showFloatingToast(`خطأ أثناء السحب: ${err.message || err}`, 'error');
     } finally {
       clearTimeout(safetyTimer);
-      safeChromeSendMessage({ action: 'closeMyTab', code: pageCode });
-      setTimeout(() => {
-        try { window.close(); } catch (e) {}
-      }, 100);
+      if (isSuccess) {
+        setTimeout(() => {
+          safeChromeSendMessage({ action: 'closeMyTab', code: pageCode });
+          try { window.close(); } catch (e) {}
+        }, 500);
+      }
     }
   }
 
@@ -1806,12 +1820,14 @@
         };
 
         // 4. حفظ كود المنتج محلياً فوراً لمنع التكرار
-        if (data.productCode) {
-          markProductAsImported(data.productCode);
+        const actualCode = data.productCode || pageCode;
+        if (actualCode) {
+          markProductAsImported(actualCode);
         }
 
-        // 5. إطلاق عملية السحب في الخلفية دون تعطيل المستخدم ودون جعله ينتظر أي ثانية!
-        sendProductPayloadToWasli(payload).then((result) => {
+        // 5. إطلاق عملية السحب وانتظار رد السيرفر الفعلي للتأكد من وصوله ونشره
+        try {
+          const result = await sendProductPayloadToWasli(payload);
           const prodId = result.product?.id || '';
           const activeTarget = wasliServerUrl.trim().replace(/\/+$/, '');
           const previewUrl = prodId ? `${activeTarget}/p/${prodId}` : activeTarget;
@@ -1820,43 +1836,46 @@
 
           toast.update({
             type: 'success',
-            title: 'تم السحب بنجاح!',
+            title: 'تم السحب والنشر بنجاح!',
             message: `تم حفظ <strong>${productTitle}</strong> بنجاح! ربحك: <strong>+${profitVal} د.ع</strong>`,
             previewUrl,
             adminUrl,
           });
-        }).catch((err) => {
-          console.error('فشل الاستيراد في الخلفية:', err);
+
+          // 6. تحديث نص ومظهر الزر بعد نجاح الحفظ الفعلي
+          if (mainTextEl) mainTextEl.textContent = isAuto ? 'تم السحب بنجاح ✓' : 'تم نقل المنتج بنجاح!';
+          if (subTextEl) subTextEl.textContent = 'تم الحفظ والنشر في تيليجرام بنجاح!';
+
+          // 7. إذا كان هذا تبويب سحب تلقائي تم فتحه من بطاقة منتج، إغلاق التبويب بسلاسة بعد النجاح
+          const isAutoTab = window.location.hash.includes('wasli-auto-import') || window.location.search.includes('wasli-auto-import');
+          if (isAutoTab) {
+            setTimeout(() => {
+              safeChromeSendMessage({
+                action: 'closeMyTab',
+                code: pageCode,
+              });
+              try {
+                window.close();
+              } catch (e) {}
+            }, 600);
+            return;
+          }
+
+          // الرجوع السلس للصفحة السابقة في التصفح العادي بعد التأكد من الحفظ
+          setTimeout(() => {
+            navigateBackSmoothly();
+          }, 500);
+
+        } catch (err) {
+          console.error('فشل الاستيراد في السيرفر:', err);
           toast.update({
             type: 'error',
             title: 'تعذر السحب',
             message: `حدث خطأ أثناء سحب المنتج: ${err.message || err}`,
           });
-        });
-
-        // 6. تحديث نص ومظهر الزر فورياً وإشعار المستخدم بالخروج المباشر
-        if (mainTextEl) mainTextEl.textContent = isAuto ? 'تم السحب تلقائياً ⚡' : 'تم بدء السحب بنجاح!';
-        if (subTextEl) subTextEl.textContent = 'جاري العودة لقائمة المنتجات...';
-
-        // 7. إذا كان هذا تبويب سحب تلقائي تم فتحه من بطاقة منتج، إغلاق التبويب فوراً وبث التحديث
-        const isAutoTab = window.location.hash.includes('wasli-auto-import') || window.location.search.includes('wasli-auto-import');
-        if (isAutoTab) {
-          setTimeout(() => {
-            safeChromeSendMessage({
-              action: 'closeMyTab',
-              code: pageCode,
-            });
-            try {
-              window.close();
-            } catch (e) {}
-          }, 400);
-          return;
+          if (mainTextEl) mainTextEl.textContent = 'تعذر السحب';
+          if (subTextEl) subTextEl.textContent = err.message || 'يرجى المحاولة مجدداً';
         }
-
-        // الرجوع السلس للصفحة السابقة في التصفح العادي
-        setTimeout(() => {
-          navigateBackSmoothly();
-        }, 150);
 
       } catch (err) {
         console.error('فشل بدء الاستيراد:', err);
@@ -2227,66 +2246,70 @@
     }
     if (code) activeSendingCodes.add(code);
 
-    let targetUrl = wasliServerUrl.trim().replace(/\/+$/, '');
-    const endpoint = `${targetUrl}/api/products/import-fedshi`;
-
-    // 1. المحاولة أولاً عبر خلفية الإضافة (Service Worker) لتجاوز قيود وحظر الـ CSP في المتصفح
-    if (isExtensionContextValid()) {
-      try {
-        const bgRes = await new Promise((resolve) => {
-          safeChromeSendMessage(
-            { action: 'importProduct', url: endpoint, payload },
-            (response) => {
-              resolve(response);
-            }
-          );
-        });
-
-        if (bgRes && bgRes.ok && bgRes.result && bgRes.result.success) {
-          return bgRes.result;
-        } else if (bgRes && bgRes.result && bgRes.result.message) {
-          throw new Error(bgRes.result.message);
-        } else if (bgRes && bgRes.error) {
-          throw new Error(bgRes.error);
-        }
-      } catch (workerErr) {
-        console.warn('تعذر الإرسال عبر الخلفية، المحاولة عبر الاتصال المباشر:', workerErr);
-      }
-    }
-
-    // 2. المحاولة البديلة عبر fetch المباشر
-    let response = null;
-    let result = null;
-
     try {
-      response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      result = await response.json();
-    } catch (fetchErr) {
-      if (targetUrl !== 'https://wasli-smart.vercel.app') {
-        targetUrl = 'https://wasli-smart.vercel.app';
-        wasliServerUrl = targetUrl;
-        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-          chrome.storage.sync.set({ wasliCustomUrl: targetUrl });
+      let targetUrl = wasliServerUrl.trim().replace(/\/+$/, '');
+      const endpoint = `${targetUrl}/api/products/import-fedshi`;
+
+      // 1. المحاولة أولاً عبر خلفية الإضافة (Service Worker) لتجاوز قيود وحظر الـ CSP في المتصفح
+      if (isExtensionContextValid()) {
+        try {
+          const bgRes = await new Promise((resolve) => {
+            safeChromeSendMessage(
+              { action: 'importProduct', url: endpoint, payload },
+              (response) => {
+                resolve(response);
+              }
+            );
+          });
+
+          if (bgRes && bgRes.ok && bgRes.result && bgRes.result.success) {
+            return bgRes.result;
+          } else if (bgRes && bgRes.result && bgRes.result.message) {
+            throw new Error(bgRes.result.message);
+          } else if (bgRes && bgRes.error) {
+            throw new Error(bgRes.error);
+          }
+        } catch (workerErr) {
+          console.warn('تعذر الإرسال عبر الخلفية، المحاولة عبر الاتصال المباشر:', workerErr);
         }
-        response = await fetch(`${targetUrl}/api/products/import-fedshi`, {
+      }
+
+      // 2. المحاولة البديلة عبر fetch المباشر
+      let response = null;
+      let result = null;
+
+      try {
+        response = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
         result = await response.json();
-      } else {
-        throw fetchErr;
+      } catch (fetchErr) {
+        if (targetUrl !== 'https://wasli-smart.vercel.app') {
+          targetUrl = 'https://wasli-smart.vercel.app';
+          wasliServerUrl = targetUrl;
+          if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+            chrome.storage.sync.set({ wasliCustomUrl: targetUrl });
+          }
+          response = await fetch(`${targetUrl}/api/products/import-fedshi`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          result = await response.json();
+        } else {
+          throw fetchErr;
+        }
       }
-    }
 
-    if (response && response.ok && result && result.success) {
-      return result;
-    } else {
-      throw new Error(result?.message || 'حدث خطأ في استجابة الخادم أثناء حفظ المنتج');
+      if (response && response.ok && result && result.success) {
+        return result;
+      } else {
+        throw new Error(result?.message || 'حدث خطأ في استجابة الخادم أثناء حفظ المنتج');
+      }
+    } finally {
+      if (code) activeSendingCodes.delete(code);
     }
   }
 

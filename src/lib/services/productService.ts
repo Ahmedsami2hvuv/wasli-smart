@@ -652,22 +652,21 @@ export async function findProductBySupplierCode(code: string): Promise<any | nul
   if (!code) return null;
   const cleanCode = code.trim().toLowerCase();
 
-  // 1. البحث في الذاكرة المؤقتة
+  // 1. البحث الدقيق في الذاكرة المؤقتة بكود المورد فقط
   const localMatch = localProducts.find(p => 
     p.supplierCode?.toLowerCase() === cleanCode || 
-    p.slug?.toLowerCase().includes(cleanCode) ||
-    p.id?.toLowerCase() === cleanCode
+    p.brand?.toLowerCase() === cleanCode
   );
   if (localMatch) return localMatch;
 
-  // 2. البحث في سوبابيس
+  // 2. البحث الدقيق في سوبابيس بحقل brand (كود المورد الحقيقي)
   const dbClient = supabaseAdmin || supabase;
   if (dbClient) {
     try {
       const { data, error } = await dbClient
         .from('products')
         .select('*')
-        .or(`brand.eq.${code.trim()},slug.ilike.%${cleanCode}%,title.ilike.%${cleanCode}%`)
+        .eq('brand', code.trim())
         .limit(1)
         .maybeSingle();
 

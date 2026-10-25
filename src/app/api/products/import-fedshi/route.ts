@@ -121,15 +121,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // منع التكرار الحاسم: إذا كان المنتج بنفس كود المورد موجوداً مسبقاً في المنصة، نمنع إنشاء نسخة مكررة!
+    // فحص ما إذا كان المنتج موجوداً مسبقاً بنفس كود المورد
     if (actualSupplierCode) {
       const existingProduct = await findProductBySupplierCode(actualSupplierCode);
       if (existingProduct) {
+        // إذا كان المنتج موجوداً، نتأكد أيضاً من إرساله/تحديثه في قناة تيليجرام بالخلفية
+        const rawPrimaryImg = (images && images.length > 0) ? images[0] : (existingProduct.image || '/placeholder-product.svg');
+        const rawImgsList = Array.isArray(images) && images.length > 0 ? images : [rawPrimaryImg];
+
+        publishProductToTelegramChannel({
+          name: existingProduct.name || name,
+          image: rawPrimaryImg,
+          images: rawImgsList,
+          wholesalePriceIqd: existingProduct.wholesalePriceIqd || customWholesale || 0,
+          minPriceIqd: existingProduct.minPriceIqd || customMin || 0,
+          maxPriceIqd: existingProduct.maxPriceIqd || customMax || 0,
+          description: specifications || description || existingProduct.description || '',
+          specifications: specifications || description || '',
+          promoDescription: promoDescription || '',
+          supplierCode: actualSupplierCode,
+          category: category || 'عام',
+          productId: existingProduct.id,
+        }).catch(err => console.warn('خلفية إعادة نشر المنتج في تيليجرام:', err));
+
         return NextResponse.json(
           {
             success: true,
             isExisting: true,
-            message: 'هذا المنتج مسحوب وموجود مسبقاً في منصة وصلي، تم تجنب التكرار',
+            message: 'المنتج مضاف مسبقاً وتم تحديثه ونشره بنجاح في منصة وصلي وتيليجرام',
             product: existingProduct,
             financials: {
               supplierCost: existingProduct.supplierPriceIqd || supplierCost,
