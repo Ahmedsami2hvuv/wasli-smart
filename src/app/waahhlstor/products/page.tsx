@@ -1034,6 +1034,14 @@ export default function AdminProductsPage() {
             </Link>
 
             <Link
+              href="/waahhlstor/distribute"
+              className="py-2.5 px-3.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
+            >
+              <Boxes className="w-4 h-4 text-emerald-200" />
+              <span>توزيع المنتجات</span>
+            </Link>
+
+            <Link
               href="/waahhlstor/categories"
               className="py-2.5 px-3.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200/80 transition-all flex items-center gap-1.5 shadow-2xs"
             >

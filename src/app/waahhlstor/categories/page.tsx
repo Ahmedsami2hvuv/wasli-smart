@@ -34,7 +34,8 @@ import {
   Car,
   HeartPulse,
   Coffee,
-  Glasses
+  Glasses,
+  Boxes
 } from 'lucide-react';
 import { Category, Subcategory } from '@/types';
 
@@ -306,7 +307,15 @@ export default function AdminCategoriesPage() {
             <span>العودة إلى صفحة المدير</span>
           </Link>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <Link
+              href="/waahhlstor/distribute"
+              className="py-2.5 px-3.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
+            >
+              <Boxes className="w-4 h-4 text-emerald-200" />
+              <span>توزيع المنتجات على الأقسام</span>
+            </Link>
+
             <button
               onClick={fetchCategories}
               className="py-2.5 px-3 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200/80 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"

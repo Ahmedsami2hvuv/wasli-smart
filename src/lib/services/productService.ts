@@ -82,12 +82,19 @@ function mapDbProductToModel(item: any): Product {
     image: primaryImg || '/placeholder-product.svg',
     category: item.category?.name || 'عام',
     categoryId: item.category_id,
-    promoDescription: (item.description || '').replace(/<!--WASLI_SUPPLIER_PRICE:\d+-->/g, '').trim(),
-    specifications: (item.description || '').replace(/<!--WASLI_SUPPLIER_PRICE:\d+-->/g, '').trim(),
+    subcategoryId: (() => {
+      const match = (item.description || '').match(/<!--WASLI_SUBCAT_ID:([^>]+)-->/);
+      return match ? match[1] : (item.subcategory_id || undefined);
+    })(),
+    subcategory: (() => {
+      const match = (item.description || '').match(/<!--WASLI_SUBCAT_NAME:([^>]+)-->/);
+      return match ? match[1] : (item.subcategory || undefined);
+    })(),
+    promoDescription: (item.description || '').replace(/<!--WASLI_[A-Z_]+:[^>]+-->/g, '').trim(),
+    specifications: (item.description || '').replace(/<!--WASLI_[A-Z_]+:[^>]+-->/g, '').trim(),
     supplierPriceIqd: (() => {
       const supplierMatch = (item.description || '').match(/<!--WASLI_SUPPLIER_PRICE:(\d+)-->/);
-      if (supplierMatch) return Number(supplierMatch[1]);
-      return wholesale;
+      return supplierMatch ? Number(supplierMatch[1]) : wholesale;
     })(),
     supplierCode: item.brand || item.metadata?.supplierCode,
     images: allImages,
@@ -458,10 +465,32 @@ export async function updatePlatformProduct(id: string, updates: Partial<Product
       if (updates.status) updateData.status = updates.status;
       if (updates.isAvailable !== undefined) updateData.is_available = updates.isAvailable;
 
-      if (updates.supplierPriceIqd !== undefined) {
+      if (updates.supplierPriceIqd !== undefined || updates.subcategoryId !== undefined || updates.subcategory !== undefined) {
         const { data: curr } = await dbClient.from('products').select('description').eq('id', id).maybeSingle();
-        const baseDesc = ((updates.description !== undefined ? updates.description : curr?.description) || '').replace(/<!--WASLI_SUPPLIER_PRICE:\d+-->/g, '').trim();
-        updateData.description = `${baseDesc}\n\n<!--WASLI_SUPPLIER_PRICE:${updates.supplierPriceIqd}-->`;
+        let baseDesc = ((updates.description !== undefined ? updates.description : curr?.description) || '');
+        
+        if (updates.supplierPriceIqd !== undefined) {
+          baseDesc = baseDesc.replace(/<!--WASLI_SUPPLIER_PRICE:\d+-->/g, '').trim();
+          if (updates.supplierPriceIqd > 0) {
+            baseDesc += `\n\n<!--WASLI_SUPPLIER_PRICE:${updates.supplierPriceIqd}-->`;
+          }
+        }
+
+        if (updates.subcategoryId !== undefined) {
+          baseDesc = baseDesc.replace(/<!--WASLI_SUBCAT_ID:[^>]+-->/g, '').trim();
+          if (updates.subcategoryId) {
+            baseDesc += `\n<!--WASLI_SUBCAT_ID:${updates.subcategoryId}-->`;
+          }
+        }
+
+        if (updates.subcategory !== undefined) {
+          baseDesc = baseDesc.replace(/<!--WASLI_SUBCAT_NAME:[^>]+-->/g, '').trim();
+          if (updates.subcategory) {
+            baseDesc += `\n<!--WASLI_SUBCAT_NAME:${updates.subcategory}-->`;
+          }
+        }
+
+        updateData.description = baseDesc.trim();
       }
 
       await dbClient.from('products').update(updateData).eq('id', id);

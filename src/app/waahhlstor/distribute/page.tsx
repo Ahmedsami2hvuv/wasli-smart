@@ -1,0 +1,832 @@
+'use client';
+
+import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
+import { 
+  ArrowRight, 
+  Search, 
+  RefreshCw, 
+  Layers, 
+  GitBranch, 
+  Check, 
+  CheckCircle2, 
+  Filter, 
+  Sparkles, 
+  Boxes, 
+  Save, 
+  AlertCircle, 
+  X, 
+  ChevronLeft, 
+  ChevronRight, 
+  Plus,
+  Package,
+  CheckSquare,
+  Square,
+  SlidersHorizontal,
+  FolderOpen
+} from 'lucide-react';
+import { Product, Category, Subcategory } from '@/types';
+
+export default function DistributeProductsPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [catFilter, setCatFilter] = useState<string>('all');
+  const [viewLimit, setViewLimit] = useState<number | 'all'>(50);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+
+  // حالات نافذة توزيع المنتج
+  const [activeProduct, setActiveProduct] = useState<Product | null>(null);
+  const [targetCategoryId, setTargetCategoryId] = useState<string>('');
+  const [targetCategoryName, setTargetCategoryName] = useState<string>('');
+  const [targetSubcategoryId, setTargetSubcategoryId] = useState<string>('');
+  const [targetSubcategoryName, setTargetSubcategoryName] = useState<string>('');
+  const [savingAssignment, setSavingAssignment] = useState(false);
+  const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // إضافة فرع سريع جديد من داخل النافذة
+  const [showQuickAddSub, setShowQuickAddSub] = useState(false);
+  const [quickSubName, setQuickSubName] = useState('');
+  const [addingSub, setAddingSub] = useState(false);
+
+  // جلب الأقسام والأفرع
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch('/api/categories');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.categories)) {
+        setCategories(data.categories);
+      }
+    } catch (e) {
+      console.error('خطأ في جلب الأقسام:', e);
+    }
+  };
+
+  // تفريغ كاش المنتجات لضمان ظهور التعديلات في كافة الصفحات
+  const invalidateProductsCache = () => {
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('wasli_admin_products_') || k === 'wasli_total_products_count')) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch (e) {}
+  };
+
+  // جلب المنتجات
+  const loadProducts = async (pageNum = 1, search = '', limit = viewLimit) => {
+    try {
+      setLoading(true);
+      const effectiveLimit = limit === 'all' ? 1000 : limit;
+      const searchParam = search.trim() ? `&search=${encodeURIComponent(search.trim())}` : '';
+      const limitParam = `&limit=${effectiveLimit}`;
+      
+      const res = await fetch(`/api/products?page=${pageNum}${limitParam}${searchParam}`);
+      const data = await res.json();
+
+      if (data.success && data.products) {
+        setProducts(data.products);
+        setTotalPages(data.totalPages || 1);
+        setTotalCount(data.total || data.products.length);
+        setPage(pageNum);
+      }
+    } catch (e) {
+      console.error('خطأ في تحميل المنتجات:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCategories();
+    loadProducts(1, '', viewLimit);
+  }, []);
+
+  // حساب الأفرع المتاحة للقسم المختار حالياً داخل النافذة
+  const activeSubs = useMemo(() => {
+    if (!targetCategoryId) return [];
+    const cat = categories.find(c => c.id === targetCategoryId);
+    return cat?.subcategories || [];
+  }, [targetCategoryId, categories]);
+
+  // إحصائيات التوزيع
+  const stats = useMemo(() => {
+    const total = products.length;
+    let distributed = 0;
+    let pending = 0;
+
+    products.forEach(p => {
+      const hasCat = Boolean(p.categoryId || (p.category && p.category !== 'عام'));
+      const hasSub = Boolean(p.subcategoryId || p.subcategory);
+      if (hasCat && hasSub) {
+        distributed++;
+      } else {
+        pending++;
+      }
+    });
+
+    return { total, distributed, pending };
+  }, [products]);
+
+  // تصفية المنتجات في الشاشة
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      // فلترة الأقسام
+      if (catFilter === 'unassigned') {
+        const hasSub = Boolean(p.subcategoryId || p.subcategory);
+        const hasCat = Boolean(p.categoryId);
+        return !hasSub || !hasCat;
+      }
+      if (catFilter !== 'all') {
+        return p.categoryId === catFilter;
+      }
+      return true;
+    });
+  }, [products, catFilter]);
+
+  // فتح نافذة توزيع المنتج
+  const handleOpenAssignModal = (p: Product) => {
+    setActiveProduct(p);
+    setShowQuickAddSub(false);
+    setQuickSubName('');
+    setFeedbackMsg(null);
+
+    // إذا كان للمنتج قسم مسبق نحدده
+    let catId = p.categoryId || '';
+    if (!catId && p.category) {
+      const matched = categories.find(c => c.name.toLowerCase() === p.category?.toLowerCase());
+      if (matched) catId = matched.id;
+    }
+    if (!catId && categories.length > 0) {
+      catId = categories[0].id;
+    }
+
+    setTargetCategoryId(catId);
+    const catObj = categories.find(c => c.id === catId);
+    setTargetCategoryName(catObj?.name || p.category || '');
+
+    // الفرع
+    setTargetSubcategoryId(p.subcategoryId || '');
+    setTargetSubcategoryName(p.subcategory || '');
+  };
+
+  // تغيير القسم الرئيسي داخل النافذة
+  const handleSelectCategory = (catId: string) => {
+    setTargetCategoryId(catId);
+    const cat = categories.find(c => c.id === catId);
+    setTargetCategoryName(cat?.name || '');
+    
+    // إعادة تعيين الفرع عند تغيير القسم
+    setTargetSubcategoryId('');
+    setTargetSubcategoryName('');
+  };
+
+  // اختيار فرع
+  const handleSelectSubcategory = (subId: string, subName: string) => {
+    setTargetSubcategoryId(subId);
+    setTargetSubcategoryName(subName);
+  };
+
+  // حفظ التوزيع
+  const handleSaveAssignment = async (moveToNext = false) => {
+    if (!activeProduct) return;
+    if (!targetCategoryId) {
+      setFeedbackMsg({ text: 'يرجى اختيار القسم الرئيسي للمنتج', type: 'error' });
+      return;
+    }
+
+    setSavingAssignment(true);
+    setFeedbackMsg(null);
+
+    try {
+      const selectedCat = categories.find(c => c.id === targetCategoryId);
+      const catName = selectedCat?.name || targetCategoryName;
+
+      const payload = {
+        categoryId: targetCategoryId,
+        category: catName,
+        subcategoryId: targetSubcategoryId || undefined,
+        subcategory: targetSubcategoryName || undefined,
+      };
+
+      // تحديث فوري مباشر في واجهة الصفحة
+      setProducts(prev => prev.map(item => item.id === activeProduct.id ? {
+        ...item,
+        ...payload,
+      } : item));
+
+      // إرسال التحديث للسيرفر لحفظه في سوبابيس
+      const res = await fetch(`/api/products/${activeProduct.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      invalidateProductsCache();
+
+      if (data.success) {
+        setFeedbackMsg({ text: `تم حفظ وتوزيع (${activeProduct.name}) بنجاح`, type: 'success' });
+
+        if (moveToNext) {
+          // الانتقال للمنتج التالي في القائمة تلقائياً
+          const currentIndex = filteredProducts.findIndex(p => p.id === activeProduct.id);
+          if (currentIndex !== -1 && currentIndex + 1 < filteredProducts.length) {
+            const nextProd = filteredProducts[currentIndex + 1];
+            setTimeout(() => {
+              handleOpenAssignModal(nextProd);
+            }, 300);
+            return;
+          }
+        }
+
+        setTimeout(() => {
+          setActiveProduct(null);
+        }, 600);
+      } else {
+        setFeedbackMsg({ text: data.message || 'فشل حفظ التوزيع', type: 'error' });
+      }
+    } catch (err: any) {
+      setFeedbackMsg({ text: 'خطأ في الاتصال بالخادم لحفظ التوزيع', type: 'error' });
+    } finally {
+      setSavingAssignment(false);
+    }
+  };
+
+  // إضافة فرع جديد سريعاً داخل القسم المختار
+  const handleQuickAddSub = async () => {
+    if (!quickSubName.trim() || !targetCategoryId) return;
+    setAddingSub(true);
+    try {
+      const res = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create_subcategory',
+          categoryId: targetCategoryId,
+          name: quickSubName.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.subcategory) {
+        const newSub: Subcategory = data.subcategory;
+        // تحديث قائمة الأقسام محلياً
+        setCategories(prev => prev.map(c => {
+          if (c.id === targetCategoryId) {
+            return {
+              ...c,
+              subcategories: [...(c.subcategories || []), newSub],
+            };
+          }
+          return c;
+        }));
+        // تحديد الفرع الجديد تلقائياً للمنتج
+        setTargetSubcategoryId(newSub.id);
+        setTargetSubcategoryName(newSub.name);
+        setQuickSubName('');
+        setShowQuickAddSub(false);
+      }
+    } catch (e) {
+      console.error('خطأ في إضافة الفرع السريع:', e);
+    } finally {
+      setAddingSub(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8 pb-24">
+      <div className="max-w-7xl mx-auto space-y-6">
+
+        {/* الشريط العلوي وروابط التنقل */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/waahhlstor/products"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-brand-700 transition-colors bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-2xs"
+            >
+              <ArrowRight className="w-4 h-4" />
+              <span>العودة لإدارة المنتجات</span>
+            </Link>
+
+            <Link
+              href="/waahhlstor/categories"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-sky-700 transition-colors bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-2xs"
+            >
+              <Layers className="w-4 h-4 text-sky-600" />
+              <span>إدارة الأقسام والأفرع</span>
+            </Link>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => loadProducts(page, searchQuery, viewLimit)}
+              disabled={loading}
+              className="py-2 px-3.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <span>تحديث المنتجات</span>
+            </button>
+          </div>
+        </div>
+
+        {/* بطاقة العنوان والتعليمات البسيطة */}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-10 h-10 rounded-2xl bg-brand-50 border border-brand-200 text-brand-700 flex items-center justify-center shrink-0">
+                <Boxes className="w-5 h-5 text-brand-700" />
+              </div>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900">توزيع وتصنيف المنتجات</h1>
+                <p className="text-xs text-slate-500">
+                  انقر على أي منتج لتحديد قسمه الرئيسي وفرعه المخصص فورياً لترتيب المتجر وسهولة تصفح الزبائن
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* العدادات الإحصائية */}
+          <div className="flex items-center gap-3 flex-wrap shrink-0">
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2 text-center min-w-[90px]">
+              <span className="text-[10px] text-slate-500 block font-bold">إجمالي المعروض</span>
+              <span className="text-base font-black text-slate-900">{stats.total}</span>
+            </div>
+
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-2 text-center min-w-[90px]">
+              <span className="text-[10px] text-emerald-700 block font-bold">موزع بالكامل</span>
+              <span className="text-base font-black text-emerald-700">{stats.distributed}</span>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-2 text-center min-w-[90px]">
+              <span className="text-[10px] text-amber-700 block font-bold">بحاجة لتوزيع</span>
+              <span className="text-base font-black text-amber-700">{stats.pending}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* شريط الفلاتر والبحث والتحكم بكمية العرض */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            
+            {/* أزرار الفلترة السريعة */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCatFilter('all')}
+                className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  catFilter === 'all' 
+                    ? 'bg-slate-900 text-white shadow-xs' 
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                }`}
+              >
+                <span>جميع المنتجات ({products.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCatFilter('unassigned')}
+                className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  catFilter === 'unassigned' 
+                    ? 'bg-amber-600 text-white shadow-xs' 
+                    : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200'
+                }`}
+              >
+                <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                <span>غير موزعة / بدون فرع ({stats.pending})</span>
+              </button>
+
+              {categories.map(cat => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setCatFilter(cat.id)}
+                  className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    catFilter === cat.id 
+                      ? 'bg-brand-700 text-white shadow-xs' 
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  <span>{cat.name}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* أدوات البحث وعرض الكمية */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* أزرار اختيار كمية العرض */}
+              <div className="flex items-center gap-1 bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs">
+                <span className="text-[10px] text-slate-500 font-bold px-1.5 hidden sm:inline">عرض:</span>
+                <button
+                  type="button"
+                  onClick={() => { setViewLimit(20); loadProducts(1, searchQuery, 20); }}
+                  className={`px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                    viewLimit === 20 ? 'bg-brand-700 text-white shadow-2xs' : 'text-slate-600 hover:bg-white'
+                  }`}
+                >
+                  20
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setViewLimit(50); loadProducts(1, searchQuery, 50); }}
+                  className={`px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                    viewLimit === 50 ? 'bg-brand-700 text-white shadow-2xs' : 'text-slate-600 hover:bg-white'
+                  }`}
+                >
+                  50
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setViewLimit(100); loadProducts(1, searchQuery, 100); }}
+                  className={`px-2 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                    viewLimit === 100 ? 'bg-brand-700 text-white shadow-2xs' : 'text-slate-600 hover:bg-white'
+                  }`}
+                >
+                  100
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setViewLimit('all'); loadProducts(1, searchQuery, 'all'); }}
+                  className={`px-2.5 py-1 rounded-lg font-black text-[11px] transition-all cursor-pointer flex items-center gap-1 ${
+                    viewLimit === 'all'
+                      ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white shadow-xs'
+                      : 'text-purple-700 bg-purple-50 hover:bg-purple-100'
+                  }`}
+                  title="عرض كافة منتجات المنصة دفعة واحدة لتوزيعها بسرعة"
+                >
+                  <span>عرض الكل</span>
+                  {totalCount > 0 && <span className="opacity-80">({totalCount})</span>}
+                </button>
+              </div>
+
+              {/* شريط البحث */}
+              <div className="relative w-full sm:w-56">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="ابحث بالاسم أو الكود..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      loadProducts(1, searchQuery, viewLimit);
+                    }
+                  }}
+                  className="w-full pr-8 pl-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-brand-600 bg-slate-50 focus:bg-white"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => loadProducts(1, searchQuery, viewLimit)}
+                className="py-1.5 px-3 bg-brand-700 hover:bg-brand-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                بحث
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        {/* شبكة المنتجات العريضة للتوزيع السريع */}
+        {loading ? (
+          <div className="bg-white rounded-3xl p-16 border border-slate-200 text-center space-y-3">
+            <RefreshCw className="w-8 h-8 text-brand-600 animate-spin mx-auto" />
+            <p className="text-sm font-bold text-slate-700">جاري تحميل المنتجات للتوزيع...</p>
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="bg-white rounded-3xl p-16 border border-dashed border-slate-300 text-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+              <FolderOpen className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-black text-slate-800">لا توجد منتجات مطابقة لهذا الفلتر</h3>
+            <p className="text-xs text-slate-500">جرب تغيير معيار البحث أو اختيار فلتر "جميع المنتجات"</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4">
+            {filteredProducts.map((p) => {
+              const wholesale = Number(p.wholesalePriceIqd) || 0;
+              const customerPrice = Number(p.platformPriceIqd) || Number(p.priceIqd) || wholesale;
+              const isAssigned = Boolean(p.subcategoryId || p.subcategory);
+
+              return (
+                <div
+                  key={p.id}
+                  onClick={() => handleOpenAssignModal(p)}
+                  className={`bg-white rounded-2xl p-3 border transition-all duration-200 hover:shadow-lg cursor-pointer flex flex-col justify-between group relative ${
+                    isAssigned 
+                      ? 'border-slate-200/90 hover:border-brand-500' 
+                      : 'border-amber-300/80 bg-amber-50/20 hover:border-amber-500'
+                  }`}
+                  title="انقر لتحديد القسم والفرع لهذا المنتج"
+                >
+                  {/* شارة حالة التوزيع في الزاوية */}
+                  <div className="absolute top-2 left-2 z-10">
+                    {isAssigned ? (
+                      <span className="bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-xs flex items-center gap-1">
+                        <Check className="w-2.5 h-2.5" />
+                        <span>موزع</span>
+                      </span>
+                    ) : (
+                      <span className="bg-amber-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-xs animate-pulse">
+                        بحاجة لفرع
+                      </span>
+                    )}
+                  </div>
+
+                  <div>
+                    {/* صورة المنتج واضحة ونظيفة */}
+                    <div className="w-full aspect-square rounded-xl overflow-hidden bg-slate-100 relative mb-2.5 group-hover:scale-[1.02] transition-transform duration-200">
+                      <img
+                        src={p.image || '/placeholder-product.svg'}
+                        alt={p.name}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-product.svg'; }}
+                      />
+                    </div>
+
+                    {/* الاسم والكود */}
+                    <div className="space-y-1">
+                      {p.supplierCode && (
+                        <span className="text-[10px] text-purple-700 font-mono font-bold block">
+                          #{p.supplierCode}
+                        </span>
+                      )}
+                      <h3 className="text-xs font-bold text-slate-900 line-clamp-2 leading-snug group-hover:text-brand-700 transition-colors" title={p.name}>
+                        {p.name}
+                      </h3>
+                    </div>
+                  </div>
+
+                  {/* الأسعار وتفاصيل القسم والفرع */}
+                  <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-1.5">
+                    {/* الأسعار */}
+                    <div className="flex items-center justify-between text-[11px]">
+                      <div className="text-slate-500">
+                        <span className="text-[10px] block text-slate-400">الجملة:</span>
+                        <span className="font-bold text-slate-700">{wholesale.toLocaleString('ar-IQ')} د.ع</span>
+                      </div>
+                      <div className="text-left text-brand-900">
+                        <span className="text-[10px] block text-slate-400">البيع:</span>
+                        <span className="font-black text-brand-700">{customerPrice.toLocaleString('ar-IQ')} د.ع</span>
+                      </div>
+                    </div>
+
+                    {/* عرض القسم والفرع الحالي */}
+                    <div className="pt-1 text-[10px] border-t border-slate-100/70">
+                      <div className="flex items-center gap-1 text-slate-600 font-semibold truncate" title={`${p.category || 'عام'} > ${p.subcategory || 'بدون فرع'}`}>
+                        <Layers className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="truncate">{p.category || 'عام'}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-sky-700 font-bold truncate mt-0.5">
+                        <GitBranch className="w-3 h-3 text-sky-500 shrink-0" />
+                        <span className="truncate">{p.subcategory || 'انقر لتحديد الفرع...'}</span>
+                      </div>
+                    </div>
+
+                    {/* زر إجراء النقر */}
+                    <div className="pt-1.5">
+                      <button
+                        type="button"
+                        className="w-full py-1.5 px-2 bg-slate-100 group-hover:bg-brand-700 group-hover:text-white text-slate-700 rounded-xl text-[10px] font-black transition-all flex items-center justify-center gap-1"
+                      >
+                        <SlidersHorizontal className="w-3 h-3" />
+                        <span>اختيار القسم والفرع</span>
+                      </button>
+                    </div>
+
+                  </div>
+
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* نافذة تحديد القسم والفرع للمنتج (Modal) */}
+        {activeProduct && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-200 my-8 animate-in fade-in zoom-in-95 duration-200 space-y-5">
+              
+              {/* رأس النافذة */}
+              <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-brand-50 border border-brand-200 text-brand-700 flex items-center justify-center shrink-0">
+                    <Boxes className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-900">توزيع وتصنيف المنتج</h3>
+                    <p className="text-xs text-slate-500">اختر القسم الرئيسي ثم حدد الفرع المناسب واضغط حفظ</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveProduct(null)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* بطاقة معاينة المنتج الجاري تصنيفه */}
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 flex gap-3.5 items-center">
+                <img
+                  src={activeProduct.image || '/placeholder-product.svg'}
+                  alt={activeProduct.name}
+                  className="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0 bg-white"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-product.svg'; }}
+                />
+                <div className="min-w-0 flex-1">
+                  {activeProduct.supplierCode && (
+                    <span className="text-[10px] text-purple-700 font-mono font-bold block">
+                      كود: #{activeProduct.supplierCode}
+                    </span>
+                  )}
+                  <h4 className="text-xs font-black text-slate-900 line-clamp-2 leading-snug">
+                    {activeProduct.name}
+                  </h4>
+                  <div className="flex items-center gap-3 text-[11px] mt-1 text-slate-600">
+                    <span>الجملة: <strong className="text-slate-800">{(activeProduct.wholesalePriceIqd || 0).toLocaleString('ar-IQ')} د.ع</strong></span>
+                    <span>البيع: <strong className="text-brand-700">{(activeProduct.platformPriceIqd || activeProduct.priceIqd || 0).toLocaleString('ar-IQ')} د.ع</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              {/* رسائل التنبيه والنجاح */}
+              {feedbackMsg && (
+                <div className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
+                  feedbackMsg.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'
+                }`}>
+                  {feedbackMsg.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertCircle className="w-4 h-4 text-red-600" />}
+                  <span>{feedbackMsg.text}</span>
+                </div>
+              )}
+
+              {/* الخطوة 1: اختيار القسم الرئيسي */}
+              <div className="space-y-2">
+                <label className="block text-xs font-black text-slate-900 flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-brand-600" />
+                  <span>الخطوة 1: اختر القسم الرئيسي *</span>
+                </label>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {categories.map((cat) => {
+                    const isSelected = targetCategoryId === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => handleSelectCategory(cat.id)}
+                        className={`p-2.5 rounded-xl border text-right transition-all flex items-center gap-2 cursor-pointer ${
+                          isSelected 
+                            ? 'bg-brand-700 border-brand-700 text-white font-black shadow-xs ring-2 ring-brand-300' 
+                            : 'bg-white border-slate-200 hover:border-brand-300 text-slate-700 font-bold hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? 'bg-accent-400' : 'bg-slate-300'}`}></span>
+                        <span className="text-xs truncate">{cat.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* الخطوة 2: اختيار الفرع التابع للقسم المختار */}
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-black text-slate-900 flex items-center gap-1.5">
+                    <GitBranch className="w-4 h-4 text-sky-600" />
+                    <span>الخطوة 2: اختر الفرع التابع لقسم ({targetCategoryName || 'المحدد'}) *</span>
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickAddSub(!showQuickAddSub)}
+                    className="text-[11px] text-sky-600 hover:text-sky-800 font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>إضافة فرع جديد لهذا القسم</span>
+                  </button>
+                </div>
+
+                {/* حقل إضافة فرع سريع */}
+                {showQuickAddSub && (
+                  <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl space-y-2 animate-in fade-in duration-200">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="اكتب اسم الفرع الجديد (مثلاً: سماعات ذكية)..."
+                        value={quickSubName}
+                        onChange={(e) => setQuickSubName(e.target.value)}
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-sky-300 text-xs text-slate-900 bg-white outline-none focus:border-sky-600 font-bold"
+                      />
+                      <button
+                        type="button"
+                        disabled={addingSub || !quickSubName.trim()}
+                        onClick={handleQuickAddSub}
+                        className="py-1.5 px-3 bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs rounded-lg transition-all cursor-pointer disabled:opacity-40"
+                      >
+                        {addingSub ? 'جاري الإضافة...' : 'حفظ الفرع'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* قائمة الأفرع المتاحة للاختيار بالنقرة */}
+                {activeSubs.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1">
+                    {activeSubs.map((sub) => {
+                      const isSelected = targetSubcategoryId === sub.id || targetSubcategoryName === sub.name;
+                      return (
+                        <button
+                          key={sub.id}
+                          type="button"
+                          onClick={() => handleSelectSubcategory(sub.id, sub.name)}
+                          className={`p-2.5 rounded-xl border text-right transition-all flex items-center justify-between gap-2 cursor-pointer ${
+                            isSelected 
+                              ? 'bg-sky-600 border-sky-600 text-white font-black shadow-xs ring-2 ring-sky-300' 
+                              : 'bg-white border-slate-200 hover:border-sky-300 text-slate-700 font-bold hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="text-xs truncate">{sub.name}</span>
+                          {isSelected && <Check className="w-4 h-4 text-white shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center space-y-2">
+                    <p className="text-xs text-slate-500 font-medium">
+                      لا توجد أفرع مضافة في هذا القسم حالياً
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowQuickAddSub(true)}
+                      className="py-1 px-3 bg-white border border-slate-300 text-sky-700 text-xs font-bold rounded-lg hover:bg-sky-50 transition-all cursor-pointer inline-flex items-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>إضافة أول فرع الآن</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* أزرار الحفظ والإغلاق */}
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setActiveProduct(null)}
+                  disabled={savingAssignment}
+                  className="py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 cursor-pointer disabled:opacity-40"
+                >
+                  إلغاء
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={savingAssignment || !targetCategoryId}
+                    onClick={() => handleSaveAssignment(true)}
+                    className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                    title="حفظ هذا المنتج والانتقال تلقائياً للمنتج التالي لتسريع العمل"
+                  >
+                    <span>حفظ والتالي</span>
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={savingAssignment || !targetCategoryId}
+                    onClick={() => handleSaveAssignment(false)}
+                    className="py-2.5 px-6 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-black text-xs shadow-md shadow-emerald-700/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-40"
+                  >
+                    {savingAssignment ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>جاري الحفظ...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4 text-emerald-200" />
+                        <span>حفظ التوزيع</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}

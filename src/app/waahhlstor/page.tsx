@@ -31,7 +31,8 @@ import {
   Check,
   Trash2,
   Search,
-  Sparkles
+  Sparkles,
+  Boxes
 } from 'lucide-react';
 import Link from 'next/link';
 import { Order, OrderStatus, Store as StoreType } from '@/types';
@@ -401,6 +402,25 @@ export default function AdminDashboardPage() {
             </div>
             <div className="text-[10px] text-sky-600 font-bold mt-2 flex items-center gap-1">
               <span>تعديل وإضافة أفرع</span>
+              <span>&larr;</span>
+            </div>
+          </Link>
+
+          <Link 
+            href="/waahhlstor/distribute"
+            className="bg-white hover:bg-purple-50/40 transition-all rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs group flex flex-col justify-between hover:border-purple-300"
+          >
+            <div>
+              <div className="text-[11px] font-bold text-purple-700 mb-1 flex items-center justify-between">
+                <span>توزيع المنتجات</span>
+                <Boxes className="w-3.5 h-3.5 text-purple-600 group-hover:scale-110 transition-transform" />
+              </div>
+              <div className="text-lg sm:text-xl font-black text-slate-900">
+                تصنيف سريع
+              </div>
+            </div>
+            <div className="text-[10px] text-purple-600 font-bold mt-2 flex items-center gap-1">
+              <span>تحديد الأقسام والأفرع</span>
               <span>&larr;</span>
             </div>
           </Link>
