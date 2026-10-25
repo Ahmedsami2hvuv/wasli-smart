@@ -2343,9 +2343,7 @@
   }
 
   // ========================================================
-  // اكتشاف بطاقات المنتجات في صفحات القوائم
-  // ========================================================
-  // رصد بطاقات المنتجات في الصفحة الرئيسية والكتالوج (فدشي وموجود)
+  // اكتشاف بطاقات المنتجات في صفحات القوائم والكتالوج
   // ========================================================
   function findVisibleProductCards() {
     const cards = [];
@@ -2367,53 +2365,43 @@
         cards.push({
           code,
           cardEl,
-          cardData: { title: cardEl.querySelector('.home-product-name, h3, h2')?.textContent?.trim() || `منتج موجود ${code}` },
         });
       });
       return cards;
     }
 
+    // موقع فدشي: البحث في كافة روابط المنتجات المعروضة
     const links = Array.from(document.querySelectorAll('a[href*="/products/"], a[href*="/product/"], a[href*="/p/"]'));
+    const ignoredWords = ['listing', 'catalog', 'category', 'categories', 'search', 'cart', 'orders', 'all', 'home', 'login'];
 
     links.forEach(link => {
-      const href = link.getAttribute('href') || link.href || '';
-      const match = href.match(/\/(?:products?|p)\/([A-Za-z0-9_-]+)/);
-      if (!match) return;
-      const code = match[1];
+      try {
+        const href = link.getAttribute('href') || link.href || '';
+        const match = href.match(/\/(?:products?|p)\/([A-Za-z0-9_-]+)/);
+        if (!match) return;
+        const code = match[1];
 
-      // استبعاد الكلمات والمسارات العامة
-      const ignoredWords = ['listing', 'catalog', 'category', 'categories', 'search', 'cart', 'orders', 'all', 'home', 'login'];
-      if (ignoredWords.includes(code.toLowerCase())) return;
+        if (ignoredWords.includes(code.toLowerCase())) return;
+        if (seenCodes.has(code)) return;
+        seenCodes.add(code);
 
-      if (seenCodes.has(code)) return;
-      seenCodes.add(code);
-
-      // العثور الدقيق على كارت المنتج المنفصل بسرعة فائقة وبدون إبطاء الصفحة
-      let cardEl = link;
-      let curr = link;
-      while (curr && curr !== document.body) {
-        const parent = curr.parentElement;
-        if (parent) {
-          const parentClass = String(parent.className || '');
-          if (parentClass.includes('grid')) {
+        // العثور على بطاقة المنتج الأنسب التي تحتضن الرابط والصورة
+        let cardEl = link;
+        let curr = link;
+        for (let i = 0; i < 6; i++) {
+          if (!curr || curr === document.body) break;
+          // بطاقة المنتج تحتوي على صورة أو مؤشر سعر
+          if (curr.querySelector && (curr.querySelector('img') || curr.querySelector('[data-amount="true"]') || curr.textContent.includes('د.ع') || curr.textContent.includes('سعر الجملة'))) {
             cardEl = curr;
-            break;
           }
+          curr = curr.parentElement;
         }
-        if (curr.querySelector('img') && (curr.textContent.includes('سعر الجملة') || curr.textContent.includes('د.ع') || curr.textContent.includes('IQD'))) {
-          cardEl = curr;
-          break;
-        }
-        curr = curr.parentElement;
-      }
 
-      const cardData = extractDataFromCard(cardEl, code);
-
-      cards.push({
-        code,
-        cardEl,
-        cardData,
-      });
+        cards.push({
+          code,
+          cardEl,
+        });
+      } catch (err) {}
     });
 
     return cards;
@@ -2441,7 +2429,6 @@
       url: targetUrl,
       code: code,
     }, (res) => {
-      // احتياط في حال عدم عمل Service Worker يفتح كتاب عادي بنفس المتصفح
       if (!res || !res.ok) {
         try {
           window.open(targetUrl, '_blank');
@@ -2458,82 +2445,82 @@
       return;
     }
 
-    const cards = findVisibleProductCards();
-    cards.forEach(({ code, cardEl }) => {
-      if (!cardEl) return;
+    try {
+      const cards = findVisibleProductCards();
+      cards.forEach(({ code, cardEl }) => {
+        if (!cardEl) return;
 
-      const compPos = window.getComputedStyle(cardEl).position;
-      if (compPos === 'static') {
-        cardEl.style.position = 'relative';
-      }
+        try {
+          const compPos = window.getComputedStyle(cardEl).position;
+          if (compPos === 'static') {
+            cardEl.style.position = 'relative';
+          }
 
-      const isLocked = cardEl.getAttribute('data-wasli-locked') === 'true';
-      const isImported = Boolean(isLocked || (code && importedCodesSet.has(code)));
-      let badge = cardEl.querySelector('.wasli-card-status-badge');
-      let quickBtn = cardEl.querySelector('.wasli-card-quick-btn');
+          const isLocked = cardEl.getAttribute('data-wasli-locked') === 'true';
+          const isImported = Boolean(isLocked || (code && importedCodesSet.has(code)));
+          let badge = cardEl.querySelector('.wasli-card-status-badge');
+          let quickBtn = cardEl.querySelector('.wasli-card-quick-btn');
 
-      if (isImported) {
-        // إزالة زر السحب إن وجد
-        if (quickBtn) quickBtn.remove();
+          if (isImported) {
+            if (quickBtn) quickBtn.remove();
 
-        // إظهار الشارة الخضراء الأنيقة
-        if (!badge) {
-          badge = document.createElement('div');
-          badge.className = 'wasli-card-status-badge';
-          badge.setAttribute('data-wasli-code', code);
-          badge.title = 'تم استيراد هذا المنتج مسبقاً في منصة وصلي';
-          badge.innerHTML = `
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-            <span>مسحوب مسبقاً ✓</span>
-          `;
-          cardEl.appendChild(badge);
-        }
-      } else {
-        // إزالة الشارة إذا كان غير مسحوب
-        if (badge) badge.remove();
+            if (!badge) {
+              badge = document.createElement('div');
+              badge.className = 'wasli-card-status-badge';
+              badge.setAttribute('data-wasli-code', code);
+              badge.title = 'تم استيراد هذا المنتج مسبقاً في منصة وصلي';
+              badge.innerHTML = `
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span>مسحوب مسبقاً ✓</span>
+              `;
+              cardEl.appendChild(badge);
+            }
+          } else {
+            if (badge) badge.remove();
 
-        // إنشاء زر السحب السريع الأزرق
-        if (!quickBtn) {
-          quickBtn = document.createElement('button');
-          quickBtn.type = 'button';
-          quickBtn.className = 'wasli-card-quick-btn';
-          quickBtn.setAttribute('data-wasli-quick-code', code);
-          quickBtn.title = 'انقر لسحب هذا المنتج تلقائياً إلى منصة وصلي ونشره في تليغرام';
-          quickBtn.innerHTML = `
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            <span>سحب لوصلي</span>
-          `;
+            if (!quickBtn) {
+              quickBtn = document.createElement('button');
+              quickBtn.type = 'button';
+              quickBtn.className = 'wasli-card-quick-btn';
+              quickBtn.setAttribute('data-wasli-quick-code', code);
+              quickBtn.title = 'انقر لسحب هذا المنتج تلقائياً إلى منصة وصلي ونشره في تليغرام';
+              quickBtn.innerHTML = `
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>سحب لوصلي</span>
+              `;
 
-          quickBtn.onclick = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+              quickBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
 
-            quickBtn.classList.add('loading');
-            quickBtn.innerHTML = `
-              <span class="wasli-card-btn-spinner"></span>
-              <span>جاري السحب...</span>
-            `;
+                quickBtn.classList.add('loading');
+                quickBtn.innerHTML = `
+                  <span class="wasli-card-btn-spinner"></span>
+                  <span>جاري السحب...</span>
+                `;
 
-            triggerAutoImportForProduct(code);
-          };
+                triggerAutoImportForProduct(code);
+              };
 
-          cardEl.appendChild(quickBtn);
-        }
-      }
-    });
+              cardEl.appendChild(quickBtn);
+            }
+          }
+        } catch (cardErr) {}
+      });
+    } catch (err) {}
 
-    // تحديث وإظهار الشريط العلوي لسحب منتجات الصفحة بالكامل
+    // تحديث وإظهار الشريط العلوي دائماً
     renderBatchToolbar();
   }
 
   // ========================================================
-  // الشريط العلوي التجميعي الذكي لسحب كل منتجات الصفحة بضغطة واحدة
+  // الشريط العلوي التجميعي لسحب كل منتجات الصفحة بضغطة واحدة
   // ========================================================
   let isBatchRunning = false;
   let batchShouldStop = false;
@@ -2548,12 +2535,6 @@
     }
 
     const cards = findVisibleProductCards();
-    if (cards.length === 0) {
-      const tb = document.getElementById('wasli-batch-toolbar');
-      if (tb) tb.remove();
-      return;
-    }
-
     const unimportedCards = cards.filter(c => c.code && !importedCodesSet.has(c.code));
     const unimportedCount = unimportedCards.length;
     let toolbar = document.getElementById('wasli-batch-toolbar');
@@ -2565,9 +2546,9 @@
       document.body.appendChild(toolbar);
     }
 
-    if (isBatchRunning) return; // عدم إعادة بناء المحتوى أثناء عمل الطابور
+    if (isBatchRunning) return; // عدم إعادة بناء المحتوى أثناء عمل السحب
 
-    const isAllDone = unimportedCount === 0;
+    const isAllDone = cards.length > 0 && unimportedCount === 0;
 
     toolbar.innerHTML = `
       <div class="wasli-batch-brand">
@@ -2580,8 +2561,7 @@
       </div>
 
       <div class="wasli-batch-count" id="wasli-batch-count-display">
-        المنتجات بالصفحة: <strong>${cards.length}</strong>
-        ${!isAllDone ? ` | غير مسحوبة: <strong style="color: #ea580c;">${unimportedCount}</strong>` : ''}
+        ${cards.length > 0 ? `المنتجات: <strong>${cards.length}</strong>${!isAllDone ? ` | غير مسحوبة: <strong style="color: #ea580c;">${unimportedCount}</strong>` : ''}` : 'جاري فحص منتجات الصفحة...'}
       </div>
 
       <button type="button" class="wasli-batch-btn ${isAllDone ? 'wasli-completed' : ''}" id="wasli-btn-batch-start" title="${isAllDone ? 'كافة المنتجات مسحوبة مسبقاً' : 'سحب كافة المنتجات غير المسحوبة في هذه الصفحة دفعة واحدة'}">
@@ -2604,7 +2584,7 @@
     `;
 
     const startBtn = toolbar.querySelector('#wasli-btn-batch-start');
-    if (startBtn && !isAllDone) {
+    if (startBtn && !isAllDone && unimportedCount > 0) {
       startBtn.onclick = (e) => {
         e.preventDefault();
         startBatchImport();
@@ -2736,14 +2716,16 @@
   }
 
   // ========================================================
-  // إدارة التحديثات الآمنة مع Debounce فائق الخفة (Zero CPU Impact)
+  // إدارة التحديثات الآمنة مع استجابة فورية بدون أي تأخير
   // ========================================================
-  let debounceTimeout = null;
+  let isCatalogUpdateScheduled = false;
   function scheduleSafeCatalogUpdate() {
-    if (debounceTimeout) clearTimeout(debounceTimeout);
-    debounceTimeout = setTimeout(() => {
+    if (isCatalogUpdateScheduled) return;
+    isCatalogUpdateScheduled = true;
+    setTimeout(() => {
+      isCatalogUpdateScheduled = false;
       injectProductCardButtons();
-    }, 450);
+    }, 150);
   }
 
   // مؤقت خفيف لمنع تكرار حقن الواجهة واستهلاك المعالج عند فتح المنتج (Zero CPU Delay)
@@ -2770,14 +2752,19 @@
     } else {
       const oldModal = document.getElementById('wasli-importer-container');
       if (oldModal) oldModal.remove();
-      scheduleSafeCatalogUpdate();
+      injectProductCardButtons();
     }
   }
 
   // 1. التشغيل الأولي الفوري
   syncWasliState();
 
-  // 2. مراقبة التنقل وتغيرات الـ DOM في SPA بخفة تامة لمنع أي تأخير في فتح المنتجات
+  // 2. فحص دوري مستمر كل ثانية ونصف لضمان عدم اختفاء الأزرار أو الشريط أبداً
+  setInterval(() => {
+    syncWasliState();
+  }, 1500);
+
+  // 3. مراقبة التنقل وتغيرات الـ DOM في SPA بخفة تامة لمنع أي تأخير في فتح المنتجات
   let lastUrl = location.href;
   new MutationObserver((mutations) => {
     const url = location.href;
@@ -2787,13 +2774,12 @@
       return;
     }
 
-    // إذا كنا في صفحة منتج فردي، نستخدم الجدولة الخفيفة (Debounce) لمنع تعليق المتصفح
     if (isProductPage()) {
       scheduleProductUiUpdate();
       return;
     }
 
-    // فحص ذكي: هل التغيير من فدشي أم من إضافتنا؟ إذا كان من إضافتنا نتجاهله تماماً!
+    // فحص ذكي: هل التغيير من فدشي أم من إضافتنا؟
     let hasForeignChange = false;
     for (const m of mutations) {
       for (const node of m.addedNodes) {
@@ -2814,14 +2800,10 @@
     }
   }).observe(document.body || document.documentElement, { subtree: true, childList: true });
 
-  // 3. مراقبة التمرير اللانهائي (Infinite Scroll) عند نزول المستخدم لأسفل صفحة الكتالوج
-  let scrollTimeout = null;
+  // 4. مراقبة التمرير اللانهائي (Infinite Scroll) عند نزول المستخدم لأسفل صفحة الكتالوج
   window.addEventListener('scroll', () => {
     if (isProductPage()) return;
-    if (scrollTimeout) clearTimeout(scrollTimeout);
-    scrollTimeout = setTimeout(() => {
-      scheduleSafeCatalogUpdate();
-    }, 600);
+    scheduleSafeCatalogUpdate();
   }, { passive: true });
 
   // ========================================================
