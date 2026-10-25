@@ -560,9 +560,11 @@ export async function fixLowProfitProducts(targetMinProfit = 3000): Promise<{ up
     if (currentProfit < targetMinProfit) {
       const diff = targetMinProfit - currentProfit;
       const newWholesale = wholesale + diff;
+      const currentMax = Number(p.maxPriceIqd) || 0;
       const newPlatform = Math.max(Number(p.platformPriceIqd || 0) + diff, newWholesale);
       const newMinPrice = Math.max(Number(p.minPriceIqd || 0) + diff, newWholesale);
-      const newMaxPrice = Math.max(Number(p.maxPriceIqd || 0) + diff, newMinPrice + 5000);
+      // الحد الأعلى للتاجر يبقى نفسه تماماً بدون زيادة
+      const newMaxPrice = currentMax > 0 ? Math.max(currentMax, newMinPrice) : (newMinPrice + 5000);
 
       await updatePlatformProduct(p.id, {
         wholesalePriceIqd: newWholesale,

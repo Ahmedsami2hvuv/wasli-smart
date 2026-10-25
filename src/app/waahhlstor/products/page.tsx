@@ -550,9 +550,11 @@ export default function AdminProductsPage() {
     if (diff <= 0) return;
 
     const newWholesale = wholesale + diff;
+    const currentMax = Number(p.maxPriceIqd) || 0;
     const newPlatform = Math.max(Number(p.platformPriceIqd || 0) + diff, newWholesale);
     const newMinPrice = Math.max(Number(p.minPriceIqd || 0) + diff, newWholesale);
-    const newMaxPrice = Math.max(Number(p.maxPriceIqd || 0) + diff, newMinPrice + 5000);
+    // الحد الأعلى للتاجر يبقى نفسه تماماً دون أي زيادة
+    const newMaxPrice = currentMax > 0 ? Math.max(currentMax, newMinPrice) : (newMinPrice + 5000);
 
     try {
       setAdjustingProfitId(p.id);
@@ -607,9 +609,11 @@ export default function AdminProductsPage() {
         if (currentProfit < 3000) {
           const diff = 3000 - currentProfit;
           const newWholesale = wholesale + diff;
+          const currentMax = Number(item.maxPriceIqd) || 0;
           const newPlatform = Math.max(Number(item.platformPriceIqd || 0) + diff, newWholesale);
           const newMinPrice = Math.max(Number(item.minPriceIqd || 0) + diff, newWholesale);
-          const newMaxPrice = Math.max(Number(item.maxPriceIqd || 0) + diff, newMinPrice + 5000);
+          // الحد الأعلى للتاجر يبقى نفسه تماماً دون أي زيادة
+          const newMaxPrice = currentMax > 0 ? Math.max(currentMax, newMinPrice) : (newMinPrice + 5000);
           return {
             ...item,
             wholesalePriceIqd: newWholesale,
