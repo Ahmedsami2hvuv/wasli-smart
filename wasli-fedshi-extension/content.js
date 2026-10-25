@@ -639,11 +639,11 @@
       }
 
       const wasliProfit = wholesaleCost > 0 ? Math.max(0, wasliWholesale - wholesaleCost) : 0;
-      const wasliMinPrice = wasliWholesale; // أقل سعر مسموح لبيع الزبون
-      const wasliMaxPrice = (highPrice && highPrice >= wasliWholesale) ? highPrice : (wasliWholesale + 13000); // سقف البيع الرسمي
+      const wasliMaxPrice = (highPrice && highPrice >= wasliWholesale) ? highPrice : (wasliWholesale + 13000); // سقف البيع الرسمي لموجود
+      const wasliMinPrice = Math.min(wasliMaxPrice, wasliWholesale + 5000); // أقل سعر مسموح لبيع الزبون (جملة التاجر + 5000 أدنى ربح للتاجر)
 
-      // السعر الافتراضي للزبون (في المنتصف وبشرط عدم تجاوز سقف موجود إطلاقاً)
-      let defaultStorePrice = Math.round(((wasliWholesale + wasliMaxPrice) / 2) / 1000) * 1000;
+      // السعر الافتراضي للزبون (في المنتصف بين minPrice و maxPrice وبشرط عدم تجاوز سقف موجود إطلاقاً)
+      let defaultStorePrice = Math.round(((wasliMinPrice + wasliMaxPrice) / 2) / 1000) * 1000;
       if (defaultStorePrice > wasliMaxPrice) defaultStorePrice = wasliMaxPrice;
       if (defaultStorePrice < wasliMinPrice) defaultStorePrice = wasliMinPrice;
 

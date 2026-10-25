@@ -111,16 +111,16 @@ export async function POST(request: NextRequest) {
           ? Number(item.lowPrice)
           : (supplierCost > 0 ? supplierCost + 3000 : 10000);
 
-        // 3. أقل سعر مسموح لبيع الزبون = سعر الجملة (12000 د.ع)
-        const minPrice = wholesalePrice;
-
         // 4. أعلى سعر مسموح لبيع الزبون = الحد الأقصى الرسمي لمنصة موجود (مثال: 25000 د.ع)
         const maxPrice = (item.highPrice && Number(item.highPrice) >= wholesalePrice)
           ? Number(item.highPrice)
           : (wholesalePrice + 13000);
 
-        // 5. السعر الافتراضي المقترح للزبون (في المنتصف وبشرط عدم تجاوز maxPrice إطلاقاً)
-        let platformPrice = Math.round(((wholesalePrice + maxPrice) / 2) / 1000) * 1000;
+        // 3. أقل سعر مسموح لبيع الزبون = جملة التاجر + 5000 د.ع أدنى ربح للتاجر (مثال: 12000 + 5000 = 17000 د.ع)
+        const minPrice = Math.min(maxPrice, wholesalePrice + 5000);
+
+        // 5. السعر الافتراضي المقترح للزبون (في المنتصف بين minPrice و maxPrice وبشرط عدم تجاوز maxPrice إطلاقاً)
+        let platformPrice = Math.round(((minPrice + maxPrice) / 2) / 1000) * 1000;
         if (platformPrice > maxPrice) platformPrice = maxPrice;
         if (platformPrice < minPrice) platformPrice = minPrice;
 

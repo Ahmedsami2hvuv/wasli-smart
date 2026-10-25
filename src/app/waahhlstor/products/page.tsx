@@ -1821,10 +1821,12 @@ export default function AdminProductsPage() {
                       const wholesalePrice = (item.lowPrice && Number(item.lowPrice) > supplierCost)
                         ? Number(item.lowPrice)
                         : (supplierCost > 0 ? supplierCost + 3000 : 10000);
-                      // أعلى سعر مسموح لبيع الزبون
+                      // سقف بيع الزبون المحدد رسمياً من موچود
                       const maxCustomerPrice = (item.highPrice && Number(item.highPrice) >= wholesalePrice)
                         ? Number(item.highPrice)
                         : (wholesalePrice + 13000);
+                      // أقل سعر لبيع الزبون = جملة التاجر + 5000 د.ع أدنى ربح للتاجر
+                      const minCustomerPrice = Math.min(maxCustomerPrice, wholesalePrice + 5000);
                       const platformProfit = Math.max(0, wholesalePrice - supplierCost);
 
                       // استخراج أول صورة بدقة
@@ -1911,9 +1913,9 @@ export default function AdminProductsPage() {
                                 <span className="text-emerald-700 font-bold">ربح المنصة:</span>
                                 <span className="font-black text-emerald-600">+{platformProfit.toLocaleString('ar-IQ')} د.ع</span>
                               </div>
-                              <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                                <span>سقف بيع الزبون:</span>
-                                <span>حتى {maxCustomerPrice.toLocaleString('ar-IQ')} د.ع</span>
+                              <div className="flex items-center justify-between text-[10px] text-slate-600 font-mono pt-0.5 border-t border-slate-100">
+                                <span>بيع الزبون:</span>
+                                <span className="font-bold">{minCustomerPrice.toLocaleString('ar-IQ')} - {maxCustomerPrice.toLocaleString('ar-IQ')} د.ع</span>
                               </div>
                             </div>
                           </div>
