@@ -1515,15 +1515,6 @@
     if (oldDraggable) oldDraggable.remove();
 
     // فحص ما إذا كان المنتج الحالي في هذه الصفحة مسحوباً ومرفوعاً مسبقاً في منصة وصلي
-    let pageCode = '';
-    if (isMojod) {
-      const pUrl = new URLSearchParams(window.location.search);
-      pageCode = (pUrl.get('id') || '').trim();
-    } else {
-      const pathParts = window.location.pathname.split('/').filter(Boolean);
-      pageCode = pathParts[pathParts.length - 1] || '';
-    }
-
     if (pageCode) {
       checkIfProductImported(pageCode).then((checkRes) => {
         if (checkRes && checkRes.exists) {
