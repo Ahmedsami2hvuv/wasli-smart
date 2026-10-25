@@ -370,22 +370,43 @@ export async function updatePlatformProduct(id: string, updates: Partial<Product
 }
 
 /**
- * أرشفة منتج أو إيقاف توفره
+ * أرشفة منتج أو حذفه نهائياً
  */
 export async function deleteOrArchiveProduct(id: string): Promise<boolean> {
+  return deleteProducts([id]);
+}
+
+/**
+ * حذف مجموعة من المنتجات دفعة واحدة نهائياً من سوبابيس والذاكرة المحلية
+ */
+export async function deleteProducts(ids: string[]): Promise<boolean> {
+  if (!ids || ids.length === 0) return true;
+
   const dbClient = supabaseAdmin || supabase;
   if (dbClient) {
     try {
-      await dbClient.from('products').delete().eq('id', id);
+      // 1. حذف ارتباطات المنتجات في المتاجر إن وجدت
+      await dbClient.from('store_products').delete().in('product_id', ids);
     } catch (err) {
-      console.warn('تعذر حذف المنتج من سوبابيس:', err);
+      // تجاهل إذا كان الجدول غير موجود
+    }
+
+    try {
+      // 2. حذف المنتجات من جدول products
+      await dbClient.from('products').delete().in('id', ids);
+    } catch (err) {
+      console.warn('تعذر حذف المنتجات من سوبابيس:', err);
     }
   }
 
-  const idx = localProducts.findIndex(p => p.id === id);
-  if (idx !== -1) {
-    localProducts.splice(idx, 1);
+  // 3. الحذف من الذاكرة المحلية
+  const idSet = new Set(ids);
+  for (let i = localProducts.length - 1; i >= 0; i--) {
+    if (idSet.has(localProducts[i].id)) {
+      localProducts.splice(i, 1);
+    }
   }
+
   return true;
 }
 

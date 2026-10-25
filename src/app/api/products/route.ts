@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllProducts, createPlatformProduct, updatePlatformProduct, deleteOrArchiveProduct } from '@/lib/services/productService';
+import { getAllProducts, createPlatformProduct, updatePlatformProduct, deleteOrArchiveProduct, deleteProducts } from '@/lib/services/productService';
 
 export async function GET() {
   try {
@@ -75,15 +75,39 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+    let ids: string[] = [];
 
-    if (!id) {
-      return NextResponse.json({ success: false, message: 'معرف المنتج مطلوب للحذف' }, { status: 400 });
+    // 1. محاولة قراءة المعرفات من جسم الطلب JSON
+    try {
+      const body = await request.json();
+      if (Array.isArray(body.ids)) {
+        ids = body.ids.map((id: any) => String(id).trim()).filter(Boolean);
+      } else if (body.id) {
+        ids = [String(body.id).trim()];
+      }
+    } catch {
+      // ليس JSON أو فارغ
     }
 
-    const ok = await deleteOrArchiveProduct(id);
-    return NextResponse.json({ success: ok });
+    // 2. إذا لم تكن في البودي، نقرأ من الرابط (Query Params)
+    if (ids.length === 0) {
+      const { searchParams } = new URL(request.url);
+      const singleId = searchParams.get('id');
+      const rawIds = searchParams.get('ids');
+
+      if (rawIds) {
+        ids = rawIds.split(',').map(s => s.trim()).filter(Boolean);
+      } else if (singleId) {
+        ids = [singleId.trim()];
+      }
+    }
+
+    if (ids.length === 0) {
+      return NextResponse.json({ success: false, message: 'معرف أو معرفات المنتجات مطلوبة للحذف' }, { status: 400 });
+    }
+
+    const ok = await deleteProducts(ids);
+    return NextResponse.json({ success: ok, count: ids.length });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }

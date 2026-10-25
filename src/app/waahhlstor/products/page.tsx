@@ -78,6 +78,11 @@ export default function AdminProductsPage() {
     });
   }, [products, profitFilter, searchQuery]);
 
+  // حالات تحديد المنتجات والحذف الجماعي في لوحة المدير
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [deletingBatch, setDeletingBatch] = useState(false);
+  const [batchMsg, setBatchMsg] = useState<string | null>(null);
+
   // حالات ودوال الربط المباشر مع API موجود
   const [showMojodModal, setShowMojodModal] = useState(false);
   const [mojodProducts, setMojodProducts] = useState<any[]>([]);
@@ -379,6 +384,7 @@ export default function AdminProductsPage() {
       setDeletingId(prodId);
       // حذف بؤري فوري من الشاشة
       setProducts(prev => prev.filter(p => p.id !== prodId));
+      setSelectedProductIds(prev => prev.filter(id => id !== prodId));
 
       const res = await fetch(`/api/products/${prodId}`, {
         method: 'DELETE',
@@ -393,6 +399,61 @@ export default function AdminProductsPage() {
       fetchInitialData();
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  // تبديل تحديد منتج فردي
+  const handleToggleSelectProduct = (id: string) => {
+    setSelectedProductIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  // تحديد أو إلغاء تحديد كافة المنتجات المعروضة
+  const handleSelectAllFiltered = () => {
+    if (filteredProducts.length === 0) return;
+    const allFilteredIds = filteredProducts.map(p => p.id);
+    const isAllSelected = allFilteredIds.every(id => selectedProductIds.includes(id));
+    if (isAllSelected) {
+      setSelectedProductIds(prev => prev.filter(id => !allFilteredIds.includes(id)));
+    } else {
+      setSelectedProductIds(prev => Array.from(new Set([...prev, ...allFilteredIds])));
+    }
+  };
+
+  // حذف المنتجات المحددة دفعة واحدة
+  const handleDeleteSelectedProducts = async () => {
+    if (selectedProductIds.length === 0) return;
+    const count = selectedProductIds.length;
+    if (!confirm(`هل أنت متأكد من حذف (${count}) منتج نهائياً من المنصة وقاعدة البيانات؟ لا يمكن التراجع عن هذا الإجراء.`)) {
+      return;
+    }
+
+    setDeletingBatch(true);
+    try {
+      const idsToDelete = [...selectedProductIds];
+      // إزالة فورية من الشاشة
+      setProducts(prev => prev.filter(p => !idsToDelete.includes(p.id)));
+      setSelectedProductIds([]);
+
+      const res = await fetch('/api/products', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: idsToDelete }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBatchMsg(`تم حذف ${count} منتج بنجاح من المنصة`);
+        setTimeout(() => setBatchMsg(null), 3000);
+        fetchInitialData();
+      } else {
+        fetchInitialData();
+      }
+    } catch (err) {
+      console.error('خطأ في حذف المنتجات:', err);
+      fetchInitialData();
+    } finally {
+      setDeletingBatch(false);
     }
   };
 
@@ -1783,6 +1844,48 @@ export default function AdminProductsPage() {
             </button>
           </div>
 
+          {/* رسالة نجاح الحذف الجماعي */}
+          {batchMsg && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-2xl text-xs font-bold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{batchMsg}</span>
+            </div>
+          )}
+
+          {/* شريط الإجراءات الجماعية عند تحديد منتج أو أكثر */}
+          {selectedProductIds.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 animate-fadeIn">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-amber-700" />
+                <span className="text-xs font-black text-amber-900">
+                  تم تحديد {selectedProductIds.length} من أصل {filteredProducts.length} منتج معروض
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedProductIds([])}
+                  className="py-1.5 px-3 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-colors cursor-pointer"
+                >
+                  إلغاء التحديد
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingBatch}
+                  onClick={handleDeleteSelectedProducts}
+                  className="py-1.5 px-3.5 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {deletingBatch ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-3.5 h-3.5" />
+                  )}
+                  <span>حذف المنتجات المحددة ({selectedProductIds.length}) نهائياً</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {loading ? (
             <div className="text-center py-12">
               <div className="w-8 h-8 border-3 border-brand-200 border-t-brand-700 rounded-full animate-spin mx-auto mb-2" />
@@ -1797,6 +1900,15 @@ export default function AdminProductsPage() {
               <table className="w-full text-right text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-400 uppercase">
+                    <th className="py-3 px-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={filteredProducts.length > 0 && filteredProducts.every(p => selectedProductIds.includes(p.id))}
+                        onChange={handleSelectAllFiltered}
+                        className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 cursor-pointer accent-brand-600"
+                        title="تحديد الكل / إلغاء تحديد الكل"
+                      />
+                    </th>
                     <th className="py-3 px-3">المنتج والمصدر</th>
                     <th className="py-3 px-3">التصنيف</th>
                     <th className="py-3 px-3">تكلفة المورد</th>
@@ -1815,8 +1927,18 @@ export default function AdminProductsPage() {
                     const platformProfit = wholesale - supplier;
                     const isLowProfit = platformProfit < 3000;
                     const isDeleting = deletingId === p.id;
+                    const isSelected = selectedProductIds.includes(p.id);
                     return (
-                      <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
+                      <tr key={p.id} className={`hover:bg-slate-50/80 transition-colors ${isSelected ? 'bg-amber-50/40' : ''}`}>
+                        <td className="py-3.5 px-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelectProduct(p.id)}
+                            className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 cursor-pointer accent-brand-600"
+                            title={`تحديد ${p.name}`}
+                          />
+                        </td>
                         <td className="py-3.5 px-3">
                           <div className="flex items-center gap-3">
                             <img src={p.image} alt={p.name} className="w-11 h-11 rounded-xl object-cover border border-slate-200 shrink-0" />
