@@ -2285,4 +2285,134 @@
     }, 600);
   }, { passive: true });
 
+  // ========================================================
+  // معالج السحب المباشر الذكي عبر قائمة الزر الأيمن (Context Menu)
+  // ========================================================
+  let lastRightClickedElement = null;
+  document.addEventListener('contextmenu', (e) => {
+    lastRightClickedElement = e.target;
+  }, true);
+
+  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+    chrome.runtime.onMessage.addListener(async (msg) => {
+      if (msg.action === 'executeContextMenuImport') {
+        const info = msg.info || {};
+
+        // 1. إذا كان في صفحة منتج فردي، ينفذ الاستيراد التلقائي الفوري للصفحة
+        if (isProductPage()) {
+          showFloatingToast('جاري سحب هذا المنتج ونشره في تليغرام...', 'info');
+          handleDirectImportAction();
+          return;
+        }
+
+        // 2. إذا كان في صفحة قائمة، استخراج كود المنتج من العنصر المنقور أو الرابط
+        let targetCode = '';
+        const href = info.linkUrl || (lastRightClickedElement?.closest('a')?.href) || '';
+        if (href) {
+          const fedMatch = href.match(/\/products\/([A-Za-z0-9_-]+)/);
+          if (fedMatch) targetCode = fedMatch[1];
+          const mojMatch = href.match(/id=([0-9]+)/);
+          if (mojMatch) targetCode = mojMatch[1];
+        }
+
+        if (!targetCode && lastRightClickedElement) {
+          const cardEl = lastRightClickedElement.closest('.product-card, [class*="productCard"], .home-product-card, a[href*="/products/"], a[href*="product-details.html"]');
+          if (cardEl) {
+            const a = cardEl.matches('a') ? cardEl : cardEl.querySelector('a[href*="/products/"], a[href*="product-details.html"]');
+            if (a && a.href) {
+              const fedMatch = a.href.match(/\/products\/([A-Za-z0-9_-]+)/);
+              if (fedMatch) targetCode = fedMatch[1];
+              const mojMatch = a.href.match(/id=([0-9]+)/);
+              if (mojMatch) targetCode = mojMatch[1];
+            }
+          }
+        }
+
+        if (!targetCode) {
+          showFloatingToast('يرجى النقر بالزر الأيمن فوق بطاقة أو صورة أو رابط المنتج المراد سحبه', 'error');
+          return;
+        }
+
+        showFloatingToast(`جاري سحب المنتج #${targetCode} إلى منصة وصلي ونشره في تليغرام...`, 'info');
+
+        try {
+          const isMojod = window.location.hostname.includes('mojod.app');
+          const targetUrl = wasliServerUrl.trim().replace(/\/+$/, '');
+
+          if (isMojod) {
+            // استيراد من موجود عبر مسار الخادم الرسمي
+            const res = await fetch(`${targetUrl}/api/suppliers/mojod`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ products: [{ _id: targetCode }] })
+            });
+            const data = await res.json();
+            if (data.success && data.importedCount > 0) {
+              markProductAsImported(targetCode);
+              showFloatingToast(`تم استيراد ونشر منتج موجود #${targetCode} بنجاح!`, 'success');
+              injectProductCardButtons();
+            } else if (data.skippedCount > 0) {
+              markProductAsImported(targetCode);
+              showFloatingToast(`هذا المنتج مسحوب مسبقاً في منصتك!`, 'warning');
+            } else {
+              showFloatingToast(data.message || 'تعذر استيراد المنتج', 'error');
+            }
+          } else {
+            // استيراد من فدشي عبر جلب بيانات الكارت المباشرة
+            const cards = findVisibleProductCards();
+            const foundCard = cards.find(c => c.code === targetCode);
+            if (foundCard && foundCard.cardData) {
+              const res = await importSingleProductCard(foundCard.cardData);
+              if (res && res.result && res.result.success) {
+                markProductAsImported(targetCode);
+                showFloatingToast(`تم استيراد منتج فدشي #${targetCode} ونشره بنجاح!`, 'success');
+                injectProductCardButtons();
+              } else {
+                showFloatingToast(res?.result?.message || 'تعذر استيراد المنتج', 'error');
+              }
+            } else {
+              // جلب صفحة المنتج خلفياً وسحبها بكامل التفاصيل
+              const prodPageUrl = `https://web.fedshi.com/products/${targetCode}`;
+              const htmlRes = await fetch(prodPageUrl);
+              const htmlText = await htmlRes.text();
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(htmlText, 'text/html');
+              const details = await extractFedshiProductDetails(doc, prodPageUrl);
+              if (details) {
+                const payload = {
+                  name: details.title,
+                  category: details.category || 'عام',
+                  description: details.specifications || details.title,
+                  promoDescription: details.promoDescription || details.title,
+                  specifications: details.specifications || details.title,
+                  wholesalePriceIqd: details.wasliWholesale,
+                  platformPriceIqd: details.defaultStorePrice,
+                  minPriceIqd: details.wasliMinPrice,
+                  maxPriceIqd: details.wasliMaxPrice,
+                  supplierPriceIqd: details.fedshiWholesale,
+                  supplierCode: targetCode,
+                  supplierSource: 'fedshi',
+                  image: details.images[0] || '',
+                  images: details.images,
+                  colors: details.colors,
+                  stockQuantity: details.stock,
+                };
+                const importRes = await sendProductPayloadToWasli(payload);
+                if (importRes && importRes.success) {
+                  markProductAsImported(targetCode);
+                  showFloatingToast(`تم استيراد منتج فدشي #${targetCode} ونشره بنجاح!`, 'success');
+                  injectProductCardButtons();
+                } else {
+                  showFloatingToast(importRes?.message || 'تعذر استيراد المنتج', 'error');
+                }
+              }
+            }
+          }
+        } catch (err) {
+          showFloatingToast(`حدث خطأ أثناء سحب المنتج: ${err.message}`, 'error');
+        }
+      }
+    });
+  }
+
 })();

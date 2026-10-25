@@ -1,3 +1,47 @@
+// ========================================================
+// إنشاء خيار السحب في قائمة الزر الأيمن (Context Menu)
+// ========================================================
+function setupWasliContextMenu() {
+  if (chrome.contextMenus) {
+    chrome.contextMenus.removeAll(() => {
+      chrome.contextMenus.create({
+        id: 'wasli_context_import_action',
+        title: '📦 سحب هذا المنتج إلى منصة وصلي',
+        contexts: ['all'],
+        documentUrlPatterns: [
+          'https://web.fedshi.com/*',
+          'https://mojod.app/*',
+          'https://*.mojod.app/*'
+        ]
+      }, () => {
+        if (chrome.runtime.lastError) {
+          // تم إنشاؤها مسبقاً
+        }
+      });
+    });
+  }
+}
+
+chrome.runtime.onInstalled.addListener(setupWasliContextMenu);
+chrome.runtime.onStartup.addListener(setupWasliContextMenu);
+
+// الاستماع للنقر على خيار الزر الأيمن
+if (chrome.contextMenus && chrome.contextMenus.onClicked) {
+  chrome.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === 'wasli_context_import_action' && tab && tab.id) {
+      chrome.tabs.sendMessage(tab.id, {
+        action: 'executeContextMenuImport',
+        info: {
+          linkUrl: info.linkUrl || '',
+          srcUrl: info.srcUrl || '',
+          pageUrl: info.pageUrl || '',
+          selectionText: info.selectionText || '',
+        }
+      });
+    }
+  });
+}
+
 // خلفية العمل لإضافة وصلي الذكية (Service Worker - Manifest V3)
 // تتولى إرسال الطلبات وتجاوز أي قيود CSP أو حظر تفرضه صفحة الويب المضيفة
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
