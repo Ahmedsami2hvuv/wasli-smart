@@ -13,6 +13,7 @@ import {
   TrendingUp, 
   Layers,
   Image as ImageIcon,
+  ShieldCheck,
   CheckCircle2,
   Trash2,
   ExternalLink,
@@ -310,6 +311,40 @@ export default function AdminProductsPage() {
   const [editDescription, setEditDescription] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [togglingStatusId, setTogglingStatusId] = useState<string | null>(null);
+  const [imageShieldActive, setImageShieldActive] = useState(true);
+  const [togglingShield, setTogglingShield] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/admin/settings')
+      .then(r => r.json())
+      .then(d => {
+        if (d && typeof d.imageProtectionShield === 'boolean') {
+          setImageShieldActive(d.imageProtectionShield);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleToggleImageShield = async () => {
+    setTogglingShield(true);
+    try {
+      const nextState = !imageShieldActive;
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: nextState }),
+      });
+      const d = await res.json();
+      if (d.success) {
+        setImageShieldActive(nextState);
+        localStorage.setItem('wasli_image_shield_active', String(nextState));
+      }
+    } catch (e) {
+    } finally {
+      setTogglingShield(false);
+    }
+  };
+
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleOpenEditModal = (p: Product) => {

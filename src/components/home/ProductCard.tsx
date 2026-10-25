@@ -5,6 +5,7 @@ import { Plus, Check, ShoppingBag, Store } from 'lucide-react';
 import Link from 'next/link';
 import { Product } from '@/types';
 import { formatIqd } from '@/lib/utils';
+import { ProtectedImage } from '@/components/store/ProtectedImage';
 
 interface ProductCardProps {
   product: Product;

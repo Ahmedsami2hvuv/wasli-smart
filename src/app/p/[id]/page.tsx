@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Product, Store } from '@/types';
+import { ProtectedImage } from '@/components/store/ProtectedImage';
 
 function ProductDetailContent() {
   const params = useParams();
@@ -341,17 +342,14 @@ function ProductDetailContent() {
                   <div className="w-10 h-10 border-2 border-brand-200 border-t-brand-700 rounded-full animate-spin" />
                 </div>
               )}
-              <img 
+              <ProtectedImage 
                 src={activeImage || product.image} 
                 alt={product.name} 
-                // @ts-ignore
-                fetchPriority="high"
-                loading="eager"
-                decoding="async"
                 onLoad={() => setMainImageLoaded(true)}
                 className={`w-full h-full object-cover group-hover:scale-105 transition-all duration-300 ${
                   mainImageLoaded ? 'opacity-100' : 'opacity-0'
                 }`}
+                containerClassName="w-full h-full"
               />
               <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm px-3 py-1 rounded-lg text-xs font-bold text-slate-800 shadow-xs">
                 {product.category}
