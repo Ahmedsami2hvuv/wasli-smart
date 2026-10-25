@@ -63,24 +63,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   // إغلاق التبويب بعد اكتمال السحب بنجاح وبث التحديث لكافة التبويبات
-  if (request.action === 'closeMyTab') {
+  if (request.action === 'closeMyTab' || request.action === 'productImportedSuccess') {
     const tabId = sender?.tab?.id || request.tabId;
-    if (tabId && chrome.tabs && chrome.tabs.remove) {
+    if (request.action === 'closeMyTab' && tabId && chrome.tabs && chrome.tabs.remove) {
       chrome.tabs.remove(tabId, () => {
         if (chrome.runtime.lastError) {}
       });
     }
-    // بث إشعار لكافة التبويبات المفتوحة لتحديث الكروت فوراً دون ريفريش
+    // بث إشعار فوري لكافة التبويبات المفتوحة لتحديث الكروت والشريط العلوي في 0 ثانية
     if (request.code && chrome.tabs && chrome.tabs.query) {
+      const cleanCode = String(request.code).trim();
       chrome.tabs.query({}, (tabs) => {
         if (!tabs || !Array.isArray(tabs)) return;
         tabs.forEach((t) => {
           if (t.id && t.id !== tabId) {
             chrome.tabs.sendMessage(t.id, {
               action: 'productImportedBroadcast',
-              code: String(request.code).trim(),
+              code: cleanCode,
               product: request.product,
-            }).catch(() => {});
+            }, () => {
+              if (chrome.runtime.lastError) {}
+            });
           }
         });
       });

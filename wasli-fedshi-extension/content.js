@@ -912,6 +912,24 @@
     }
   } catch (e) {}
 
+  // الاستماع اللحظي لتحديثات التخزين بين التبويبات لمزامنة المنتجات المسحوبة في 0 ثانية
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'wasli_imported_codes' && e.newValue) {
+      try {
+        const arr = JSON.parse(e.newValue);
+        if (Array.isArray(arr)) {
+          arr.forEach(c => {
+            if (c) {
+              const clean = String(c).trim();
+              importedCodesSet.add(clean);
+              markProductAsImported(clean);
+            }
+          });
+        }
+      } catch (err) {}
+    }
+  });
+
   function getCurrentProductCode() {
     if (window.location.hostname.includes('mojod.app')) {
       const pUrl = new URLSearchParams(window.location.search);
@@ -1263,7 +1281,34 @@
       }
     });
 
-    // 2. تحديث الشارات القائمة إن وجدت
+    // 2. فحص بطاقات الكتالوج الحالية وتطبيق الشارة والقفل الدائم عليها فوراً
+    try {
+      const allCards = findVisibleProductCards();
+      allCards.filter(c => c.code === cleanCode).forEach(({ cardEl }) => {
+        if (cardEl) {
+          cardEl.setAttribute('data-wasli-locked', 'true');
+          cardEl.style.outline = '';
+          const oldBtn = cardEl.querySelector('.wasli-card-quick-btn');
+          if (oldBtn) oldBtn.remove();
+
+          if (!cardEl.querySelector('.wasli-card-status-badge')) {
+            const badge = document.createElement('div');
+            badge.className = 'wasli-card-status-badge';
+            badge.setAttribute('data-wasli-code', cleanCode);
+            badge.title = 'تم استيراد هذا المنتج مسبقاً في منصة وصلي';
+            badge.innerHTML = `
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              <span>مسحوب مسبقاً ✓</span>
+            `;
+            cardEl.appendChild(badge);
+          }
+        }
+      });
+    } catch (e) {}
+
+    // 3. تحديث الشارات القائمة إن وجدت
     const badges = document.querySelectorAll(`[data-wasli-code="${cleanCode}"]`);
     badges.forEach(el => {
       el.className = 'wasli-card-status-badge';
@@ -1343,7 +1388,16 @@
       return p.includes('product-details.html') || href.includes('product-details.html?id=') || document.body.classList.contains('product-details-page') || Boolean(document.getElementById('productTitle'));
     }
     const p = window.location.pathname;
-    return p.includes('/products/') || p.includes('/product/') || /\/products?\/[^\/]+/.test(p);
+    // استبعاد صفحات القوائم والكتالوج والتصنيفات والبحث
+    const isExcluded = p.includes('/listing') || p.includes('/category') || p.includes('/catalog') || p.includes('/search') || p.includes('/cart') || p.includes('/orders') || p.endsWith('/products') || p.endsWith('/products/');
+    if (isExcluded) return false;
+
+    // تطابق المسار الدقيق لصفحة منتج فردي حصراً مثل /products/AFREU أو /products/2857614
+    const match = p.match(/\/(?:products?|p)\/([A-Za-z0-9_-]+)/);
+    if (!match) return false;
+    const seg = match[1].toLowerCase();
+    const commonPages = ['listing', 'catalog', 'category', 'categories', 'search', 'cart', 'orders', 'all', 'home', 'login'];
+    return !commonPages.includes(seg);
   }
 
   // ========================================================
@@ -1418,6 +1472,7 @@
         const importRes = await sendProductPayloadToWasli(payload);
         if (importRes && importRes.success) {
           markProductAsImported(pageCode);
+          safeChromeSendMessage({ action: 'productImportedSuccess', code: pageCode, product: importRes.product });
         }
       }
     } catch (err) {
@@ -2318,13 +2373,17 @@
       return cards;
     }
 
-    const links = Array.from(document.querySelectorAll('a[href*="/products/"]'));
+    const links = Array.from(document.querySelectorAll('a[href*="/products/"], a[href*="/product/"], a[href*="/p/"]'));
 
     links.forEach(link => {
       const href = link.getAttribute('href') || link.href || '';
-      const match = href.match(/\/products\/([A-Za-z0-9_-]+)/);
+      const match = href.match(/\/(?:products?|p)\/([A-Za-z0-9_-]+)/);
       if (!match) return;
       const code = match[1];
+
+      // استبعاد الكلمات والمسارات العامة
+      const ignoredWords = ['listing', 'catalog', 'category', 'categories', 'search', 'cart', 'orders', 'all', 'home', 'login'];
+      if (ignoredWords.includes(code.toLowerCase())) return;
 
       if (seenCodes.has(code)) return;
       seenCodes.add(code);
@@ -2341,7 +2400,7 @@
             break;
           }
         }
-        if (curr.querySelector('img') && curr.textContent.includes('سعر الجملة')) {
+        if (curr.querySelector('img') && (curr.textContent.includes('سعر الجملة') || curr.textContent.includes('د.ع') || curr.textContent.includes('IQD'))) {
           cardEl = curr;
           break;
         }
@@ -2520,12 +2579,12 @@
         <span>وصلي الذكي</span>
       </div>
 
-      <div class="wasli-batch-count">
+      <div class="wasli-batch-count" id="wasli-batch-count-display">
         المنتجات بالصفحة: <strong>${cards.length}</strong>
         ${!isAllDone ? ` | غير مسحوبة: <strong style="color: #ea580c;">${unimportedCount}</strong>` : ''}
       </div>
 
-      <button type="button" class="wasli-batch-btn ${isAllDone ? 'wasli-completed' : ''}" id="wasli-btn-batch-start" title="${isAllDone ? 'كافة المنتجات مسحوبة' : 'سحب كافة المنتجات غير المسحوبة في هذه الصفحة'}">
+      <button type="button" class="wasli-batch-btn ${isAllDone ? 'wasli-completed' : ''}" id="wasli-btn-batch-start" title="${isAllDone ? 'كافة المنتجات مسحوبة مسبقاً' : 'سحب كافة المنتجات غير المسحوبة في هذه الصفحة دفعة واحدة'}">
         ${isAllDone ? `
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
             <polyline points="20 6 9 17 4 12"></polyline>
@@ -2535,7 +2594,7 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
           </svg>
-          <span>سحب كل منتجات الصفحة (${unimportedCount})</span>
+          <span>سحب كافة المنتجات (${unimportedCount})</span>
         `}
       </button>
 
@@ -2581,6 +2640,7 @@
     const toolbar = document.getElementById('wasli-batch-toolbar');
     const startBtn = toolbar?.querySelector('.wasli-batch-btn');
     const stopBtn = toolbar?.querySelector('.wasli-batch-stop-btn');
+    const countDisplay = toolbar?.querySelector('#wasli-batch-count-display');
 
     if (stopBtn) stopBtn.style.display = 'inline-flex';
     if (startBtn) {
@@ -2588,7 +2648,7 @@
       startBtn.disabled = true;
     }
 
-    showFloatingToast(`بدء السحب المنظم لـ ${batchQueue.length} منتج بالخلفية... لن يسقط أي منتج!`, 'info');
+    showFloatingToast(`بدء السحب المنظم لـ ${batchQueue.length} منتج بالخلفية... جاري العمل!`, 'info');
 
     for (let i = 0; i < batchQueue.length; i++) {
       if (batchShouldStop) {
@@ -2598,6 +2658,12 @@
 
       currentBatchIndex = i + 1;
       const code = batchQueue[i];
+
+      // تحديث عداد الشريط العلوي
+      if (countDisplay) {
+        const remaining = batchQueue.length - i;
+        countDisplay.innerHTML = `المنتجات بالصفحة: <strong>${cards.length}</strong> | غير مسحوبة: <strong style="color: #ea580c;">${remaining}</strong>`;
+      }
 
       // إبراز بطاقة المنتج الحالية وإظهار مؤشر السحب فوق زره فوراً للمستخدم
       const cardQuickBtn = document.querySelector(`[data-wasli-quick-code="${code}"]`);
@@ -2617,46 +2683,28 @@
       if (startBtn) {
         startBtn.innerHTML = `
           <span class="wasli-card-btn-spinner"></span>
-          <span>جاري سحب (${currentBatchIndex} من ${batchQueue.length})...</span>
+          <span>سحب (${currentBatchIndex} من ${batchQueue.length})...</span>
         `;
       }
 
       // تشغيل سحب هذا المنتج بتبويب فردي منعزل
       triggerAutoImportForProduct(code);
 
-      // انتظار حتمي حتى اكتمال المنتج بالكامل وإغلاق تبويبه قبل الانتقال للتالي (مهلة وافية حتى 14 ثانية)
+      // انتظار استجابة السحب الذكية (بمجرد وصول إشعار النجاح ينتهي فوراً في 0 ثانية)
       const startWaitTime = Date.now();
-      let isDone = false;
-      while (Date.now() - startWaitTime < 14000) {
+      while (Date.now() - startWaitTime < 10000) {
         if (importedCodesSet.has(code)) {
-          isDone = true;
           break;
         }
         if (batchShouldStop) break;
-        await new Promise(r => setTimeout(r, 250));
+        await new Promise(r => setTimeout(r, 200));
       }
 
-      // فور اكتمال سحب المنتج: إزالة الزر وإظهار الشارة الخضراء فورياً على الكارت
-      if (cardQuickBtn) {
-        const parentCard = cardQuickBtn.closest('.wasli-card-wrapper') || cardQuickBtn.parentElement;
-        if (parentCard) parentCard.style.outline = '';
-        cardQuickBtn.remove();
+      // قفل المنتج وتثبيت الشارة الخضراء الدائمة بدون أي وميض
+      markProductAsImported(code);
 
-        const badge = document.createElement('div');
-        badge.className = 'wasli-card-status-badge';
-        badge.setAttribute('data-wasli-code', code);
-        badge.title = 'تم استيراد هذا المنتج مسبقاً في منصة وصلي';
-        badge.innerHTML = `
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-          <span>مسحوب مسبقاً ✓</span>
-        `;
-        if (parentCard) parentCard.appendChild(badge);
-      }
-
-      // استراحة تنظيمية خفيفة لمدة 350ms بين التبويبات لمنع أي اختناق في المتصفح
-      await new Promise(r => setTimeout(r, 350));
+      // استراحة خفيفة 300ms قبل التبويب التالي لمنع أي ضغط على المتصفح
+      await new Promise(r => setTimeout(r, 300));
     }
 
     isBatchRunning = false;
