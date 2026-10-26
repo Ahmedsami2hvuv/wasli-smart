@@ -44,6 +44,8 @@ function ProgressiveProductImage({
       <ProtectedImage
         src={src}
         alt={alt}
+        width={300}
+        height={300}
         loading={priority ? 'eager' : 'lazy'}
         fetchPriority={priority ? 'high' : 'auto'}
         decoding="async"
@@ -381,12 +383,12 @@ function StorePageContent({
     }
   };
 
-  // عدد المنتجات المعروضة لتحميل تدريجي سريع يريح المتصفح
-  const [visibleCount, setVisibleCount] = useState<number>(24);
+  // عدد المنتجات المعروضة لتحميل تدريجي سريع يريح المتصفح ويقلل استهلاك الذاكرة
+  const [visibleCount, setVisibleCount] = useState<number>(12);
 
   // إعادة ضبط عدد المعروض عند تغيير البحث أو التصنيف
   useEffect(() => {
-    setVisibleCount(24);
+    setVisibleCount(12);
   }, [searchQuery, selectedCategory, selectedSubcategory]);
 
   // حساب المنتجات المفلترة
@@ -518,6 +520,10 @@ function StorePageContent({
                 <img 
                   src={storeLogo} 
                   alt={activeStoreName} 
+                  width={56}
+                  height={56}
+                  loading="eager"
+                  fetchPriority="high"
                   className="w-full h-full object-cover rounded-[14px]"
                 />
               </div>
