@@ -35,6 +35,8 @@ interface ProductIssue {
   linksCount: number;
   originalDescription: string;
   cleanedDescription: string;
+  originalShortDescription?: string;
+  cleanedShortDescription?: string;
   originalName: string;
   cleanedName: string;
 }
@@ -104,6 +106,7 @@ export default function FedshiInspectorModal({
         body: JSON.stringify({
           productId: issue.productId,
           customCleanedDescription: issue.cleanedDescription,
+          customCleanedShortDescription: issue.cleanedShortDescription,
           customCleanedName: issue.cleanedName,
         }),
       });
@@ -124,7 +127,7 @@ export default function FedshiInspectorModal({
 
   // دالة تنظيف كافة المنتجات المخالفة دفعة واحدة
   const handleCleanAllProducts = async () => {
-    if (!window.confirm(`هل أنت متأكد من رغبتك في تنظيف وتحديث كافة المنتجات المكتشفة (${issuesList.length} منتج) وإزالة الروابط وكلمات فدشي منها؟`)) {
+    if (!window.confirm(`هل أنت متأكد من رغبتك في تنظيف وتحديث كافة المنتجات المكتشفة (${issuesList.length} منتج) وإزالة الروابط وكلمات الموردين (فدشي وموجود) منها؟`)) {
       return;
     }
 
@@ -138,9 +141,10 @@ export default function FedshiInspectorModal({
       });
       const data = await res.json();
       if (data.success) {
-        setIssuesList([]);
         setActionMessage({ text: data.message || 'تم تنظيف كافة المنتجات بنجاح', type: 'success' });
         if (onProductsUpdated) onProductsUpdated();
+        // إعادة الفحص الفعلي للتأكد من قاعدة البيانات مباشرة
+        await handleScanDatabase();
       } else {
         setActionMessage({ text: data.message || 'فشل تنظيف المنتجات', type: 'error' });
       }
@@ -234,13 +238,13 @@ export default function FedshiInspectorModal({
             </div>
             <div>
               <h2 className="text-lg sm:text-xl font-black flex items-center gap-2">
-                كاشف نصوص وروابط فد شي
+                كاشف نصوص وروابط الموردين (فد شي وموجود)
                 <span className="text-[11px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold border border-amber-400/30">
                   حماية الخصوصية
                 </span>
               </h2>
               <p className="text-xs text-slate-300 mt-0.5">
-                فحص فوري لكشف كلمة (فد شي) وأي روابط خارجية في وصف أو عنوان المنتجات مع إمكانية تنظيفها بضغطة واحدة
+                فحص فوري لكشف كلمات الموردين (فد شي / موجود) وأي روابط خارجية في الأوصاف والعناوين مع إمكانية تنظيفها بضغطة واحدة
               </p>
             </div>
           </div>
@@ -712,20 +716,40 @@ export default function FedshiInspectorModal({
 
                         {/* التفاصيل الموسعة (المقارنة بين الأصلي والمنظف) */}
                         {isExpanded && (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
-                            <div className="space-y-1">
-                              <span className="text-[11px] font-bold text-slate-500">الوصف الحالي (يحتوي مخالفات):</span>
-                              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 max-h-32 overflow-y-auto whitespace-pre-wrap leading-relaxed">
-                                {issue.originalDescription}
+                          <div className="space-y-3 pt-2 border-t border-slate-100">
+                            {issue.originalDescription && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <span className="text-[11px] font-bold text-slate-500">الوصف الكامل الأصلي:</span>
+                                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 max-h-32 overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                                    {issue.originalDescription}
+                                  </div>
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="text-[11px] font-black text-emerald-800">الوصف الكامل بعد التنظيف:</span>
+                                  <div className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-200 text-xs text-slate-800 max-h-32 overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                                    {issue.cleanedDescription || <span className="text-slate-400 italic">لا يوجد نص</span>}
+                                  </div>
+                                </div>
                               </div>
-                            </div>
+                            )}
 
-                            <div className="space-y-1">
-                              <span className="text-[11px] font-black text-emerald-800">الوصف بعد التنظيف (المقترح):</span>
-                              <div className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-200 text-xs text-slate-800 max-h-32 overflow-y-auto whitespace-pre-wrap leading-relaxed">
-                                {issue.cleanedDescription || <span className="text-slate-400 italic">لا يوجد نص</span>}
+                            {issue.originalShortDescription && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <span className="text-[11px] font-bold text-slate-500">الوصف الترويجي / المختصر الأصلي:</span>
+                                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 max-h-32 overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                                    {issue.originalShortDescription}
+                                  </div>
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="text-[11px] font-black text-emerald-800">الوصف الترويجي بعد التنظيف:</span>
+                                  <div className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-200 text-xs text-slate-800 max-h-32 overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                                    {issue.cleanedShortDescription || <span className="text-slate-400 italic">لا يوجد نص</span>}
+                                  </div>
+                                </div>
                               </div>
-                            </div>
+                            )}
                           </div>
                         )}
                       </div>

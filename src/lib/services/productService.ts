@@ -466,8 +466,8 @@ export async function updatePlatformProduct(id: string, updates: Partial<Product
     try {
       const updateData: any = {};
       if (updates.name) updateData.title = updates.name;
-      if (updates.description) updateData.description = updates.description;
-      if (updates.shortDescription) updateData.short_description = updates.shortDescription;
+      if (updates.description !== undefined) updateData.description = updates.description;
+      if (updates.shortDescription !== undefined) updateData.short_description = updates.shortDescription;
       if (updates.wholesalePriceIqd !== undefined) updateData.wholesale_price = updates.wholesalePriceIqd;
       if (updates.platformPriceIqd !== undefined) updateData.platform_price = updates.platformPriceIqd;
       if (updates.minPriceIqd !== undefined) updateData.min_price = updates.minPriceIqd;

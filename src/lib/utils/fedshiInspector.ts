@@ -1,10 +1,10 @@
 /**
- * أداة وخوارزميات كشف وتنظيف نصوص وروابط فدشي وأي روابط خارجية
- * مخصصة لمنصة وصلي للحفاظ على الخصوصية التامة للتاجر ومنع تسرب أي روابط أو أسماء خارجية
+ * أداة وخوارزميات كشف وتنظيف نصوص وروابط فدشي وموجود وأي روابط خارجية
+ * مخصصة لمنصة وصلي للحفاظ على الخصوصية التامة للتاجر ومنع تسرب أي روابط أو أسماء الموردين
  */
 
 export interface InspectionMatch {
-  type: 'fedshi_word' | 'external_link';
+  type: 'supplier_word' | 'external_link';
   text: string;
   startIndex: number;
   endIndex: number;
@@ -20,19 +20,27 @@ export interface InspectionResult {
   matches: InspectionMatch[];
 }
 
-// الكلمات والعبارات التابعة لفدشي بكل أشكالها الشائعة
-export const FEDSHI_PATTERNS = [
+// الكلمات والعبارات التابعة لفدشي وموجود بكل أشكالها الشائعة
+export const SUPPLIER_PATTERNS = [
+  // منصة فد شي
   /وصف\s+المنتج\s+(?:في|من|على)?\s*فد\s*شي/gi,
   /وصف\s+المنتج\s+(?:في|من|على)?\s*فدشي/gi,
+  /فريق\s+فد\s*شي/gi,
+  /فريق\s+فدشي/gi,
   /(?:في|من|على|تطبيق|منصة|موقع|شركة|كتالوج)?\s*فد\s*شي/gi,
   /(?:في|من|على|تطبيق|منصة|موقع|شركة|كتالوج)?\s*فدشي/gi,
   /fedshi(?:\.com)?/gi,
   /فد\s*شي/gi,
   /فدشي/gi,
+
+  // منصة موجود
+  /(?:في|من|على|تطبيق|منصة|موقع|شركة|كتالوج)?\s*موجود(?:\s+دروب\s*شيبينغ)?/gi,
+  /mojod(?:\.app)?/gi,
+  /mojod_\d+/gi,
 ];
 
-// أنماط الروابط والـ URLs بجميع أنواعها
-export const URL_REGEX = /(https?:\/\/[^\s<>"'()]+|www\.[^\s<>"'()]+|[a-zA-Z0-9_-]+\.(?:com|org|net|app|me|co|io|link|info)[^\s<>"'()]*)/gi;
+// أنماط الروابط والـ URLs بجميع أنواعها بما فيها تيليجرام والروابط المكسورة
+export const URL_REGEX = /(https?:\/\/[^\s<>"'()]+|https?:[a-zA-Z0-9_\/.-]+|www\.[^\s<>"'()]+|t\.me\/[^\s<>"'()]+|t\.me[A-Za-z0-9_-]+|[a-zA-Z0-9_-]+\.(?:com|org|net|app|me|co|io|link|info)[^\s<>"'()]*)/gi;
 
 /**
  * فحص أي نص واستخراج كافة الكلمات والروابط المشبوهة
@@ -68,8 +76,8 @@ export function inspectText(rawText: string): InspectionResult {
     });
   }
 
-  // 2. كشف كلمات فدشي
-  for (const pattern of FEDSHI_PATTERNS) {
+  // 2. كشف كلمات فدشي وموجود
+  for (const pattern of SUPPLIER_PATTERNS) {
     let wordMatch: RegExpExecArray | null;
     const patCopy = new RegExp(pattern.source, pattern.flags);
     while ((wordMatch = patCopy.exec(rawText)) !== null) {
@@ -83,7 +91,7 @@ export function inspectText(rawText: string): InspectionResult {
       if (!alreadyInLink) {
         detectedWordsSet.add(matchedWord);
         matches.push({
-          type: 'fedshi_word',
+          type: 'supplier_word',
           text: matchedWord,
           startIndex: wordMatch.index,
           endIndex: wordMatch.index + wordMatch[0].length,
@@ -122,36 +130,40 @@ export function inspectText(rawText: string): InspectionResult {
 }
 
 /**
- * تنظيف النص تلقائياً بحذف أي روابط وأي إشارة لفدشي وإعادة تنسيق الفراغات
+ * تنظيف النص تلقائياً بحذف أي روابط وأي إشارة لفدشي وموجود وإعادة تنسيق الفراغات
  */
 export function cleanText(rawText: string): string {
   if (!rawText || typeof rawText !== 'string') return '';
 
   let cleaned = rawText;
 
-  // 1. إزالة عبارات "وصف المنتج في فد شي" ومشتقاتها
-  cleaned = cleaned.replace(/وصف\s+المنتج\s+(?:في|من|على)?\s*فد\s*شي/gi, '');
-  cleaned = cleaned.replace(/وصف\s+المنتج\s+(?:في|من|على)?\s*فدشي/gi, '');
-  cleaned = cleaned.replace(/وصف\s+المنتج/gi, '');
+  // 1. إزالة الأسطر الخاصة بروابط الفيديو الإعلاني للموردين بالكامل
+  cleaned = cleaned.replace(/^[^\n]*(?:رابط\s*فيديو|فيديو\s*اعلاني|رابط\s*المنتج|رابط\s*القناة)[^\n]*$/gmi, '');
+  cleaned = cleaned.replace(/(?:رابط\s*فيديو|فيديو\s*اعلاني|رابط\s*المنتج|رابط\s*القناة)\s*[:：]?\s*(?:https?:\S*|t\.me\S*)?/gi, '');
 
-  // 2. إزالة أي روابط
+  // 2. إزالة تنبيهات حقوق الصور والتحذيرات التابعة للمورد
+  cleaned = cleaned.replace(/الصور\s+المفرغة\s+اعلا[هة][^\n]*(?:حقوق\s+النشر|لا\s*يتحمل\s*اي\s*مسؤولية)[^\n]*/gi, '');
+  cleaned = cleaned.replace(/نسخ\s+الوصف/gi, '');
+
+  // 3. إزالة الروابط بمختلف أشكالها
   cleaned = cleaned.replace(URL_REGEX, '');
 
-  // 3. إزالة بقية عبارات فدشي
-  cleaned = cleaned.replace(/(?:في|من|على|تطبيق|منصة|موقع|شركة|كتالوج)?\s*فد\s*شي/gi, '');
-  cleaned = cleaned.replace(/(?:في|من|على|تطبيق|منصة|موقع|شركة|كتالوج)?\s*فدشي/gi, '');
-  cleaned = cleaned.replace(/fedshi(?:\.com)?/gi, '');
-  cleaned = cleaned.replace(/فد\s*شي/gi, '');
-  cleaned = cleaned.replace(/فدشي/gi, '');
+  // 4. إزالة أسماء وعبارات فدشي وموجود
+  for (const pat of SUPPLIER_PATTERNS) {
+    cleaned = cleaned.replace(pat, '');
+  }
 
-  // 4. تنظيف الأقواس الفارغة أو الخطوط المتروكة بسبب الحذف
+  // 5. إزالة بقايا https: أو http: المبتورة
+  cleaned = cleaned.replace(/https?:\s*/gi, '');
+
+  // 6. تنظيف الأقواس الفارغة أو الخطوط المتروكة بسبب الحذف
   cleaned = cleaned.replace(/\(\s*\)/g, '');
   cleaned = cleaned.replace(/\[\s*\]/g, '');
   cleaned = cleaned.replace(/\{\s*\}/g, '');
   cleaned = cleaned.replace(/-{2,}/g, '-');
   cleaned = cleaned.replace(/_{2,}/g, '_');
 
-  // 5. تنظيف الفراغات والأسطر الزائدة المتتالية
+  // 7. تنظيف الفراغات والأسطر الزائدة المتتالية
   cleaned = cleaned
     .split('\n')
     .map(line => line.replace(/[ \t]+/g, ' ').trim())

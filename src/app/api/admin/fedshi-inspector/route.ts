@@ -18,6 +18,8 @@ export async function GET(request: NextRequest) {
       linksCount: number;
       originalDescription: string;
       cleanedDescription: string;
+      originalShortDescription: string;
+      cleanedShortDescription: string;
       originalName: string;
       cleanedName: string;
     }> = [];
@@ -27,19 +29,19 @@ export async function GET(request: NextRequest) {
 
     for (const p of products) {
       const descInspection = inspectText(p.description || '');
-      const nameInspection = inspectText(p.name || '');
       const shortDescInspection = inspectText(p.shortDescription || '');
+      const nameInspection = inspectText(p.name || '');
 
       const allDetectedWords = Array.from(new Set([
         ...descInspection.detectedWords,
-        ...nameInspection.detectedWords,
         ...shortDescInspection.detectedWords,
+        ...nameInspection.detectedWords,
       ]));
 
       const allDetectedLinks = Array.from(new Set([
         ...descInspection.detectedLinks,
-        ...nameInspection.detectedLinks,
         ...shortDescInspection.detectedLinks,
+        ...nameInspection.detectedLinks,
       ]));
 
       if (allDetectedWords.length > 0 || allDetectedLinks.length > 0) {
@@ -58,6 +60,8 @@ export async function GET(request: NextRequest) {
           linksCount: allDetectedLinks.length,
           originalDescription: p.description || '',
           cleanedDescription: descInspection.cleanedText,
+          originalShortDescription: p.shortDescription || '',
+          cleanedShortDescription: shortDescInspection.cleanedText,
           originalName: p.name,
           cleanedName: nameInspection.cleanedText || p.name,
         });
@@ -73,7 +77,7 @@ export async function GET(request: NextRequest) {
       issues,
     });
   } catch (error: any) {
-    console.error('خطأ أثناء فحص نصوص وروابط فدشي:', error);
+    console.error('خطأ أثناء فحص نصوص وروابط فدشي وموجود:', error);
     return NextResponse.json({ success: false, message: error.message || 'حدث خطأ أثناء الفحص' }, { status: 500 });
   }
 }
@@ -81,7 +85,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { productId, cleanAll, customCleanedDescription, customCleanedName } = body;
+    const { 
+      productId, 
+      cleanAll, 
+      customCleanedDescription, 
+      customCleanedShortDescription, 
+      customCleanedName 
+    } = body;
 
     // تنظيف جماعي لكافة المنتجات المخالفة
     if (cleanAll) {
@@ -90,11 +100,13 @@ export async function POST(request: NextRequest) {
 
       for (const p of products) {
         const descInspection = inspectText(p.description || '');
+        const shortDescInspection = inspectText(p.shortDescription || '');
         const nameInspection = inspectText(p.name || '');
 
-        if (descInspection.hasIssues || nameInspection.hasIssues) {
+        if (descInspection.hasIssues || shortDescInspection.hasIssues || nameInspection.hasIssues) {
           await updatePlatformProduct(p.id, {
             description: descInspection.cleanedText,
+            shortDescription: shortDescInspection.cleanedText,
             name: nameInspection.hasIssues ? nameInspection.cleanedText : p.name,
           });
           cleanedCount++;
@@ -103,7 +115,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `تم تنظيف وتحديث ${cleanedCount} منتج بنجاح وإزالة كافة الروابط وكلمات فدشي.`,
+        message: `تم تنظيف وتحديث ${cleanedCount} منتج بنجاح وإزالة كافة الروابط وكلمات الموردين.`,
         cleanedCount,
       });
     }
@@ -121,12 +133,17 @@ export async function POST(request: NextRequest) {
         ? customCleanedDescription 
         : cleanText(product.description || '');
 
+      const finalShortDescription = customCleanedShortDescription !== undefined
+        ? customCleanedShortDescription
+        : cleanText(product.shortDescription || '');
+
       const finalName = customCleanedName !== undefined 
         ? customCleanedName 
         : (inspectText(product.name).hasIssues ? cleanText(product.name) : product.name);
 
       await updatePlatformProduct(productId, {
         description: finalDescription,
+        shortDescription: finalShortDescription,
         name: finalName,
       });
 
@@ -134,6 +151,7 @@ export async function POST(request: NextRequest) {
         success: true,
         message: 'تم تنظيف وحفظ المنتج بنجاح',
         cleanedDescription: finalDescription,
+        cleanedShortDescription: finalShortDescription,
         cleanedName: finalName,
       });
     }
