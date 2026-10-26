@@ -35,7 +35,9 @@ import {
   CheckCheck,
   ChevronDown,
   Plus,
-  Trash2
+  Trash2,
+  Globe,
+  LayoutDashboard
 } from 'lucide-react';
 import { Store as StoreType, Order } from '@/types';
 
@@ -147,13 +149,23 @@ export default function AdminMerchantsPage() {
     return map;
   }, [orders]);
 
-  // نسخ رابط المتجر
+  // نسخ رابط متجر التاجر المخصص للزبائن
   const handleCopyStoreLink = (code: string) => {
     if (typeof window === 'undefined') return;
     const url = `${window.location.origin}/s/${code}`;
     navigator.clipboard.writeText(url);
-    setCopiedCode(code);
-    showToast('تم نسخ رابط متجر التاجر بنجاح', 'success');
+    setCopiedCode(`store_${code}`);
+    showToast('تم نسخ رابط متجر التاجر للزبائن بنجاح', 'success');
+    setTimeout(() => setCopiedCode(null), 2500);
+  };
+
+  // نسخ رابط صفحة التاجر (لوحة التحكم)
+  const handleCopyMerchantLink = (code: string) => {
+    if (typeof window === 'undefined') return;
+    const url = `${window.location.origin}/merchant?storeCode=${code}`;
+    navigator.clipboard.writeText(url);
+    setCopiedCode(`merchant_${code}`);
+    showToast('تم نسخ رابط صفحة التاجر (لوحة التحكم) بنجاح', 'success');
     setTimeout(() => setCopiedCode(null), 2500);
   };
 
@@ -652,7 +664,7 @@ export default function AdminMerchantsPage() {
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-black text-slate-500 uppercase">
                     <th className="py-3.5 px-4">التاجر والمتجر</th>
-                    <th className="py-3.5 px-4">كود المتجر ورابطه</th>
+                    <th className="py-3.5 px-4 min-w-[240px]">روابط التاجر والمتجر</th>
                     <th className="py-3.5 px-4">رقم الهاتف والمحافظة</th>
                     <th className="py-3.5 px-4 text-center">الطلبات</th>
                     <th className="py-3.5 px-4">إجمالي المبيعات</th>
@@ -699,27 +711,68 @@ export default function AdminMerchantsPage() {
                           </div>
                         </td>
 
-                        {/* كود المتجر ورابطه */}
-                        <td className="py-4 px-4 font-mono">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-lg text-xs">
-                              {store.code}
-                            </span>
-                            <button
-                              onClick={() => store.code && handleCopyStoreLink(store.code)}
-                              title="نسخ رابط متجر التاجر"
-                              className="text-slate-400 hover:text-brand-700 p-1 rounded-md transition-colors cursor-pointer"
-                            >
-                              {copiedCode === store.code ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                            </button>
-                            <Link
-                              href={`/s/${store.code}`}
-                              target="_blank"
-                              title="معاينة متجر التاجر كما يراه الزبون"
-                              className="text-slate-400 hover:text-sky-600 p-1 rounded-md transition-colors"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </Link>
+                        {/* روابط التاجر والمتجر */}
+                        <td className="py-3.5 px-4 font-mono">
+                          <div className="space-y-1.5 min-w-[230px]">
+                            {/* كود المتجر */}
+                            <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
+                              <span className="font-sans font-bold text-slate-400">كود:</span>
+                              <span className="font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded-md text-xs">
+                                {store.code}
+                              </span>
+                            </div>
+
+                            {/* رابط صفحة التاجر (لوحة التحكم) */}
+                            <div className="flex items-center justify-between gap-1 bg-purple-50/80 border border-purple-200/80 rounded-xl px-2 py-1">
+                              <div className="flex items-center gap-1 min-w-0">
+                                <LayoutDashboard className="w-3 h-3 text-purple-700 shrink-0" />
+                                <span className="font-sans text-[10px] font-bold text-purple-900 truncate">رابط التاجر:</span>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => store.code && handleCopyMerchantLink(store.code)}
+                                  title="نسخ رابط صفحة التاجر (لوحة التحكم)"
+                                  className="p-1 text-purple-600 hover:text-purple-900 hover:bg-purple-100 rounded-md transition-colors cursor-pointer"
+                                >
+                                  {copiedCode === `merchant_${store.code}` ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                                </button>
+                                <Link
+                                  href={`/merchant?storeCode=${store.code}`}
+                                  target="_blank"
+                                  title="فتح لوحة تحكم التاجر مباشرة"
+                                  className="p-1 text-purple-600 hover:text-purple-900 hover:bg-purple-100 rounded-md transition-colors"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                </Link>
+                              </div>
+                            </div>
+
+                            {/* رابط متجر التاجر المخصص للزبائن */}
+                            <div className="flex items-center justify-between gap-1 bg-sky-50/80 border border-sky-200/80 rounded-xl px-2 py-1">
+                              <div className="flex items-center gap-1 min-w-0">
+                                <Globe className="w-3 h-3 text-sky-700 shrink-0" />
+                                <span className="font-sans text-[10px] font-bold text-sky-900 truncate">متجر الزبائن:</span>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => store.code && handleCopyStoreLink(store.code)}
+                                  title="نسخ رابط متجر التاجر المخصص للزبائن"
+                                  className="p-1 text-sky-600 hover:text-sky-900 hover:bg-sky-100 rounded-md transition-colors cursor-pointer"
+                                >
+                                  {copiedCode === `store_${store.code}` ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                                </button>
+                                <Link
+                                  href={`/s/${store.code}`}
+                                  target="_blank"
+                                  title="فتح متجر التاجر كما يراه الزبون"
+                                  className="p-1 text-sky-600 hover:text-sky-900 hover:bg-sky-100 rounded-md transition-colors"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                </Link>
+                              </div>
+                            </div>
                           </div>
                         </td>
 
@@ -939,34 +992,72 @@ export default function AdminMerchantsPage() {
                 </div>
               </div>
 
-              {/* القسم 3: تفاصيل متجر التاجر ورابطه */}
+              {/* القسم 3: تفاصيل متجر التاجر وروابطه */}
               <div>
                 <h4 className="text-xs font-black text-slate-700 mb-2.5 flex items-center gap-1.5">
                   <Store className="w-4 h-4 text-sky-600" />
-                  <span>بيانات وإعدادات متجر التاجر:</span>
+                  <span>روابط وبيانات متجر التاجر:</span>
                 </h4>
 
-                <div className="space-y-2.5 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <span className="text-slate-500">رابط متجر التاجر المباشر للزبائن:</span>
+                <div className="space-y-3 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+                  {/* رابط صفحة التاجر (لوحة التحكم) */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-purple-50/80 border border-purple-200/80 p-3 rounded-xl">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-slate-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200 text-[11px] truncate max-w-xs">
+                      <LayoutDashboard className="w-4 h-4 text-purple-700 shrink-0" />
+                      <div>
+                        <span className="font-bold text-purple-950 block text-xs">رابط التاجر (لوحة التحكم):</span>
+                        <span className="text-[10px] text-purple-700/80">صفحة التحكم الخاصة بالتاجر لمتابعة أرباحه وإدارة منتجاته وطلباته</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-purple-900 bg-white px-2.5 py-1 rounded-lg border border-purple-200 text-[11px] truncate max-w-xs" dir="ltr">
+                        /merchant?storeCode={selectedMerchant.code}
+                      </span>
+                      <button
+                        onClick={() => selectedMerchant.code && handleCopyMerchantLink(selectedMerchant.code)}
+                        className="p-1.5 bg-white hover:bg-purple-100 border border-purple-200 text-purple-800 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                        title="نسخ رابط صفحة التاجر"
+                      >
+                        {copiedCode === `merchant_${selectedMerchant.code}` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                      <Link
+                        href={`/merchant?storeCode=${selectedMerchant.code}`}
+                        target="_blank"
+                        className="py-1 px-3 bg-purple-700 hover:bg-purple-800 text-white rounded-lg text-[11px] font-bold flex items-center gap-1"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>فتح لوحة التاجر</span>
+                      </Link>
+                    </div>
+                  </div>
+
+                  {/* رابط متجر التاجر (للزبائن) */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-sky-50/80 border border-sky-200/80 p-3 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <Globe className="w-4 h-4 text-sky-700 shrink-0" />
+                      <div>
+                        <span className="font-bold text-sky-950 block text-xs">رابط متجر التاجر (للزبائن):</span>
+                        <span className="text-[10px] text-sky-700/80">المتجر الإلكتروني المخصص للزبائن للشراء المباشر</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sky-900 bg-white px-2.5 py-1 rounded-lg border border-sky-200 text-[11px] truncate max-w-xs" dir="ltr">
                         /s/{selectedMerchant.code}
                       </span>
                       <button
                         onClick={() => selectedMerchant.code && handleCopyStoreLink(selectedMerchant.code)}
-                        className="p-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                        title="نسخ الرابط"
+                        className="p-1.5 bg-white hover:bg-sky-100 border border-sky-200 text-sky-800 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                        title="نسخ رابط المتجر للزبائن"
                       >
-                        <Copy className="w-3.5 h-3.5" />
+                        {copiedCode === `store_${selectedMerchant.code}` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
                       <Link
                         href={`/s/${selectedMerchant.code}`}
                         target="_blank"
-                        className="py-1 px-2.5 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-[11px] font-bold flex items-center gap-1"
+                        className="py-1 px-3 bg-sky-700 hover:bg-sky-800 text-white rounded-lg text-[11px] font-bold flex items-center gap-1"
                       >
                         <ExternalLink className="w-3 h-3" />
-                        <span>فتح المتجر</span>
+                        <span>معاينة المتجر</span>
                       </Link>
                     </div>
                   </div>
