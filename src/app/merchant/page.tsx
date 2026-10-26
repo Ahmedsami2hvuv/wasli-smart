@@ -105,6 +105,7 @@ function MerchantDashboardContent() {
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
   const [preSelectedCustomerForOrder, setPreSelectedCustomerForOrder] = useState<Customer | null>(null);
+  const [preSelectedProductForOrder, setPreSelectedProductForOrder] = useState<any | null>(null);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [isAddCustomerModalOpen, setIsAddCustomerModalOpen] = useState(false);
   const [newCustomerForm, setNewCustomerForm] = useState({
@@ -388,6 +389,22 @@ interface MerchantEditFormState {
   // فتح نافذة إنشاء الطلب لزبون محدد بنقرة واحدة
   const handleOpenCreateOrderForCustomer = (cust: Customer) => {
     setPreSelectedCustomerForOrder(cust);
+    setPreSelectedProductForOrder(null);
+    setIsCreateOrderModalOpen(true);
+  };
+
+  // إضافة منتج مباشرة من بطاقته إلى لوحة إضافة الطلب الجديد
+  const handleAddProductToOrderDraft = (product: any) => {
+    const baseCost = product.platformPriceIqd || product.priceIqd || 10000;
+    const userPrice = editingPrices[product.id] !== undefined 
+      ? editingPrices[product.id] 
+      : product.sellingPrice || baseCost;
+
+    setPreSelectedProductForOrder({
+      ...product,
+      sellingPrice: userPrice
+    });
+    setPreSelectedCustomerForOrder(null);
     setIsCreateOrderModalOpen(true);
   };
 
@@ -1338,12 +1355,26 @@ interface MerchantEditFormState {
                     return (
                       <div
                         key={product.id}
-                        className={`rounded-2xl p-5 border transition-all flex flex-col justify-between gap-4 ${
+                        className={`rounded-2xl p-5 border transition-all flex flex-col justify-between gap-4 relative group ${
                           product.isActive !== false
                             ? 'bg-white border-slate-200/90 shadow-xs hover:shadow-md'
                             : 'bg-slate-50/70 border-slate-200 opacity-75'
                         }`}
                       >
+                        {/* زر زائد (+) بزاوية بلوك كل منتج لإضافته فوراً للوحة إضافة الطلب الجديد */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddProductToOrderDraft(product);
+                          }}
+                          className="absolute top-3.5 left-3.5 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer z-10 border border-emerald-500/40 hover:shadow-md hover:shadow-emerald-600/25"
+                          title="إضافة هذا المنتج للوحة إضافة الطلب الجديد"
+                        >
+                          <Plus className="w-4 h-4 stroke-[3]" />
+                          <span className="text-[11px]">طلب جديد</span>
+                        </button>
+
                         {/* الجزء العلوي: الصورة والاسم والتصنيف */}
                         <div>
                           <div className="flex items-start gap-4">
@@ -1360,7 +1391,7 @@ interface MerchantEditFormState {
                               )}
                             </div>
 
-                            <div className="flex-1 min-w-0">
+                            <div className="flex-1 min-w-0 pl-24">
                               <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 <span className="text-[11px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
                                   {product.category || 'عام'}
@@ -3263,11 +3294,13 @@ interface MerchantEditFormState {
           onClose={() => {
             setIsCreateOrderModalOpen(false);
             setPreSelectedCustomerForOrder(null);
+            setPreSelectedProductForOrder(null);
           }}
           store={currentStore}
           availableProducts={merchantProducts}
           customers={customers}
           preSelectedCustomer={preSelectedCustomerForOrder}
+          preSelectedProduct={preSelectedProductForOrder}
           onOrderCreated={(newOrder) => {
             setOrders(prev => [newOrder, ...prev]);
             reloadCustomers();

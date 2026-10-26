@@ -61,6 +61,7 @@ interface CreateOrderModalProps {
   availableProducts: Product[];
   customers: Customer[];
   preSelectedCustomer?: Customer | null;
+  preSelectedProduct?: Product | null;
   onOrderCreated: (newOrder: Order) => void;
 }
 
@@ -71,6 +72,7 @@ export default function CreateOrderModal({
   availableProducts,
   customers,
   preSelectedCustomer,
+  preSelectedProduct,
   onOrderCreated,
 }: CreateOrderModalProps) {
   // 1. حالات قسم المنتجات (أولاً في الأعلى)
@@ -137,6 +139,23 @@ export default function CreateOrderModal({
       setShowCustomerForm(true);
     }
   }, [preSelectedCustomer, customers]);
+
+  // تهيئة المنتج المختار مسبقاً من زاوية كارت المنتج
+  useEffect(() => {
+    if (preSelectedProduct) {
+      const wholesale = preSelectedProduct.wholesalePriceIqd || Math.round(preSelectedProduct.priceIqd * 0.7);
+      const selling = (preSelectedProduct as any).sellingPrice || preSelectedProduct.platformPriceIqd || preSelectedProduct.priceIqd;
+      setOrderItems([
+        {
+          product: preSelectedProduct,
+          quantity: 1,
+          sellingPrice: Math.max(wholesale, selling),
+          color: preSelectedProduct.colors && preSelectedProduct.colors.length > 0 ? preSelectedProduct.colors[0].name : undefined,
+        }
+      ]);
+      setSelectedProduct(null);
+    }
+  }, [preSelectedProduct]);
 
   // فلترة الزبائن الحاليين بالبحث
   const filteredCustomers = useMemo(() => {
