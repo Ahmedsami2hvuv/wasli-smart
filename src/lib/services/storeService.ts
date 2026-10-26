@@ -2,6 +2,7 @@ import { Store, StoreProduct, Product, PayoutMethod, PayoutDetails } from '@/typ
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase/admin';
 import { mockStores } from '@/data/mockData';
+import { getAllProducts } from '@/lib/services/productService';
 import fs from 'fs';
 import path from 'path';
 
@@ -481,4 +482,80 @@ export async function deleteStore(identifier: string): Promise<boolean> {
   }
 
   return true;
+}
+
+/**
+ * جلب منتجات المتجر المتاحة للزبائن مباشرة من جهة السيرفر بسرعة فائقة
+ */
+export async function getStoreProductsForCustomer(identifier: string): Promise<Product[]> {
+  try {
+    const cleanId = (identifier || '').toLowerCase().trim();
+    const allProducts = await getAllProducts();
+    if (!cleanId) return allProducts;
+
+    const store = await getStoreBySlugOrCode(cleanId);
+    let customPrices: Record<string, { sellingPrice: number; isActive: boolean }> = {};
+
+    const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+    if (activeSupabase && store?.id) {
+      try {
+        const { data: storeData } = await activeSupabase
+          .from('stores')
+          .select('settings')
+          .eq('id', store.id)
+          .maybeSingle();
+
+        if (storeData?.settings?.custom_product_prices) {
+          customPrices = { ...storeData.settings.custom_product_prices };
+        }
+
+        const { data: spRows } = await activeSupabase
+          .from('store_products')
+          .select('product_id, selling_price, is_active')
+          .eq('store_id', store.id);
+
+        if (spRows && spRows.length > 0) {
+          spRows.forEach((row: any) => {
+            if (row.product_id) {
+              customPrices[row.product_id] = {
+                sellingPrice: Number(row.selling_price),
+                isActive: row.is_active !== false,
+              };
+            }
+          });
+        }
+      } catch (e) {}
+    }
+
+    const mergedProducts = allProducts.map(product => {
+      const custom = customPrices[product.id];
+      const basePlatformPrice = product.platformPriceIqd || product.priceIqd || 10000;
+      const minPrice = product.minPriceIqd || (basePlatformPrice + 5000);
+      const maxPrice = product.maxPriceIqd || (basePlatformPrice + 20000);
+
+      const defaultSellingPrice = Math.min(maxPrice, Math.max(minPrice, basePlatformPrice + 10000));
+      const rawSelling = custom && custom.sellingPrice ? Number(custom.sellingPrice) : defaultSellingPrice;
+      const sellingPrice = Math.max(minPrice, Math.min(maxPrice, rawSelling));
+      const isActive = custom && custom.isActive !== undefined ? custom.isActive : true;
+      const merchantProfit = Math.max(0, sellingPrice - basePlatformPrice);
+
+      return {
+        ...product,
+        priceIqd: sellingPrice,
+        sellingPrice: sellingPrice,
+        defaultSellingPrice: defaultSellingPrice,
+        platformPriceIqd: basePlatformPrice,
+        minPriceIqd: minPrice,
+        maxPriceIqd: maxPrice,
+        merchantProfit: merchantProfit,
+        isActive: isActive,
+        isCustomized: !!custom,
+      };
+    });
+
+    return mergedProducts.filter(p => p.isActive !== false);
+  } catch (error) {
+    console.warn('تعذر جلب منتجات المتجر من السيرفر:', error);
+    return [];
+  }
 }
