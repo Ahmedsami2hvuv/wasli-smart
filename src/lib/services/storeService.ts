@@ -116,17 +116,65 @@ export async function getAllStores(): Promise<Store[]> {
 }
 
 /**
- * جلب متجر بواسطة الكود الفريد أو الـ slug
+ * جلب متجر بواسطة الكود الفريد أو الـ slug باستعلام مباشر وسريع من قاعدة البيانات
  */
 export async function getStoreBySlugOrCode(identifier: string): Promise<Store | null> {
-  const stores = await getAllStores();
-  const decoded = decodeURIComponent(identifier).toLowerCase().trim();
-  
-  const found = stores.find(
+  const decoded = decodeURIComponent(identifier || '').toLowerCase().trim();
+  if (!decoded) return null;
+
+  const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+
+  if (activeSupabase) {
+    try {
+      const { data, error } = await activeSupabase
+        .from('stores')
+        .select('*')
+        .or(`code.ilike.${decoded},slug.ilike.${decoded},id.eq.${decoded}`)
+        .maybeSingle();
+
+      if (!error && data) {
+        return {
+          id: data.id,
+          name: data.name,
+          ownerName: data.settings?.owner_name || undefined,
+          slug: data.slug,
+          code: data.code,
+          description: data.description,
+          logoUrl: data.logo_url || '/images/store-default.png',
+          bannerUrl: data.banner_url,
+          city: data.city || 'العراق',
+          phone: data.phone,
+          status: data.status,
+          totalSales: Number(data.total_sales || 0),
+          totalOrders: Number(data.total_orders || 0),
+          balanceEarned: Number(data.balance_earned || 0),
+          balanceWithdrawn: Number(data.balance_withdrawn || 0),
+          payoutMethod: data.settings?.payout_method,
+          payoutDetails: data.settings?.payout_details,
+          adminNotes: data.settings?.admin_notes,
+          telegramUsername: data.settings?.telegram_username,
+          telegramChatId: data.settings?.telegram_chat_id,
+          rating: data.settings?.rating || 4.9,
+          reviewsCount: data.settings?.reviews_count || 38,
+          deliveryFeeIqd: data.settings?.delivery_fee_iqd !== undefined ? Number(data.settings.delivery_fee_iqd) : 5000,
+          deliveryTimeMinutes: data.settings?.delivery_time_minutes || 'خلال يوم أو يومين',
+          isOpen: data.settings?.is_open !== undefined ? data.settings.is_open : true,
+          image: data.logo_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80',
+          location: data.settings?.location || data.city || 'العراق',
+          district: data.settings?.district || data.city || 'العراق',
+          createdAt: data.created_at,
+        };
+      }
+    } catch (e) {
+      console.warn('استخدام الكاش المحلي للبحث عن المتجر:', e);
+    }
+  }
+
+  const cached = loadCachedStores();
+  const foundInLocal = [...localStores, ...cached].find(
     s => s.code?.toLowerCase() === decoded || s.slug?.toLowerCase() === decoded || s.id === decoded
   );
-
-  return found || null;
+  return foundInLocal || null;
 }
 
 /**

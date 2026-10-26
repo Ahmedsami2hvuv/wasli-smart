@@ -122,17 +122,13 @@ export const ProtectedImage: React.FC<ProtectedImageProps> = ({
         {...props}
       />
 
-      {/* 2. درع الحماية الشفاف المتقدم: يلتقط أوامر الحفظ والضغط المطول وينزل صورة فارغة شفافة */}
+      {/* 2. درع الحماية الشفاف المتقدم لمنع الحفظ والسحب والضغط المطول بدون التأثير على قياس LCP */}
       {shouldProtect && (
-        <img
-          src={TRANSPARENT_PIXEL}
-          alt=""
+        <div
           aria-hidden="true"
-          draggable={false}
-          className="absolute inset-0 w-full h-full object-cover z-10 opacity-0 cursor-pointer pointer-events-auto select-none"
-          title=""
-          onDragStart={(e) => e.preventDefault()}
+          className="absolute inset-0 w-full h-full z-10 select-none cursor-pointer"
           onContextMenu={(e) => e.preventDefault()}
+          onDragStart={(e) => e.preventDefault()}
         />
       )}
     </div>
