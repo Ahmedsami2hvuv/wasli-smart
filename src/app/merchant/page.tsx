@@ -44,12 +44,16 @@ import {
   Send,
   Bell,
   Menu,
-  PackageCheck
+  PackageCheck,
+  Users,
+  UserPlus,
+  PhoneCall
 } from 'lucide-react';
 import Link from 'next/link';
-import { Store as StoreType, Order } from '@/types';
+import { Store as StoreType, Order, Customer } from '@/types';
 import PromoLinkModal from '@/components/PromoLinkModal';
 import { PromoLink } from '@/lib/services/promoLinkService';
+import CreateOrderModal from '@/components/merchant/CreateOrderModal';
 
 const IRAQI_GOVERNORATES = [
   'بغداد',
@@ -94,7 +98,26 @@ function MerchantDashboardContent() {
   const [productFeedback, setProductFeedback] = useState<Record<string, string>>({});
   const [productFilter, setProductFilter] = useState<'all' | 'active' | 'hidden'>('all');
   const [productSearch, setProductSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'links'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'customers' | 'links'>('products');
+
+  // حالات إدارة زبائن التاجر وإضافة الطلبات
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
+  const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
+  const [preSelectedCustomerForOrder, setPreSelectedCustomerForOrder] = useState<Customer | null>(null);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [isAddCustomerModalOpen, setIsAddCustomerModalOpen] = useState(false);
+  const [newCustomerForm, setNewCustomerForm] = useState({
+    name: '',
+    phone: '',
+    phone2: '',
+    governorate: IRAQI_GOVERNORATES[0],
+    city: '',
+    address: '',
+    notes: '',
+  });
+  const [isSavingCustomer, setIsSavingCustomer] = useState(false);
+  const [customerModalMsg, setCustomerModalMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   // حالات نظام روابط البيع الخاصة (روابطي)
   const [promoLinks, setPromoLinks] = useState<PromoLink[]>([]);
@@ -314,6 +337,22 @@ interface MerchantEditFormState {
               }
             }
           } catch (e) {}
+
+          // جلب زبائن التاجر المسجلين في المتجر
+          try {
+            setLoadingCustomers(true);
+            const custRes = await fetch(`/api/customers?storeId=${found.id}&storeCode=${found.code || ''}`);
+            if (custRes.ok) {
+              const custData = await custRes.json();
+              if (custData.success && Array.isArray(custData.customers)) {
+                setCustomers(custData.customers);
+              }
+            }
+          } catch (e) {
+            console.warn('تعذر جلب زبائن التاجر:', e);
+          } finally {
+            setLoadingCustomers(false);
+          }
         } else {
           setCurrentStore(null);
         }
@@ -326,6 +365,81 @@ interface MerchantEditFormState {
 
     initMerchant();
   }, [urlStoreCode]);
+
+  // دالة إعادة جلب زبائن المتجر
+  const reloadCustomers = async () => {
+    if (!currentStore) return;
+    try {
+      setLoadingCustomers(true);
+      const res = await fetch(`/api/customers?storeId=${currentStore.id}&storeCode=${currentStore.code || ''}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.customers)) {
+          setCustomers(data.customers);
+        }
+      }
+    } catch (e) {
+      console.warn('تعذر تحديث زبائن المتجر:', e);
+    } finally {
+      setLoadingCustomers(false);
+    }
+  };
+
+  // فتح نافذة إنشاء الطلب لزبون محدد بنقرة واحدة
+  const handleOpenCreateOrderForCustomer = (cust: Customer) => {
+    setPreSelectedCustomerForOrder(cust);
+    setIsCreateOrderModalOpen(true);
+  };
+
+  // حفظ زبون جديد من المودال السريع للزبائن
+  const handleSaveNewCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentStore) return;
+    setCustomerModalMsg(null);
+
+    if (!newCustomerForm.name.trim() || !newCustomerForm.phone.trim() || !newCustomerForm.address.trim()) {
+      setCustomerModalMsg({ text: 'يرجى إكمال جميع الحقول الإلزامية (الاسم، الهاتف، المحافظة، العنوان)', type: 'error' });
+      return;
+    }
+
+    setIsSavingCustomer(true);
+    try {
+      const res = await fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storeId: currentStore.id,
+          storeCode: currentStore.code,
+          ...newCustomerForm,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.customer) {
+        setCustomerModalMsg({ text: 'تم حفظ الزبون بنجاح في قاعدة البيانات!', type: 'success' });
+        await reloadCustomers();
+        setTimeout(() => {
+          setIsAddCustomerModalOpen(false);
+          setCustomerModalMsg(null);
+          setNewCustomerForm({
+            name: '',
+            phone: '',
+            phone2: '',
+            governorate: IRAQI_GOVERNORATES[0],
+            city: '',
+            address: '',
+            notes: '',
+          });
+        }, 800);
+      } else {
+        setCustomerModalMsg({ text: data.message || 'تعذر حفظ الزبون', type: 'error' });
+      }
+    } catch (err: any) {
+      setCustomerModalMsg({ text: err.message || 'خطأ في الاتصال بالسيرفر', type: 'error' });
+    } finally {
+      setIsSavingCustomer(false);
+    }
+  };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1010,6 +1124,19 @@ interface MerchantEditFormState {
               <span>فتح المتجر</span>
             </Link>
 
+            {/* زر إضافة طلب جديد المباشر للتاجر */}
+            <button
+              onClick={() => {
+                setPreSelectedCustomerForOrder(null);
+                setIsCreateOrderModalOpen(true);
+              }}
+              className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all flex items-center gap-2 cursor-pointer ring-2 ring-emerald-300/40"
+              title="إضافة وتسجيل طلب جديد مباشر"
+            >
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>+ إضافة طلب جديد</span>
+            </button>
+
             {/* 4. زر تعديل المتجر */}
             <button
               onClick={openEditModal}
@@ -1034,7 +1161,7 @@ interface MerchantEditFormState {
 
         {/* مساحة العمل والمحتوى الرئيسي - عرض كامل أنيق وفخم */}
         <div className="w-full space-y-6">
-            {/* شريط التبويب الرئيسي: إدارة المنتجات والأسعار / الطلبات الواردة */}
+            {/* شريط التبويب الرئيسي: إدارة المنتجات والأسعار / الطلبات الواردة / زبائني / روابطي */}
             <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 pb-3">
               <button
                 onClick={() => setActiveTab('products')}
@@ -1067,6 +1194,24 @@ interface MerchantEditFormState {
                   activeTab === 'orders' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
                 }`}>
                   {orders.length}
+                </span>
+              </button>
+
+              {/* تبويب زبائني */}
+              <button
+                onClick={() => setActiveTab('customers')}
+                className={`py-3 px-5 rounded-2xl font-black text-sm flex items-center gap-2 transition-all cursor-pointer ${
+                  activeTab === 'customers'
+                    ? 'bg-brand-700 text-white shadow-md shadow-brand-700/20'
+                    : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                <span>زبائني</span>
+                <span className={`text-xs px-2.5 py-0.5 rounded-full font-mono font-bold ${
+                  activeTab === 'customers' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {customers.length}
                 </span>
               </button>
 
@@ -1512,14 +1657,32 @@ interface MerchantEditFormState {
         {/* 2. قسم الطلبات الواردة لمتجري */}
         {activeTab === 'orders' && (
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md">
-          <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 border-b border-slate-100 pb-4">
             <div>
-              <h2 className="text-lg font-black text-slate-900">الطلبات الواردة من متجرك</h2>
+              <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <ShoppingBag className="w-5 h-5 text-brand-700" />
+                <span>الطلبات الواردة من متجرك</span>
+              </h2>
               <p className="text-xs text-slate-500 mt-0.5">تتبع طلبات زبائنك وحالات التوصيل وأرباح كل طلب</p>
             </div>
-            <span className="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-full">
-              {orders.length} طلب
-            </span>
+            
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1.5 rounded-full">
+                {orders.length} طلب
+              </span>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setPreSelectedCustomerForOrder(null);
+                  setIsCreateOrderModalOpen(true);
+                }}
+                className="py-2 px-3.5 bg-brand-700 hover:bg-brand-800 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                <span>+ إضافة طلب جديد</span>
+              </button>
+            </div>
           </div>
 
           {orders.length === 0 ? (
@@ -1630,7 +1793,278 @@ interface MerchantEditFormState {
         </div>
         )}
 
-        {/* 3. قسم روابطي المخصص (روابط البيع الخاصة وإحصائياتها الشاملة) */}
+        {/* 3. قسم زبائني (إدارة وحفظ زبائن التاجر وإحصائياتهم) */}
+        {activeTab === 'customers' && (
+          <div className="space-y-6">
+            {/* بطاقة إحصائيات زبائن المتجر */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-brand-50 text-brand-700 flex items-center justify-center shrink-0 border border-brand-100">
+                  <Users className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="text-xs text-slate-500 font-bold block">إجمالي زبائنك المسجلين</span>
+                  <strong className="text-xl font-black text-slate-900 font-mono">
+                    {customers.length} زبون
+                  </strong>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-100">
+                  <PackageCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="text-xs text-slate-500 font-bold block">زبائن متكررو الشراء</span>
+                  <strong className="text-xl font-black text-emerald-700 font-mono">
+                    {customers.filter(c => c.totalOrders > 1).length} زبون
+                  </strong>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-sky-50 text-sky-700 flex items-center justify-center shrink-0 border border-sky-100">
+                  <TrendingUp className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="text-xs text-slate-500 font-bold block">إجمالي مشتريات الزبائن</span>
+                  <strong className="text-xl font-black text-brand-800 font-mono">
+                    {customers.reduce((sum, c) => sum + (c.totalSpent || 0), 0).toLocaleString('ar-IQ')} د.ع
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            {/* الحاوية الرئيسية للزبائن */}
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md space-y-6">
+              
+              {/* هيدر قسم الزبائن مع زر مستطيل لإضافة زبون وزر لإضافة طلب */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                    <Users className="w-5 h-5 text-brand-700" />
+                    <span>زبائن متجرك</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    قاعدة بيانات زبائنك المحفوظة في سوبابيس، مع أرقام هواتفهم وعناوينهم وإمكانية إنشاء طلب لهم بضغطة واحدة
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {/* زر مستطيل لإضافة زبون جديد كما طلب المستخدم */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomerModalMsg(null);
+                      setIsAddCustomerModalOpen(true);
+                    }}
+                    className="py-2.5 px-4 bg-white hover:bg-slate-50 text-brand-700 border-2 border-brand-300 hover:border-brand-500 font-black text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>+ إضافة زبون جديد</span>
+                  </button>
+
+                  {/* زر إضافة طلب جديد */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreSelectedCustomerForOrder(null);
+                      setIsCreateOrderModalOpen(true);
+                    }}
+                    className="py-2.5 px-4 bg-brand-700 hover:bg-brand-800 text-white font-black text-xs rounded-xl shadow-md shadow-brand-700/20 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4 stroke-[3]" />
+                    <span>+ إضافة طلب جديد</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* شريط البحث في الزبائن */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={customerSearchQuery}
+                    onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                    placeholder="ابحث باسم الزبون، رقم الهاتف الأساسي أو الإضافي، أو المحافظة..."
+                    className="w-full bg-slate-50 pr-10 pl-4 py-2.5 rounded-2xl border border-slate-200 text-xs focus:ring-2 focus:ring-brand-500 outline-none"
+                  />
+                </div>
+
+                <span className="text-xs text-slate-500 font-bold self-center">
+                  المعروض: {
+                    customers.filter(c => {
+                      if (!customerSearchQuery.trim()) return true;
+                      const q = customerSearchQuery.toLowerCase().trim();
+                      return c.name?.toLowerCase().includes(q) ||
+                             c.phone?.includes(q) ||
+                             c.phone2?.includes(q) ||
+                             c.governorate?.toLowerCase().includes(q) ||
+                             c.city?.toLowerCase().includes(q) ||
+                             c.address?.toLowerCase().includes(q);
+                    }).length
+                  } زبون
+                </span>
+              </div>
+
+              {/* جدول وبطاقات الزبائن */}
+              {loadingCustomers ? (
+                <div className="text-center py-12">
+                  <div className="w-8 h-8 border-3 border-brand-200 border-t-brand-700 rounded-full animate-spin mx-auto mb-2" />
+                  <p className="text-xs text-slate-500">جاري تحميل قائمة زبائنك من قاعدة البيانات...</p>
+                </div>
+              ) : customers.length === 0 ? (
+                <div className="text-center py-12 bg-slate-50 rounded-3xl border border-dashed border-slate-200 p-8 space-y-4">
+                  <div className="w-16 h-16 bg-brand-50 text-brand-600 rounded-3xl mx-auto flex items-center justify-center">
+                    <Users className="w-8 h-8" />
+                  </div>
+                  <div className="max-w-md mx-auto">
+                    <h3 className="text-base font-black text-slate-900">لا يوجد زبائن مسجلين لمتجرك حتى الآن</h3>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      أي زبون يقوم بطلب منتج من متجرك الإلكتروني، أو تقوم أنت بتسجيل طلب له يدوياً، سيتم حفظ بياناته وأرقام هواتفه وعنوانه تلقائياً هنا في سوبابيس لتتمكن من إعادة مراسلته وإنشاء طلبات له بنقرة واحدة.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomerModalMsg(null);
+                      setIsAddCustomerModalOpen(true);
+                    }}
+                    className="py-2.5 px-5 bg-brand-700 hover:bg-brand-800 text-white font-black text-xs rounded-xl shadow-xs transition-all inline-flex items-center gap-2 cursor-pointer"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>+ إضافة أول زبون لمتجرك الآن</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-right text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-400 font-bold bg-slate-50/50">
+                        <th className="py-3 px-3">الزبون</th>
+                        <th className="py-3 px-3">أرقام الهاتف</th>
+                        <th className="py-3 px-3">المحافظة والعنوان</th>
+                        <th className="py-3 px-3">الطلبات والمشتريات</th>
+                        <th className="py-3 px-3">آخر نشاط</th>
+                        <th className="py-3 px-3 text-center">إجراء سريع</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {customers
+                        .filter(c => {
+                          if (!customerSearchQuery.trim()) return true;
+                          const q = customerSearchQuery.toLowerCase().trim();
+                          return c.name?.toLowerCase().includes(q) ||
+                                 c.phone?.includes(q) ||
+                                 c.phone2?.includes(q) ||
+                                 c.governorate?.toLowerCase().includes(q) ||
+                                 c.city?.toLowerCase().includes(q) ||
+                                 c.address?.toLowerCase().includes(q);
+                        })
+                        .map((c) => {
+                          const cleanPhone1 = c.phone?.replace(/[^0-9]/g, '');
+                          const waPhone = cleanPhone1?.startsWith('0') ? '964' + cleanPhone1.substring(1) : cleanPhone1;
+                          return (
+                            <tr key={c.id || c.phone} className="hover:bg-slate-50/80 transition-colors">
+                              {/* اسم الزبون */}
+                              <td className="py-3.5 px-3">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-9 h-9 rounded-xl bg-brand-100 text-brand-800 flex items-center justify-center font-black text-xs shrink-0">
+                                    {c.name ? c.name.charAt(0) : 'ز'}
+                                  </div>
+                                  <div>
+                                    <div className="font-black text-slate-900">{c.name}</div>
+                                    {c.notes && (
+                                      <div className="text-[10px] text-slate-400 truncate max-w-xs" title={c.notes}>
+                                        {c.notes}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* أرقام الهواتف (الأساسي والثاني) */}
+                              <td className="py-3.5 px-3">
+                                <div className="space-y-1 font-mono">
+                                  <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                                    <Phone className="w-3 h-3 text-slate-400" />
+                                    <span>{c.phone}</span>
+                                    <a
+                                      href={`https://wa.me/${waPhone}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[10px] bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-1.5 py-0.5 rounded font-sans font-bold"
+                                      title="مراسلة عبر واتساب"
+                                    >
+                                      واتساب
+                                    </a>
+                                  </div>
+                                  {c.phone2 && (
+                                    <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
+                                      <span className="text-[10px] text-slate-400 font-sans">هاتف 2:</span>
+                                      <span>{c.phone2}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* المحافظة والعنوان */}
+                              <td className="py-3.5 px-3">
+                                <div>
+                                  <span className="font-bold text-slate-800 block">{c.governorate}</span>
+                                  <span className="text-[11px] text-slate-500 block truncate max-w-xs" title={`${c.city} - ${c.address}`}>
+                                    {c.city ? `${c.city} • ` : ''}{c.address}
+                                  </span>
+                                </div>
+                              </td>
+
+                              {/* إحصائيات الطلبات والمبالغ */}
+                              <td className="py-3.5 px-3">
+                                <div className="font-bold text-slate-900">
+                                  {c.totalOrders > 0 ? `${c.totalOrders} طلب` : 'مسجل بدون طلب'}
+                                </div>
+                                {c.totalSpent > 0 && (
+                                  <div className="text-[11px] font-mono font-bold text-brand-700">
+                                    {c.totalSpent.toLocaleString('ar-IQ')} د.ع
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* تاريخ آخر طلب */}
+                              <td className="py-3.5 px-3 text-slate-500 text-[11px]">
+                                {c.lastOrderAt ? (
+                                  <span>{new Date(c.lastOrderAt).toLocaleDateString('ar-IQ')}</span>
+                                ) : (
+                                  <span>{new Date(c.createdAt).toLocaleDateString('ar-IQ')}</span>
+                                )}
+                              </td>
+
+                              {/* زر إنشاء طلب مباشر لهذا الزبون بنقرة واحدة */}
+                              <td className="py-3.5 px-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCreateOrderForCustomer(c)}
+                                  className="py-1.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-black text-xs transition-colors inline-flex items-center gap-1.5 border border-emerald-200 cursor-pointer shadow-2xs"
+                                  title="إنشاء وتسجيل طلب جديد لهذا الزبون فوراً"
+                                >
+                                  <Plus className="w-3.5 h-3.5 stroke-[3] text-emerald-700" />
+                                  <span>إنشاء طلب له</span>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+            </div>
+          </div>
+        )}
+
+        {/* 4. قسم روابطي المخصص (روابط البيع الخاصة وإحصائياتها الشاملة) */}
         {activeTab === 'links' && (
           <div className="space-y-6">
             {/* رأس قسم روابطي */}
@@ -2584,6 +3018,35 @@ interface MerchantEditFormState {
 
               {/* محتوى القائمة القابل للتمرير */}
               <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                
+                {/* أزرار العمليات السريعة */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSidebarDrawerOpen(false);
+                      setPreSelectedCustomerForOrder(null);
+                      setIsCreateOrderModalOpen(true);
+                    }}
+                    className="py-3 px-3 bg-brand-700 hover:bg-brand-800 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4 stroke-[3]" />
+                    <span>إضافة طلب جديد</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSidebarDrawerOpen(false);
+                      setActiveTab('customers');
+                    }}
+                    className="py-3 px-3 bg-white hover:bg-slate-100 text-brand-800 border border-brand-200 font-black text-xs rounded-2xl flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+                  >
+                    <Users className="w-4 h-4" />
+                    <span>قائمة زبائني</span>
+                  </button>
+                </div>
+
                 {/* 1. بطاقة المحفظة والأرباح */}
                 <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-3.5">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -2791,6 +3254,178 @@ interface MerchantEditFormState {
           }}
           onLinkUpdated={handleLinkUpdated}
         />
+      )}
+
+      {/* نافذة مودال إنشاء طلب جديد للتاجر */}
+      {currentStore && isCreateOrderModalOpen && (
+        <CreateOrderModal
+          isOpen={isCreateOrderModalOpen}
+          onClose={() => {
+            setIsCreateOrderModalOpen(false);
+            setPreSelectedCustomerForOrder(null);
+          }}
+          store={currentStore}
+          availableProducts={merchantProducts}
+          customers={customers}
+          preSelectedCustomer={preSelectedCustomerForOrder}
+          onOrderCreated={(newOrder) => {
+            setOrders(prev => [newOrder, ...prev]);
+            reloadCustomers();
+          }}
+        />
+      )}
+
+      {/* نافذة مودال إضافة زبون جديد مباشر */}
+      {isAddCustomerModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl border border-slate-200 overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150" dir="rtl">
+            <div className="bg-brand-700 text-white px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-white shrink-0">
+                  <UserPlus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black">إضافة زبون جديد لمتجرك</h3>
+                  <p className="text-[11px] text-sky-100">احفظ بيانات الزبون في قاعدة بياناتك بسوبابيس</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddCustomerModalOpen(false)}
+                className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveNewCustomer} className="p-6 space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">اسم الزبون الكامل *</label>
+                <input
+                  type="text"
+                  required
+                  value={newCustomerForm.name}
+                  onChange={(e) => setNewCustomerForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="مثال: أحمد عبد الله الهاشمي"
+                  className="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-brand-500 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">رقم الهاتف الأساسي *</label>
+                  <input
+                    type="tel"
+                    required
+                    value={newCustomerForm.phone}
+                    onChange={(e) => setNewCustomerForm(prev => ({ ...prev, phone: e.target.value }))}
+                    placeholder="07801234567"
+                    className="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono focus:ring-2 focus:ring-brand-500 outline-none text-right"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">رقم هاتف ثانٍ (اختياري)</label>
+                  <input
+                    type="tel"
+                    value={newCustomerForm.phone2}
+                    onChange={(e) => setNewCustomerForm(prev => ({ ...prev, phone2: e.target.value }))}
+                    placeholder="07701234567"
+                    className="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono focus:ring-2 focus:ring-brand-500 outline-none text-right"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">المحافظة *</label>
+                  <select
+                    value={newCustomerForm.governorate}
+                    onChange={(e) => setNewCustomerForm(prev => ({ ...prev, governorate: e.target.value }))}
+                    className="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-brand-500 outline-none"
+                  >
+                    {IRAQI_GOVERNORATES.map(g => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">المدينة / القضاء</label>
+                  <input
+                    type="text"
+                    value={newCustomerForm.city}
+                    onChange={(e) => setNewCustomerForm(prev => ({ ...prev, city: e.target.value }))}
+                    placeholder="الكرادة، المنصور، العشار..."
+                    className="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-brand-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">العنوان التفصيلي (أقرب نقطة دالة) *</label>
+                <input
+                  type="text"
+                  required
+                  value={newCustomerForm.address}
+                  onChange={(e) => setNewCustomerForm(prev => ({ ...prev, address: e.target.value }))}
+                  placeholder="الشارع، الفرع، أقرب معلم معروف"
+                  className="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-brand-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">ملاحظات عن الزبون (اختياري)</label>
+                <input
+                  type="text"
+                  value={newCustomerForm.notes}
+                  onChange={(e) => setNewCustomerForm(prev => ({ ...prev, notes: e.target.value }))}
+                  placeholder="ملاحظات شخصية أو تفضيلات وقت الاتصال..."
+                  className="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-brand-500 outline-none"
+                />
+              </div>
+
+              {customerModalMsg && (
+                <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                  customerModalMsg.type === 'success' 
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                }`}>
+                  {customerModalMsg.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                  <span>{customerModalMsg.text}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddCustomerModalOpen(false)}
+                  className="py-2.5 px-4 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-bold cursor-pointer"
+                >
+                  إلغاء
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSavingCustomer}
+                  className="py-2.5 px-6 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-xs font-black shadow-xs flex items-center gap-2 cursor-pointer"
+                >
+                  {isSavingCustomer ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>جاري الحفظ...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      <span>حفظ الزبون في سوبابيس</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

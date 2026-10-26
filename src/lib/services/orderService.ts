@@ -4,6 +4,7 @@ import { getStoreBySlugOrCode } from './storeService';
 import { sendAdminOrderNotification, sendStoreOrderNotification } from '@/lib/telegram/vault';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase/admin';
+import { saveOrUpdateCustomer } from './customerService';
 
 let localOrders: Order[] = [];
 let localProfitEntries: ProfitEntry[] = [];
@@ -28,6 +29,7 @@ export interface CreateOrderParams {
   storeIdentifier: string; // كود المتجر أو معرّفه
   customerName: string;
   customerPhone: string;
+  customerPhone2?: string; // رقم هاتف إضافي للزبون
   governorate: string;
   city: string;
   address: string;
@@ -37,6 +39,9 @@ export interface CreateOrderParams {
     quantity: number;
     // السعر المرسل من العميل سيتم التحقق منه ومطابقته بدقة على السيرفر
     requestedPrice?: number;
+    color?: string;
+    size?: string;
+    variantName?: string;
   }>;
 }
 
@@ -48,7 +53,7 @@ export async function createOrder(params: CreateOrderParams): Promise<{
   message: string;
   order?: Order;
 }> {
-  const { storeIdentifier, customerName, customerPhone, governorate, city, address, deliveryNotes, items } = params;
+  const { storeIdentifier, customerName, customerPhone, customerPhone2, governorate, city, address, deliveryNotes, items } = params;
 
   if (!items || items.length === 0) {
     return { success: false, message: 'يجب أن تحتوي السلة على منتج واحد على الأقل' };
@@ -110,12 +115,21 @@ export async function createOrder(params: CreateOrderParams): Promise<{
       supplierPrice: product.supplierPriceIqd || (wholesalePrice > 3000 ? wholesalePrice - 3000 : wholesalePrice),
       supplierCode: product.supplierCode || product.id,
       supplierSku: product.supplierSku || product.variants?.[0]?.sku || '',
-      variantName: product.variants?.[0]?.name || '',
+      variantName: item.variantName || product.variants?.[0]?.name || '',
+      color: item.color,
+      size: item.size,
     });
   }
 
   const deliveryFee = 5000; // أجور التوصيل المعتمدة لعموم العراق (5,000 د.ع)
   const totalAmount = subtotal + deliveryFee;
+
+  // دمج الهاتف البديل في ملاحظات التوصيل لضمان وصوله لشركة الشحن وسوبابيس
+  let combinedDeliveryNotes = deliveryNotes?.trim() || '';
+  if (customerPhone2?.trim()) {
+    const p2Note = `هاتف بديل: ${customerPhone2.trim()}`;
+    combinedDeliveryNotes = combinedDeliveryNotes ? `${combinedDeliveryNotes} | ${p2Note}` : p2Note;
+  }
 
   // 3. بناء كائن الطلب النهائي
   const newOrder: Order = {
@@ -126,10 +140,11 @@ export async function createOrder(params: CreateOrderParams): Promise<{
     storeCode: storeCode,
     customerName,
     customerPhone,
+    customerPhone2: customerPhone2?.trim() || undefined,
     governorate,
     city,
     address,
-    deliveryNotes,
+    deliveryNotes: combinedDeliveryNotes,
     subtotal,
     deliveryFee,
     totalAmount,
@@ -143,6 +158,23 @@ export async function createOrder(params: CreateOrderParams): Promise<{
   };
 
   localOrders.unshift(newOrder);
+
+  // حفظ بيانات الزبون تلقائياً في قاعدة البيانات وربطه بهذا المتجر
+  try {
+    await saveOrUpdateCustomer({
+      storeId: store?.id,
+      storeCode: store?.code || storeIdentifier,
+      name: customerName,
+      phone: customerPhone,
+      phone2: customerPhone2,
+      governorate,
+      city,
+      address,
+      notes: deliveryNotes,
+    });
+  } catch (custErr) {
+    console.warn('تنبيه حفظ الزبون تلقائياً:', custErr);
+  }
 
   // حفظ الطلب بشكل دائم في سوبابيس (Supabase)
   const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);

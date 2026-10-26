@@ -197,6 +197,7 @@ export interface Order {
   storeCode?: string;
   customerName: string;
   customerPhone: string;
+  customerPhone2?: string; // رقم هاتف إضافي للزبون
   governorate: string;
   city: string;
   address: string;
@@ -231,5 +232,22 @@ export interface NotificationItem {
   type: 'info' | 'order' | 'profit' | 'system' | 'warning';
   link?: string;
   isRead: boolean;
+  createdAt: string;
+}
+
+export interface Customer {
+  id: string;
+  storeId?: string;
+  storeCode?: string;
+  name: string;
+  phone: string;
+  phone2?: string;
+  governorate: string;
+  city: string;
+  address: string;
+  notes?: string;
+  totalOrders: number;
+  totalSpent: number;
+  lastOrderAt?: string;
   createdAt: string;
 }
