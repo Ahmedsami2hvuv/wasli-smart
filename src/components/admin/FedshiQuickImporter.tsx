@@ -13,7 +13,8 @@ import {
   X,
   ListOrdered,
   Sparkles,
-  ArrowDown
+  ArrowDown,
+  Boxes
 } from 'lucide-react';
 
 export interface QueueItem {
@@ -68,9 +69,9 @@ export default function FedshiQuickImporter({ onSuccess }: FedshiQuickImporterPr
     if (!inputStrings || inputStrings.length === 0) return;
 
     const newItems: QueueItem[] = inputStrings.map((str) => {
-      // استخراج كود المنتج المبدئي للعرض الأولي
+      // استخراج كود المنتج المبدئي للعرض الأولي (فدشي أو دروب برايم)
       let preliminaryCode = str;
-      const m = str.match(/\/products\/([A-Za-z0-9_-]+)/) || str.match(/id=([A-Za-z0-9_-]+)/);
+      const m = str.match(/\/(?:product|products|p)\/([^/?#]+)/i) || str.match(/id=([^&?#]+)/);
       if (m && m[1]) preliminaryCode = m[1];
       preliminaryCode = preliminaryCode.split('?')[0].split('#')[0].trim();
 
@@ -89,6 +90,25 @@ export default function FedshiQuickImporter({ onSuccess }: FedshiQuickImporterPr
     setTimeout(() => {
       inputRef.current?.focus();
     }, 50);
+  };
+
+  const [loadingAllDP, setLoadingAllDP] = useState(false);
+
+  // سحب جميع منتجات دروب برايم دفعة واحدة للطابور
+  const handleLoadAllDropPrime = async () => {
+    setLoadingAllDP(true);
+    try {
+      const res = await fetch('/api/suppliers/dropprime');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.products) && data.products.length > 0) {
+        const codes = data.products.map((p: any) => `https://dropprime.site/product/${p.supplierCode}`);
+        addToQueue(codes);
+      }
+    } catch (e) {
+      console.error('خطأ في جلب منتجات دروب برايم:', e);
+    } finally {
+      setLoadingAllDP(false);
+    }
   };
 
   // معالجة زر الإرسال أو الضغط على Enter
@@ -231,27 +251,44 @@ export default function FedshiQuickImporter({ onSuccess }: FedshiQuickImporterPr
             </div>
             <div>
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                أداة السحب السريع المستمر (طابور تلقائي)
+                أداة السحب السريع المباشر (فدشي + دروب برايم)
                 <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-0.5 rounded-full font-medium flex items-center gap-1">
                   <Sparkles className="w-3 h-3" />
                   معالجة تلقائية متتابعة
                 </span>
               </h3>
               <p className="text-sm text-blue-200/80">
-                الصق الروابط واحداً تلو الآخر بدون انتظار! الأداة تسحب بالخلفية وتترك لك الحقل مفتوحاً دائماً
+                الصق الروابط من فدشي أو دروب برايم واحداً تلو الآخر بدون انتظار! الأداة تسحب بالخلفية وتترك لك الحقل مفتوحاً دائماً
               </p>
             </div>
           </div>
 
-          {/* عداد الطابور */}
-          {queue.length > 0 && (
-            <div className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-900/60 border border-blue-500/40 rounded-2xl text-xs font-bold text-blue-200">
-              <ListOrdered className="w-4 h-4 text-amber-400" />
-              <span>
-                {isWorking ? 'جاري المعالجة' : 'جاهز'} ({queue.length} في القائمة)
-              </span>
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleLoadAllDropPrime}
+              disabled={loadingAllDP}
+              className="px-3.5 py-2 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-white rounded-2xl text-xs font-bold border border-purple-400/40 flex items-center gap-1.5 transition shadow-sm cursor-pointer disabled:opacity-50"
+              title="جلب كافة منتجات دروب برايم المتاحة دفعة واحدة إلى طابور السحب والنشر"
+            >
+              {loadingAllDP ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-200" />
+              ) : (
+                <Boxes className="w-3.5 h-3.5 text-amber-300" />
+              )}
+              <span>سحب كل دروب برايم (28 منتج)</span>
+            </button>
+
+            {/* عداد الطابور */}
+            {queue.length > 0 && (
+              <div className="flex items-center gap-2 px-3.5 py-2 bg-blue-900/60 border border-blue-500/40 rounded-2xl text-xs font-bold text-blue-200">
+                <ListOrdered className="w-4 h-4 text-amber-400" />
+                <span>
+                  {isWorking ? 'جاري المعالجة' : 'جاهز'} ({queue.length} في القائمة)
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* نموذج الإدخال السريع والمفتوح دائماً */}
@@ -265,7 +302,7 @@ export default function FedshiQuickImporter({ onSuccess }: FedshiQuickImporterPr
                 ref={inputRef}
                 type="text"
                 dir="ltr"
-                placeholder="الصق رابط المنتج هنا واضغط Enter أو لصق (الحقل مفتوح دائماً)..."
+                placeholder="الصق رابط فدشي أو دروب برايم (dropprime.site) واضغط Enter..."
                 value={inputUrl}
                 onChange={(e) => setInputUrl(e.target.value)}
                 autoComplete="off"

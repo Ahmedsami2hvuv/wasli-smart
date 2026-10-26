@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { publishProductToTelegramChannel } from '@/lib/telegram/vault';
 import { createPlatformProduct, findProductBySupplierCode } from '@/lib/services/productService';
 import { findOrCreateCategoryAndSubcategory } from '@/lib/services/categoryService';
+import { fetchDropPrimeProductDetails, parseDropPrimeProduct } from '@/lib/services/dropPrimeService';
 import { cleanText } from '@/lib/utils/fedshiInspector';
 
 interface FedshiGraphqlResponse {
@@ -88,12 +89,132 @@ export async function POST(request: NextRequest) {
 
     if (!rawInput) {
       return NextResponse.json(
-        { success: false, message: 'يرجى إدخال رابط منتج فدشي أو كود المنتج.' },
+        { success: false, message: 'يرجى إدخال رابط منتج فدشي أو دروب برايم أو كود المنتج.' },
         { status: 400 }
       );
     }
 
-    // 1. استخراج كود المنتج من الرابط أو المدخل
+    // 0. التحقق مما إذا كان المدخل رابطاً أو كوداً لمنصة «دروب برايم» (Drop Prime)
+    const isDropPrime = rawInput.toLowerCase().includes('dropprime') || 
+                        rawInput.toUpperCase().startsWith('DP-') || 
+                        rawInput.startsWith('prod_');
+
+    if (isDropPrime) {
+      let dpId = rawInput;
+      const mMatch = rawInput.match(/\/(?:product|products|p)\/([^/?#]+)/i);
+      if (mMatch && mMatch[1]) {
+        dpId = mMatch[1];
+      } else if (rawInput.includes('id=')) {
+        const idMatch = rawInput.match(/id=([^&?#]+)/);
+        if (idMatch && idMatch[1]) dpId = idMatch[1];
+      }
+      dpId = dpId.split('?')[0].split('#')[0].trim();
+
+      const dpDetails = await fetchDropPrimeProductDetails(dpId);
+      if (!dpDetails || !dpDetails.name) {
+        return NextResponse.json(
+          { success: false, message: `تعذر العثور على المنتج (${dpId}) في منصة دروب برايم.` },
+          { status: 404 }
+        );
+      }
+
+      const parsed = parseDropPrimeProduct(dpDetails);
+      const code = parsed.supplierCode;
+
+      // فحص ما إذا كان مضافاً مسبقاً
+      const existing = await findProductBySupplierCode(code);
+      let finalProductRecord: any = null;
+
+      if (existing) {
+        finalProductRecord = existing;
+      } else {
+        // ربط القسم
+        let finalCatId: string | undefined = undefined;
+        let finalCatName = parsed.category || 'منتجات عامة';
+        try {
+          const catRes = await findOrCreateCategoryAndSubcategory(finalCatName);
+          finalCatId = catRes.categoryId;
+          finalCatName = catRes.categoryName;
+        } catch (e) {}
+
+        const safeImages = (parsed.images || [parsed.primaryImage]).map(u => 
+          `/api/images/proxy?url=${encodeURIComponent(u)}`
+        );
+        const safePrimary = safeImages[0] || `/api/images/proxy?url=${encodeURIComponent(parsed.primaryImage)}`;
+
+        finalProductRecord = await createPlatformProduct({
+          name: parsed.name,
+          category: finalCatName,
+          categoryId: finalCatId,
+          description: parsed.specifications || parsed.name,
+          shortDescription: parsed.promoDescription || '',
+          promoDescription: parsed.promoDescription || '',
+          specifications: parsed.specifications || '',
+          wholesalePriceIqd: parsed.wholesalePrice,
+          platformPriceIqd: parsed.wholesalePrice,
+          minPriceIqd: parsed.minCustomerPrice,
+          maxPriceIqd: parsed.maxCustomerPrice,
+          supplierPriceIqd: parsed.supplierCost,
+          supplierCode: code,
+          supplierSku: parsed.supplierSku,
+          supplierSource: 'dropprime',
+          colors: (parsed.colors || []).map(c => ({ name: c, image: safePrimary })),
+          variants: parsed.variants || [],
+          videoUrl: parsed.videoUrl || '',
+          stockQuantity: parsed.stockQuantity || 50,
+          image: safePrimary,
+          images: safeImages,
+        });
+      }
+
+      // النشر في قناة تيليجرام
+      let telegramPublished = false;
+      let telegramMessageId: number | undefined = undefined;
+      try {
+        const tgRes = await publishProductToTelegramChannel({
+          name: parsed.name,
+          image: parsed.primaryImage,
+          images: parsed.images,
+          wholesalePriceIqd: parsed.wholesalePrice,
+          minPriceIqd: parsed.minCustomerPrice,
+          maxPriceIqd: parsed.maxCustomerPrice,
+          description: parsed.specifications,
+          specifications: parsed.specifications,
+          promoDescription: parsed.promoDescription,
+          supplierCode: code,
+          category: parsed.category,
+          productId: finalProductRecord.id,
+        });
+        if (tgRes && tgRes.success) {
+          telegramPublished = true;
+          telegramMessageId = tgRes.messageId;
+        }
+      } catch (tgErr) {
+        console.warn('تنبيه أثناء نشر تيليجرام لدروب برايم:', tgErr);
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: existing
+          ? `المنتج (${parsed.name}) مضاف مسبقاً وتم تحديثه ونشره بنجاح في تيليجرام!`
+          : `تم سحب منتج دروب برايم (${parsed.name}) بنجاح وحفظه في المنصة ونشره بتيليجرام!`,
+        product: finalProductRecord,
+        telegramPublished,
+        telegramMessageId,
+        details: {
+          code: code,
+          name: parsed.name,
+          supplierCost: parsed.supplierCost,
+          wholesalePrice: parsed.wholesalePrice,
+          expectedProfit: parsed.platformProfit,
+          imagesCount: parsed.images.length,
+          primaryImage: parsed.primaryImage,
+          source: 'dropprime',
+        }
+      });
+    }
+
+    // 1. استخراج كود المنتج من الرابط أو المدخل لمنصة فدشي
     let productCode = rawInput;
     if (rawInput.includes('/products/')) {
       const match = rawInput.match(/\/products\/([A-Za-z0-9_-]+)/);
