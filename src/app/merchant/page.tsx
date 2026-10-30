@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { 
   Store, 
@@ -92,14 +92,22 @@ function MerchantDashboardContent() {
   const [loading, setLoading] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  // حالات إدارة منتجات وأسعار المتجر
+  // حالات إدارة منتجات وأسعار المتجر (تحميل مؤجل + صفحات لتقليل الضغط على السيرفر)
+  const PRODUCTS_PAGE_SIZE = 12;
   const [merchantProducts, setMerchantProducts] = useState<any[]>([]);
+  const [orderCatalogProducts, setOrderCatalogProducts] = useState<any[]>([]);
   const [editingPrices, setEditingPrices] = useState<Record<string, number>>({});
   const [savingProductId, setSavingProductId] = useState<string | null>(null);
   const [productFeedback, setProductFeedback] = useState<Record<string, string>>({});
   const [productFilter, setProductFilter] = useState<'all' | 'active' | 'hidden'>('all');
   const [productSearch, setProductSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'customers' | 'links'>('products');
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [productsPage, setProductsPage] = useState(1);
+  const [productsTotalPages, setProductsTotalPages] = useState(1);
+  const [activeProductsCount, setActiveProductsCount] = useState(0);
+  const [hiddenProductsCount, setHiddenProductsCount] = useState(0);
+  const productsLoadedForStoreRef = useRef<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'customers' | 'links'>('orders');
 
   // حالات إدارة زبائن التاجر وإضافة الطلبات
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -329,21 +337,19 @@ interface MerchantEditFormState {
             setOrders(ordersData.orders);
           }
 
-          // جلب منتجات وأسعار متجر هذا التاجر المنشورة من المنصة
+          // ملخص المنتجات فقط (بدون جلب القائمة الكاملة — تُحمَّل عند فتح تبويب المنتجات)
           try {
-            const spRes = await fetch(`/api/stores/products?storeCode=${found.code || found.id}`);
+            const spRes = await fetch(
+              `/api/stores/products?storeCode=${encodeURIComponent(found.code || found.id)}&summary=1`
+            );
             const spData = await spRes.json();
-            if (spData.success && Array.isArray(spData.products)) {
-              setMerchantProducts(spData.products);
-              setTotalProductsCount(spData.products.length);
-              const initialPrices: Record<string, number> = {};
-              spData.products.forEach((p: any) => {
-                initialPrices[p.id] = p.sellingPrice || p.priceIqd || p.platformPriceIqd;
-              });
-              setEditingPrices(initialPrices);
+            if (spData.success) {
+              setTotalProductsCount(Number(spData.total) || 0);
+              setActiveProductsCount(Number(spData.activeCount) || 0);
+              setHiddenProductsCount(Number(spData.hiddenCount) || 0);
             }
           } catch (e) {
-            console.warn('تعذر جلب منتجات المتجر:', e);
+            console.warn('تعذر جلب ملخص منتجات المتجر:', e);
           }
 
           // جلب روابط البيع الخاصة بالتاجر
@@ -484,6 +490,12 @@ interface MerchantEditFormState {
     }
     router.push(`/merchant?storeCode=${found.code}`);
 
+    setMerchantProducts([]);
+    setOrderCatalogProducts([]);
+    setEditingPrices({});
+    productsLoadedForStoreRef.current = null;
+    setActiveTab('orders');
+
     try {
       const ordersRes = await fetch(`/api/orders?storeId=${found.id}`);
       const ordersData = await ordersRes.json();
@@ -493,16 +505,14 @@ interface MerchantEditFormState {
     } catch (e) {}
 
     try {
-      const spRes = await fetch(`/api/stores/products?storeCode=${found.code || found.id}`);
+      const spRes = await fetch(
+        `/api/stores/products?storeCode=${encodeURIComponent(found.code || found.id)}&summary=1`
+      );
       const spData = await spRes.json();
-      if (spData.success && Array.isArray(spData.products)) {
-        setMerchantProducts(spData.products);
-        setTotalProductsCount(spData.products.length);
-        const initialPrices: Record<string, number> = {};
-        spData.products.forEach((p: any) => {
-          initialPrices[p.id] = p.sellingPrice || p.priceIqd || p.platformPriceIqd;
-        });
-        setEditingPrices(initialPrices);
+      if (spData.success) {
+        setTotalProductsCount(Number(spData.total) || 0);
+        setActiveProductsCount(Number(spData.activeCount) || 0);
+        setHiddenProductsCount(Number(spData.hiddenCount) || 0);
       }
     } catch (e) {}
 
@@ -523,6 +533,79 @@ interface MerchantEditFormState {
     } catch (e) {}
   };
 
+  const loadMerchantProducts = useCallback(
+    async (opts?: { page?: number; search?: string; filter?: 'all' | 'active' | 'hidden' }) => {
+      if (!currentStore) return;
+      const storeKey = currentStore.code || currentStore.id;
+      const page = opts?.page ?? productsPage;
+      const filter = opts?.filter ?? productFilter;
+      const search = opts?.search ?? productSearch;
+
+      setLoadingProducts(true);
+      try {
+        const params = new URLSearchParams({
+          storeCode: storeKey,
+          lean: '1',
+          page: String(page),
+          limit: String(PRODUCTS_PAGE_SIZE),
+          status: filter,
+        });
+        if (search.trim()) params.set('q', search.trim());
+
+        const spRes = await fetch(`/api/stores/products?${params.toString()}`);
+        const spData = await spRes.json();
+        if (spData.success && Array.isArray(spData.products)) {
+          setMerchantProducts(spData.products);
+          setProductsPage(Number(spData.page) || page);
+          setProductsTotalPages(Number(spData.totalPages) || 1);
+          if (typeof spData.totalAll === 'number') setTotalProductsCount(spData.totalAll);
+          else if (typeof spData.total === 'number' && filter === 'all') setTotalProductsCount(spData.total);
+          if (typeof spData.activeCount === 'number') setActiveProductsCount(spData.activeCount);
+          if (typeof spData.hiddenCount === 'number') setHiddenProductsCount(spData.hiddenCount);
+
+          setEditingPrices(prev => {
+            const next = { ...prev };
+            spData.products.forEach((p: any) => {
+              next[p.id] = p.sellingPrice || p.priceIqd || p.platformPriceIqd;
+            });
+            return next;
+          });
+          productsLoadedForStoreRef.current = storeKey;
+        }
+      } catch (e) {
+        console.warn('تعذر جلب منتجات المتجر:', e);
+      } finally {
+        setLoadingProducts(false);
+      }
+    },
+    [currentStore, productsPage, productFilter, productSearch]
+  );
+
+  const ensureOrderCatalogProducts = useCallback(async () => {
+    if (!currentStore) return;
+    if (orderCatalogProducts.length > 0) return;
+    if (merchantProducts.length > 0) {
+      setOrderCatalogProducts(merchantProducts);
+      return;
+    }
+    try {
+      const params = new URLSearchParams({
+        storeCode: currentStore.code || currentStore.id,
+        lean: '1',
+        page: '1',
+        limit: '80',
+        status: 'active',
+      });
+      const res = await fetch(`/api/stores/products?${params.toString()}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.products)) {
+        setOrderCatalogProducts(data.products);
+      }
+    } catch (e) {
+      console.warn('تعذر جلب منتجات إنشاء الطلب:', e);
+    }
+  }, [currentStore, orderCatalogProducts.length, merchantProducts]);
+
   const handleAuthSuccess = async (found: StoreType) => {
     setLoginError('');
     setIsLoggingIn(true);
@@ -533,12 +616,45 @@ interface MerchantEditFormState {
     }
   };
 
+  // تحميل المنتجات فقط عند فتح تبويب المنتجات (وليس عند فتح الحساب)
+  useEffect(() => {
+    if (activeTab !== 'products' || !currentStore) return;
+    setProductsPage(1);
+    loadMerchantProducts({ page: 1, filter: productFilter, search: productSearch });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, currentStore?.id, currentStore?.code]);
+
+  // بحث وفلترة المنتجات مع تأخير بسيط لتقليل الطلبات
+  useEffect(() => {
+    if (activeTab !== 'products' || !currentStore) return;
+    if (productsLoadedForStoreRef.current !== (currentStore.code || currentStore.id)) return;
+    const timer = setTimeout(() => {
+      setProductsPage(1);
+      loadMerchantProducts({ page: 1, filter: productFilter, search: productSearch });
+    }, 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productSearch, productFilter]);
+
+  // عند فتح نافذة طلب جديد: جلب كتالوج خفيف إن لم تكن المنتجات محمّلة
+  useEffect(() => {
+    if (isCreateOrderModalOpen) {
+      ensureOrderCatalogProducts();
+    }
+  }, [isCreateOrderModalOpen, ensureOrderCatalogProducts]);
+
   const handleLogout = () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('wasli_current_store');
     }
     setCurrentStore(null);
     setOrders([]);
+    setMerchantProducts([]);
+    setOrderCatalogProducts([]);
+    setEditingPrices({});
+    setTotalProductsCount(0);
+    productsLoadedForStoreRef.current = null;
+    setActiveTab('orders');
     setStoreInput('');
     router.push('/merchant');
   };
@@ -772,9 +888,17 @@ interface MerchantEditFormState {
       });
       const data = await res.json();
       if (data.success) {
-        setMerchantProducts(prev =>
-          prev.map(p => (p.id === productId ? { ...p, isActive: newActive } : p))
-        );
+        setMerchantProducts(prev => {
+          if (productFilter === 'active' && !newActive) {
+            return prev.filter(p => p.id !== productId);
+          }
+          if (productFilter === 'hidden' && newActive) {
+            return prev.filter(p => p.id !== productId);
+          }
+          return prev.map(p => (p.id === productId ? { ...p, isActive: newActive } : p));
+        });
+        setActiveProductsCount(c => Math.max(0, c + (newActive ? 1 : -1)));
+        setHiddenProductsCount(c => Math.max(0, c + (newActive ? -1 : 1)));
       }
     } catch (err) {
       alert('تعذر تحديث حالة المنتج');
@@ -1043,25 +1167,8 @@ interface MerchantEditFormState {
 
         {/* مساحة العمل والمحتوى الرئيسي - عرض كامل أنيق وفخم */}
         <div className="w-full space-y-6">
-            {/* شريط التبويب الرئيسي: إدارة المنتجات والأسعار / الطلبات الواردة / زبائني / روابطي */}
+            {/* شريط التبويب الرئيسي: الطلبات أولاً (فتح سريع) ثم المنتجات عند الحاجة */}
             <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 pb-3">
-              <button
-                onClick={() => setActiveTab('products')}
-                className={`py-3 px-5 rounded-2xl font-black text-sm flex items-center gap-2 transition-all cursor-pointer ${
-                  activeTab === 'products'
-                    ? 'bg-brand-700 text-white shadow-md shadow-brand-700/20'
-                    : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-                }`}
-              >
-                <Tag className="w-4 h-4" />
-                <span>منتجات متجري وتعديل الأسعار</span>
-                <span className={`text-xs px-2.5 py-0.5 rounded-full font-mono font-bold ${
-                  activeTab === 'products' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
-                }`}>
-                  {merchantProducts.length}
-                </span>
-              </button>
-
               <button
                 onClick={() => setActiveTab('orders')}
                 className={`py-3 px-5 rounded-2xl font-black text-sm flex items-center gap-2 transition-all cursor-pointer ${
@@ -1076,6 +1183,23 @@ interface MerchantEditFormState {
                   activeTab === 'orders' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
                 }`}>
                   {orders.length}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('products')}
+                className={`py-3 px-5 rounded-2xl font-black text-sm flex items-center gap-2 transition-all cursor-pointer ${
+                  activeTab === 'products'
+                    ? 'bg-brand-700 text-white shadow-md shadow-brand-700/20'
+                    : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <Tag className="w-4 h-4" />
+                <span>منتجات متجري وتعديل الأسعار</span>
+                <span className={`text-xs px-2.5 py-0.5 rounded-full font-mono font-bold ${
+                  activeTab === 'products' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {totalProductsCount || merchantProducts.length}
                 </span>
               </button>
 
@@ -1133,11 +1257,11 @@ interface MerchantEditFormState {
               {/* إحصائيات سريعة للمنتجات */}
               <div className="flex items-center gap-2 text-xs font-bold shrink-0">
                 <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-xl">
-                  {merchantProducts.filter(p => p.isActive !== false).length} معروض للبيع
+                  {activeProductsCount} معروض للبيع
                 </span>
-                {merchantProducts.filter(p => p.isActive === false).length > 0 && (
+                {hiddenProductsCount > 0 && (
                   <span className="bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1.5 rounded-xl">
-                    {merchantProducts.filter(p => p.isActive === false).length} مخفي
+                    {hiddenProductsCount} مخفي
                   </span>
                 )}
               </div>
@@ -1164,7 +1288,7 @@ interface MerchantEditFormState {
                     productFilter === 'all' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  الكل ({merchantProducts.length})
+                  الكل ({totalProductsCount})
                 </button>
                 <button
                   type="button"
@@ -1173,7 +1297,7 @@ interface MerchantEditFormState {
                     productFilter === 'active' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  المعروضة ({merchantProducts.filter(p => p.isActive !== false).length})
+                  المعروضة ({activeProductsCount})
                 </button>
                 <button
                   type="button"
@@ -1182,32 +1306,30 @@ interface MerchantEditFormState {
                     productFilter === 'hidden' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  المخفية ({merchantProducts.filter(p => p.isActive === false).length})
+                  المخفية ({hiddenProductsCount})
                 </button>
               </div>
             </div>
 
             {/* قائمة كروت المنتجات */}
-            {merchantProducts.length === 0 ? (
+            {loadingProducts && merchantProducts.length === 0 ? (
+              <div className="text-center py-12">
+                <Package className="w-12 h-12 text-slate-300 mx-auto mb-3 animate-pulse" />
+                <h3 className="text-base font-bold text-slate-700">جاري تحميل منتجات المنصة...</h3>
+                <p className="text-xs text-slate-500 mt-1">نعرض المنتجات على دفعات لتسريع الصفحة</p>
+              </div>
+            ) : merchantProducts.length === 0 ? (
               <div className="text-center py-12">
                 <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <h3 className="text-base font-bold text-slate-700">جاري تحميل منتجات المنصة...</h3>
+                <h3 className="text-base font-bold text-slate-700">
+                  {productSearch.trim() || productFilter !== 'all'
+                    ? 'لا توجد منتجات مطابقة للبحث أو الفلتر'
+                    : 'لا توجد منتجات منشورة حالياً'}
+                </h3>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {merchantProducts
-                  .filter(product => {
-                    if (productFilter === 'active' && product.isActive === false) return false;
-                    if (productFilter === 'hidden' && product.isActive !== false) return false;
-                    if (productSearch.trim()) {
-                      const q = productSearch.toLowerCase();
-                      const matchName = product.name?.toLowerCase().includes(q);
-                      const matchCat = product.category?.toLowerCase().includes(q);
-                      return matchName || matchCat;
-                    }
-                    return true;
-                  })
-                  .map((product) => {
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-5 ${loadingProducts ? 'opacity-60 pointer-events-none' : ''}`}>
+                {merchantProducts.map((product) => {
                     const baseCost = product.platformPriceIqd || product.priceIqd || 10000;
                     const minPrice = product.minPriceIqd || baseCost;
                     const maxPrice = product.maxPriceIqd || Math.max(baseCost + 35000, Math.round(baseCost * 2));
@@ -1246,7 +1368,11 @@ interface MerchantEditFormState {
                             <div className="w-20 h-20 rounded-xl bg-slate-100 overflow-hidden border border-slate-200 shrink-0 relative">
                               <img
                                 src={product.image || '/placeholder-product.svg'}
-                                alt={product.name}
+                                alt={product.name || 'منتج'}
+                                width={112}
+                                height={112}
+                                loading="lazy"
+                                decoding="async"
                                 className="w-full h-full object-cover"
                               />
                               {product.isActive === false && (
@@ -1545,6 +1671,39 @@ interface MerchantEditFormState {
                       </div>
                     );
                   })}
+              </div>
+            )}
+
+            {/* تنقل صفحات المنتجات */}
+            {productsTotalPages > 1 && (
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={loadingProducts || productsPage <= 1}
+                  onClick={() => {
+                    const next = productsPage - 1;
+                    setProductsPage(next);
+                    loadMerchantProducts({ page: next });
+                  }}
+                  className="py-2 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
+                >
+                  السابق
+                </button>
+                <span className="text-xs font-bold text-slate-600">
+                  صفحة {productsPage} من {productsTotalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={loadingProducts || productsPage >= productsTotalPages}
+                  onClick={() => {
+                    const next = productsPage + 1;
+                    setProductsPage(next);
+                    loadMerchantProducts({ page: next });
+                  }}
+                  className="py-2 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
+                >
+                  التالي
+                </button>
               </div>
             )}
           </div>
@@ -3200,7 +3359,7 @@ interface MerchantEditFormState {
             setPreSelectedProductForOrder(null);
           }}
           store={currentStore}
-          availableProducts={merchantProducts}
+          availableProducts={orderCatalogProducts.length > 0 ? orderCatalogProducts : merchantProducts}
           customers={customers}
           preSelectedCustomer={preSelectedCustomerForOrder}
           preSelectedProduct={preSelectedProductForOrder}

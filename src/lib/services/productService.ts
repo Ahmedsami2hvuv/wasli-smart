@@ -224,6 +224,177 @@ export async function getProductsPaginated(options?: {
   };
 }
 
+const LEAN_PRODUCT_SELECT = `
+  id, title, brand, slug, wholesale_price, platform_price, min_price, max_price,
+  stock_quantity, is_available, status, category_id, created_at,
+  category:categories(name),
+  images:product_images(image_url, local_url, telegram_file_id, is_primary, sort_order)
+`;
+
+function mapDbProductToLean(item: any): Product {
+  const wholesale = Number(item.wholesale_price) || 0;
+  const platform = Number(item.platform_price) || wholesale;
+  const minP = Number(item.min_price) || platform;
+  const maxP = Number(item.max_price) || Math.round(platform * 1.6);
+
+  const resolveImage = (im: any): string => {
+    if (!im) return '';
+    if (typeof im === 'string') {
+      if (im.includes('fedshi.com') || im.includes('mojod.app') || im.includes('dropprime.site')) {
+        return `/api/images/proxy?url=${encodeURIComponent(im)}`;
+      }
+      return im;
+    }
+    if (im.telegram_file_id) {
+      return `/api/images/proxy?fileId=${encodeURIComponent(im.telegram_file_id)}`;
+    }
+    const raw = im.local_url || im.localUrl || im.image_url || '';
+    if (typeof raw === 'string' && (raw.includes('fedshi.com') || raw.includes('mojod.app') || raw.includes('dropprime.site'))) {
+      return `/api/images/proxy?url=${encodeURIComponent(raw)}`;
+    }
+    return raw;
+  };
+
+  const sortedImages = Array.isArray(item.images)
+    ? [...item.images].sort((a: any, b: any) => {
+        if (a.is_primary && !b.is_primary) return -1;
+        if (!a.is_primary && b.is_primary) return 1;
+        return (a.sort_order || 0) - (b.sort_order || 0);
+      })
+    : [];
+
+  const primaryImg = sortedImages.length > 0
+    ? resolveImage(sortedImages[0])
+    : (item.image || '/placeholder-product.svg');
+
+  return {
+    id: item.id,
+    name: item.title || item.name || '',
+    slug: item.slug,
+    description: '',
+    shortDescription: '',
+    priceIqd: platform,
+    wholesalePriceIqd: wholesale,
+    platformPriceIqd: platform,
+    minPriceIqd: minP,
+    maxPriceIqd: maxP,
+    stockQuantity: item.stock_quantity ?? 100,
+    isAvailable: item.is_available,
+    status: item.status || 'published',
+    image: primaryImg || '/placeholder-product.svg',
+    category: item.category?.name || 'عام',
+    categoryId: item.category_id,
+    supplierCode: item.brand,
+    images: undefined,
+  };
+}
+
+/**
+ * عدد المنتجات الكلي (خفيف جداً بدون جلب بيانات)
+ */
+export async function getProductsCount(): Promise<number> {
+  const dbClient = supabaseAdmin || supabase;
+  if (dbClient) {
+    try {
+      const { count, error } = await dbClient
+        .from('products')
+        .select('id', { count: 'exact', head: true });
+      if (!error && typeof count === 'number') return count;
+    } catch (e) {
+      console.warn('تعذر عد المنتجات من سوبابيس:', e);
+    }
+  }
+  return localProducts.length;
+}
+
+/**
+ * جلب منتجات خفيفة للوحة التاجر (بدون وصف طويل وبدون كل الصور)
+ */
+export async function getProductsLeanPaginated(options?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  ids?: string[];
+}): Promise<{
+  products: Product[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}> {
+  const page = Math.max(1, options?.page || 1);
+  const limit = Math.max(1, Math.min(100, options?.limit || 12));
+  const search = options?.search?.trim();
+  const ids = options?.ids;
+
+  const dbClient = supabaseAdmin || supabase;
+  if (dbClient) {
+    try {
+      let query = dbClient
+        .from('products')
+        .select(LEAN_PRODUCT_SELECT, { count: 'exact' });
+
+      if (ids && ids.length > 0) {
+        query = query.in('id', ids);
+      }
+
+      if (search) {
+        query = query.or(`title.ilike.%${search}%,brand.ilike.%${search}%,slug.ilike.%${search}%`);
+      }
+
+      query = query.order('created_at', { ascending: false });
+
+      const from = (page - 1) * limit;
+      const to = from + limit - 1;
+      query = query.range(from, to);
+
+      const { data, count, error } = await query;
+
+      if (!error && data) {
+        const total = count ?? data.length;
+        const totalPages = Math.ceil(total / limit) || 1;
+        return {
+          products: data.map(mapDbProductToLean),
+          total,
+          page,
+          limit,
+          totalPages,
+        };
+      }
+    } catch (e) {
+      console.warn('استخدام البيانات المحلية للمنتجات الخفيفة:', e);
+    }
+  }
+
+  let filtered = [...localProducts];
+  if (ids && ids.length > 0) {
+    const idSet = new Set(ids);
+    filtered = filtered.filter(p => idSet.has(p.id));
+  }
+  if (search) {
+    const q = search.toLowerCase();
+    filtered = filtered.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      p.category?.toLowerCase().includes(q) ||
+      p.supplierCode?.toLowerCase().includes(q)
+    );
+  }
+
+  const total = filtered.length;
+  const totalPages = Math.ceil(total / limit) || 1;
+  const from = (page - 1) * limit;
+  const products = filtered.slice(from, from + limit).map(p => ({
+    ...p,
+    description: '',
+    shortDescription: '',
+    promoDescription: '',
+    specifications: '',
+    images: undefined,
+  }));
+
+  return { products, total, page, limit, totalPages };
+}
+
 /**
  * جلب منتج محدد بواسطة المعرف أو الرابط (slug) مباشرة وبسرعة فائقة
  */

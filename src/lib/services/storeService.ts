@@ -720,6 +720,15 @@ export async function verifyPinResetToken(store: Store, token: string): Promise<
   return settings.pin_reset_token_hash === hashSecret(String(token || '').trim());
 }
 
+export async function clearPinResetToken(store: Store): Promise<void> {
+  await patchStoreAuthSettings(store, {
+    pin_reset_token_hash: null,
+    pin_reset_expires_at: null,
+    login_otp_hash: null,
+    login_otp_expires_at: null,
+  });
+}
+
 /**
  * جلب المنتجات المضافة لمتجر معين مع أسعار البيع المخصصة
  */

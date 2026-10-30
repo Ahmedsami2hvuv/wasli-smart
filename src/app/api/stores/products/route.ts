@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllProducts } from '@/lib/services/productService';
+import {
+  getAllProducts,
+  getProductsCount,
+  getProductsLeanPaginated,
+} from '@/lib/services/productService';
 import { getAllStores } from '@/lib/services/storeService';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase/admin';
@@ -7,102 +11,241 @@ import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase/admin';
 // مخزن مؤقت لأسعار منتجات المتاجر أثناء التشغيل السريع
 const localStoreProductPrices: Record<string, Record<string, { sellingPrice: number; isActive: boolean }>> = {};
 
+type CustomPrice = { sellingPrice: number; isActive: boolean };
+
+function mergeProductWithCustomPrices(product: any, customPrices: Record<string, CustomPrice>) {
+  const custom = customPrices[product.id];
+  const basePlatformPrice = product.platformPriceIqd || product.priceIqd || 10000;
+  const minPrice = product.minPriceIqd || (basePlatformPrice + 5000);
+  const maxPrice = product.maxPriceIqd || (basePlatformPrice + 20000);
+
+  const defaultSellingPrice = Math.min(maxPrice, Math.max(minPrice, basePlatformPrice + 10000));
+  const rawSelling = custom && custom.sellingPrice ? Number(custom.sellingPrice) : defaultSellingPrice;
+  const sellingPrice = Math.max(minPrice, Math.min(maxPrice, rawSelling));
+  const isActive = custom && custom.isActive !== undefined ? custom.isActive : true;
+  const merchantProfit = Math.max(0, sellingPrice - basePlatformPrice);
+
+  return {
+    ...product,
+    priceIqd: sellingPrice,
+    sellingPrice,
+    defaultSellingPrice,
+    platformPriceIqd: basePlatformPrice,
+    minPriceIqd: minPrice,
+    maxPriceIqd: maxPrice,
+    merchantProfit,
+    isActive,
+    isCustomized: !!custom,
+  };
+}
+
+function toLeanMerchantProduct(product: any) {
+  return {
+    id: product.id,
+    name: product.name,
+    category: product.category,
+    image: product.image,
+    platformPriceIqd: product.platformPriceIqd,
+    priceIqd: product.priceIqd,
+    wholesalePriceIqd: product.wholesalePriceIqd,
+    minPriceIqd: product.minPriceIqd,
+    maxPriceIqd: product.maxPriceIqd,
+    sellingPrice: product.sellingPrice,
+    defaultSellingPrice: product.defaultSellingPrice,
+    merchantProfit: product.merchantProfit,
+    isActive: product.isActive,
+    isCustomized: product.isCustomized,
+  };
+}
+
+async function loadStoreCustomPrices(
+  store: { id?: string; code?: string } | null | undefined,
+  identifier: string
+): Promise<Record<string, CustomPrice>> {
+  let customPrices: Record<string, CustomPrice> = {};
+  const storeKey = store?.code || identifier;
+
+  if (localStoreProductPrices[storeKey]) {
+    customPrices = { ...localStoreProductPrices[storeKey] };
+  }
+
+  const activeSupabase =
+    isSupabaseAdminConfigured && supabaseAdmin
+      ? supabaseAdmin
+      : isSupabaseConfigured
+        ? supabase
+        : null;
+
+  if (activeSupabase && store?.id) {
+    try {
+      const { data: storeData } = await activeSupabase
+        .from('stores')
+        .select('settings')
+        .eq('id', store.id)
+        .maybeSingle();
+
+      if (storeData?.settings?.custom_product_prices) {
+        customPrices = {
+          ...customPrices,
+          ...storeData.settings.custom_product_prices,
+        };
+      }
+
+      const { data: spRows } = await activeSupabase
+        .from('store_products')
+        .select('product_id, selling_price, is_active')
+        .eq('store_id', store.id);
+
+      if (spRows && spRows.length > 0) {
+        spRows.forEach((row: any) => {
+          if (row.product_id) {
+            customPrices[row.product_id] = {
+              sellingPrice: Number(row.selling_price),
+              isActive: row.is_active !== false,
+            };
+          }
+        });
+      }
+    } catch (dbErr) {
+      console.warn('تعذر قراءة أسعار المتجر من سوبابيس:', dbErr);
+    }
+  }
+
+  return customPrices;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const storeCode = searchParams.get('storeCode');
     const storeId = searchParams.get('storeId');
     const forCustomer = searchParams.get('forCustomer') === 'true';
+    const lean = searchParams.get('lean') === '1' || searchParams.get('lean') === 'true';
+    const summary = searchParams.get('summary') === '1' || searchParams.get('summary') === 'true';
+    const q = (searchParams.get('q') || searchParams.get('search') || '').trim();
+    const status = (searchParams.get('status') || 'all') as 'all' | 'active' | 'hidden';
+    const pageParam = searchParams.get('page');
+    const limitParam = searchParams.get('limit');
+    const usePagination = lean || pageParam !== null || limitParam !== null || summary;
 
     const identifier = (storeCode || storeId || '').toLowerCase().trim();
-    const allProducts = await getAllProducts();
 
+    // بدون متجر: السلوك القديم (للوحة المدير وغيرها)
     if (!identifier) {
+      if (summary) {
+        const total = await getProductsCount();
+        return NextResponse.json({
+          success: true,
+          total,
+          activeCount: total,
+          hiddenCount: 0,
+          products: [],
+        });
+      }
+      if (usePagination) {
+        const result = await getProductsLeanPaginated({
+          page: pageParam ? Number(pageParam) : 1,
+          limit: limitParam ? Number(limitParam) : 12,
+          search: q || undefined,
+        });
+        return NextResponse.json({
+          success: true,
+          ...result,
+          products: lean ? result.products.map(toLeanMerchantProduct) : result.products,
+        });
+      }
+      const allProducts = await getAllProducts();
       return NextResponse.json({ success: true, products: allProducts });
     }
 
-    // جلب بيانات المتجر لمعرفة إعدادات أسعاره المخصصة
     const stores = await getAllStores();
     const store = stores.find(
       s => s.code?.toLowerCase() === identifier || s.slug?.toLowerCase() === identifier || s.id === identifier
     );
 
-    let customPrices: Record<string, { sellingPrice: number; isActive: boolean }> = {};
+    const customPrices = await loadStoreCustomPrices(store, identifier);
+    const hiddenIds = Object.entries(customPrices)
+      .filter(([, v]) => v.isActive === false)
+      .map(([id]) => id);
+    const hiddenCount = hiddenIds.length;
 
-    // 1. فحص التخزين المحلي في الذاكرة
-    const storeKey = store?.code || identifier;
-    if (localStoreProductPrices[storeKey]) {
-      customPrices = { ...localStoreProductPrices[storeKey] };
+    // ملخص سريع لفتح لوحة التاجر بدون جلب المنتجات
+    if (summary) {
+      const total = await getProductsCount();
+      return NextResponse.json({
+        success: true,
+        store: store ? { id: store.id, code: store.code, name: store.name } : null,
+        total,
+        activeCount: Math.max(0, total - hiddenCount),
+        hiddenCount,
+        products: [],
+      });
     }
 
-    // 2. فحص سوبابيس إذا كان متاحاً
-    const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
-    if (activeSupabase && store?.id) {
-      try {
-        const { data: storeData } = await activeSupabase
-          .from('stores')
-          .select('settings')
-          .eq('id', store.id)
-          .maybeSingle();
+    // مسار خفيف للوحة التاجر: صفحات + حقول مختصرة فقط
+    if (usePagination || lean) {
+      const page = Math.max(1, Number(pageParam) || 1);
+      const limit = Math.max(1, Math.min(100, Number(limitParam) || 12));
 
-        if (storeData?.settings?.custom_product_prices) {
-          customPrices = {
-            ...customPrices,
-            ...storeData.settings.custom_product_prices,
-          };
-        }
-
-        // فحص جدول store_products إن وجد
-        const { data: spRows } = await activeSupabase
-          .from('store_products')
-          .select('product_id, selling_price, is_active')
-          .eq('store_id', store.id);
-
-        if (spRows && spRows.length > 0) {
-          spRows.forEach((row: any) => {
-            if (row.product_id) {
-              customPrices[row.product_id] = {
-                sellingPrice: Number(row.selling_price),
-                isActive: row.is_active !== false,
-              };
-            }
+      let result;
+      if (status === 'hidden') {
+        if (hiddenIds.length === 0) {
+          result = { products: [] as any[], total: 0, page, limit, totalPages: 1 };
+        } else {
+          result = await getProductsLeanPaginated({
+            page,
+            limit,
+            search: q || undefined,
+            ids: hiddenIds,
           });
         }
-      } catch (dbErr) {
-        console.warn('تعذر قراءة أسعار المتجر من سوبابيس:', dbErr);
+      } else {
+        result = await getProductsLeanPaginated({
+          page,
+          limit,
+          search: q || undefined,
+        });
+        if (status === 'active' && hiddenIds.length > 0) {
+          const hiddenSet = new Set(hiddenIds);
+          result = {
+            ...result,
+            products: result.products.filter(p => !hiddenSet.has(p.id)),
+          };
+        }
       }
+
+      let merged = result.products.map(p => mergeProductWithCustomPrices(p, customPrices));
+      if (forCustomer) {
+        merged = merged.filter(p => p.isActive !== false);
+      }
+
+      const totalAll = await getProductsCount();
+      const filteredTotal =
+        status === 'hidden'
+          ? hiddenCount
+          : status === 'active'
+            ? Math.max(0, totalAll - hiddenCount)
+            : result.total;
+      const totalPages = Math.max(1, Math.ceil(filteredTotal / limit) || result.totalPages);
+
+      return NextResponse.json({
+        success: true,
+        store: store ? { id: store.id, code: store.code, name: store.name } : null,
+        products: lean ? merged.map(toLeanMerchantProduct) : merged,
+        page: result.page,
+        limit: result.limit,
+        total: filteredTotal,
+        totalPages,
+        totalAll,
+        activeCount: Math.max(0, totalAll - hiddenCount),
+        hiddenCount,
+      });
     }
 
-    // دمج الأسعار المخصصة مع المنتجات
-    let mergedProducts = allProducts.map(product => {
-      const custom = customPrices[product.id];
-      const basePlatformPrice = product.platformPriceIqd || product.priceIqd || 10000;
-      const minPrice = product.minPriceIqd || (basePlatformPrice + 5000);
-      const maxPrice = product.maxPriceIqd || (basePlatformPrice + 20000);
-      
-      // سعر البيع الافتراضي لمتجر التاجر = سعر الجملة + 10,000 د.ع (ليكون ربح التاجر الافتراضي 10,000 د.ع)
-      const defaultSellingPrice = Math.min(maxPrice, Math.max(minPrice, basePlatformPrice + 10000));
-      const rawSelling = custom && custom.sellingPrice ? Number(custom.sellingPrice) : defaultSellingPrice;
-      // التأكد من أن سعر التاجر لا يقل عن الحد الأدنى المسموح (ربح 5,000 د.ع) ولا يزيد عن الحد الأقصى
-      const sellingPrice = Math.max(minPrice, Math.min(maxPrice, rawSelling));
-      const isActive = custom && custom.isActive !== undefined ? custom.isActive : true;
-      const merchantProfit = Math.max(0, sellingPrice - basePlatformPrice);
+    // المسار الكامل (متجر الزبون / التوافق مع الطلبات القديمة)
+    const allProducts = await getAllProducts();
+    let mergedProducts = allProducts.map(product => mergeProductWithCustomPrices(product, customPrices));
 
-      return {
-        ...product,
-        priceIqd: sellingPrice,
-        sellingPrice: sellingPrice,
-        defaultSellingPrice: defaultSellingPrice,
-        platformPriceIqd: basePlatformPrice,
-        minPriceIqd: minPrice,
-        maxPriceIqd: maxPrice,
-        merchantProfit: merchantProfit,
-        isActive: isActive,
-        isCustomized: !!custom,
-      };
-    });
-
-    // إذا كان الطلب من زبون يزور المتجر، نستبعد المنتجات غير النشطة
     if (forCustomer) {
       mergedProducts = mergedProducts.filter(p => p.isActive !== false);
     }

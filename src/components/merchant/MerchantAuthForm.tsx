@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Bell,
   CheckCircle2,
+  KeyRound,
   Phone,
   ShieldCheck,
   Sparkles,
@@ -21,7 +22,7 @@ import {
 } from '@/lib/merchantAuthShared';
 import type { Store as StoreType } from '@/types';
 
-type Mode = 'login' | 'recover-phone' | 'recover-wait' | 'recover-otp' | 'set-pin';
+type Mode = 'login' | 'recover-phone' | 'recover-wait' | 'recover-otp' | 'post-verify' | 'set-pin';
 
 interface MerchantAuthFormProps {
   onSuccess: (store: StoreType) => void;
@@ -170,10 +171,49 @@ export default function MerchantAuthForm({
       }
       setRecoveryToken(data.recoveryToken);
       setRecoveredStore(data.store);
-      setMode('set-pin');
-      setInfoMessage('تم التحقق. احفظ رمز دخولك أو عيّن رمزاً جديداً.');
+      setNewPin('');
+      setConfirmPin('');
+      // إن لم يكن لديه رمز دخول سابقاً، نوجّهه مباشرة لتعيين رمز
+      if (data.hasLoginPin === false || data.store?.hasLoginPin === false) {
+        setMode('set-pin');
+        setInfoMessage('عيّن رمز دخول لحسابك الآن.');
+      } else {
+        setMode('post-verify');
+        setInfoMessage('تم التحقق بنجاح. تابع لحسابك أو غيّر رمز الدخول.');
+      }
     } catch {
       setErrorMessage('تعذر التحقق من الرمز');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleContinueToAccount = async () => {
+    resetMessages();
+    if (!recoveredStore) return;
+    setIsLoading(true);
+    try {
+      if (recoveryToken) {
+        const res = await fetch('/api/merchant/auth/set-pin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone: phone.trim(),
+            recoveryToken,
+            continueOnly: true,
+          }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+          setErrorMessage(data.message || 'تعذر إكمال الدخول');
+          return;
+        }
+        onSuccess(data.store || recoveredStore);
+        return;
+      }
+      onSuccess(recoveredStore);
+    } catch {
+      setErrorMessage('تعذر إكمال الدخول للحساب');
     } finally {
       setIsLoading(false);
     }
@@ -437,6 +477,51 @@ export default function MerchantAuthForm({
         </div>
       )}
 
+      {mode === 'post-verify' && (
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-right">
+            <div className="flex items-start gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-black text-emerald-950 mb-1">
+                  تم التحقق من حسابك{recoveredStore?.name ? ` (${recoveredStore.name})` : ''}
+                </p>
+                <p className="text-xs text-emerald-900 leading-relaxed">
+                  اختر: المتابعة مباشرة لحسابك، أو تعيين رمز دخول جديد.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {errorMessage && (
+            <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">{errorMessage}</div>
+          )}
+
+          <button
+            type="button"
+            disabled={isLoading}
+            onClick={handleContinueToAccount}
+            className="w-full min-h-[48px] py-3.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-black text-sm disabled:opacity-60 cursor-pointer flex items-center justify-center gap-2"
+          >
+            <Store className="w-4 h-4" />
+            <span>{isLoading ? 'جاري الدخول...' : 'المتابعة إلى حسابي'}</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={isLoading}
+            onClick={() => {
+              resetMessages();
+              setMode('set-pin');
+            }}
+            className="w-full min-h-[48px] py-3.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 font-bold text-sm cursor-pointer flex items-center justify-center gap-2"
+          >
+            <KeyRound className="w-4 h-4 text-brand-700" />
+            <span>تعيين رمز دخول جديد</span>
+          </button>
+        </div>
+      )}
+
       {mode === 'set-pin' && (
         <form onSubmit={handleSetPin} className="space-y-4" autoComplete="off">
           <input type="text" name="prevent_autofill_user" autoComplete="username" tabIndex={-1} aria-hidden="true" className="hidden" style={{ display: 'none' }} />
@@ -444,7 +529,7 @@ export default function MerchantAuthForm({
           <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-right">
             <p className="text-xs text-emerald-900 leading-relaxed font-semibold">
               تم التحقق من حسابك
-              {recoveredStore?.name ? ` (${recoveredStore.name})` : ''}. احفظ رمز الدخول أو عيّن رمزاً جديداً الآن.
+              {recoveredStore?.name ? ` (${recoveredStore.name})` : ''}. عيّن رمز الدخول الجديد الآن.
             </p>
           </div>
           <div>
@@ -479,6 +564,19 @@ export default function MerchantAuthForm({
             >
               {isLoading ? 'جاري الحفظ...' : 'حفظ رمز الدخول والدخول للحساب'}
             </button>
+            {recoveredStore?.hasLoginPin !== false && (
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={() => {
+                  resetMessages();
+                  setMode('post-verify');
+                }}
+                className="w-full min-h-[44px] py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-bold cursor-pointer"
+              >
+                رجوع: المتابعة بدون تغيير الرمز
+              </button>
+            )}
           </div>
         </form>
       )}
