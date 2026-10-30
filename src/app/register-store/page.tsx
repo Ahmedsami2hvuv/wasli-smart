@@ -2,9 +2,11 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Store, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Share2, User, Phone, MapPin, Copy, Check, Lock, CreditCard, Wallet, Smartphone, ExternalLink } from 'lucide-react';
+import { Store, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Share2, User, Phone, MapPin, Copy, Check, Lock, CreditCard, Wallet, Smartphone, ExternalLink, Bell } from 'lucide-react';
 import Link from 'next/link';
 import { IRAQ_GOVERNORATES } from '@/data/iraqCities';
+
+const ORDERS_BOT_USERNAME = 'wasliasharatbot';
 
 export default function RegisterStorePage() {
   const router = useRouter();
@@ -16,6 +18,7 @@ export default function RegisterStorePage() {
   const [createdStore, setCreatedStore] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [copiedInfo, setCopiedInfo] = useState(false);
+  const [telegramOpened, setTelegramOpened] = useState(false);
 
   // حالات طريقة استلام الأرباح
   const [payoutMethod, setPayoutMethod] = useState<'mastercard' | 'zain_cash' | 'mobile_credit'>('mastercard');
@@ -121,6 +124,17 @@ ${dashboardUrl}`;
     setCopiedInfo(true);
   };
 
+  // فتح بوت إشعارات الطلبات مع التعرف التلقائي على المتجر وإرسال الروابط
+  const getOrdersBotConnectUrl = (storeCode: string) =>
+    `https://t.me/${ORDERS_BOT_USERNAME}?start=store_${encodeURIComponent(storeCode)}`;
+
+  const handleConnectOrdersBot = (storeCode?: string) => {
+    const code = storeCode || createdStore?.code;
+    if (!code) return;
+    window.open(getOrdersBotConnectUrl(code), '_blank', 'noopener,noreferrer');
+    setTelegramOpened(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -207,6 +221,12 @@ ${dashboardUrl}`;
               registry.unshift(data.store);
               localStorage.setItem('wasli_stores_registry', JSON.stringify(registry));
             }
+          } catch (e) {}
+
+          // توجيه تلقائي لبوت الإشعارات لحفظ الروابط وتفعيل التنبيهات فوراً
+          try {
+            window.open(getOrdersBotConnectUrl(data.store.code), '_blank', 'noopener,noreferrer');
+            setTelegramOpened(true);
           } catch (e) {}
         }
       } else {
@@ -593,8 +613,45 @@ ${dashboardUrl}`;
               مبروك! تم إنشاء متجرك بنجاح
             </h2>
             <p className="text-slate-600 text-sm mb-6">
-              أصبح متجر التاجر جاهزاً الآن للبدء باختيار المنتجات وتحديد أرباحك وإدارته من صفحة التاجر.
+              أصبح متجر التاجر جاهزاً الآن. الخطوة الأهم: احفظ روابطك وفعّل إشعارات الطلبات على التليكرام.
             </p>
+
+            {/* الخطوة الأولى: تفعيل بوت التليكرام وحفظ الروابط */}
+            <div className="bg-gradient-to-br from-sky-50 to-brand-50 border-2 border-sky-200/90 rounded-2xl p-5 sm:p-6 text-right mb-6 shadow-sm">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-11 h-11 rounded-xl bg-sky-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-sky-600/30">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <h3 className="font-black text-slate-900 text-base sm:text-lg">
+                    احفظ روابطك وفعّل إشعارات التليكرام
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                    البوت يتعرف على متجرك فوراً ويرسل لك رسالة فيها رابط المتجر ورابط صفحة التاجر، ويفعّل إشعارات الطلبات الجديدة.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleConnectOrdersBot()}
+                className="w-full min-h-[48px] py-3.5 px-5 rounded-xl bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white font-black text-sm shadow-md shadow-sky-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Bell className="w-4 h-4 text-amber-300" />
+                <span>
+                  {telegramOpened
+                    ? 'افتح البوت مرة أخرى إن لم تظهر الرسالة'
+                    : 'فتح بوت الإشعارات الآن'}
+                </span>
+                <ExternalLink className="w-4 h-4 opacity-80" />
+              </button>
+
+              {telegramOpened && (
+                <p className="mt-3 text-[11px] sm:text-xs text-sky-800 font-semibold text-center leading-relaxed">
+                  تم فتح التليكرام. اضغط Start داخل البوت إن طُلب منك، وستصلك رسالة بروابطك فوراً.
+                </p>
+              )}
+            </div>
 
             <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-right space-y-3 mb-8">
               {createdStore.ownerName && (

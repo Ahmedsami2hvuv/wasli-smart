@@ -4,6 +4,56 @@ import { getStoreBySlugOrCode, getAllStores, updateStore } from '@/lib/services/
 
 export const dynamic = 'force-dynamic';
 
+function getPublicSiteUrl(): string {
+  return (process.env.NEXT_PUBLIC_SITE_URL || 'https://wasli-smart.vercel.app').replace(/\/$/, '');
+}
+
+function buildMerchantLinks(store: {
+  code?: string;
+  name?: string;
+  ownerName?: string;
+  city?: string;
+  phone?: string;
+}) {
+  const origin = getPublicSiteUrl();
+  const code = store.code || '';
+  const storeUrl = `${origin}/s/${code}?name=${encodeURIComponent(store.name || '')}`;
+  const dashboardUrl =
+    `${origin}/merchant?storeCode=${code}` +
+    `&name=${encodeURIComponent(store.name || '')}` +
+    `&owner=${encodeURIComponent(store.ownerName || '')}` +
+    `&city=${encodeURIComponent(store.city || '')}` +
+    `&phone=${encodeURIComponent(store.phone || '')}`;
+  return { storeUrl, dashboardUrl };
+}
+
+function buildStoreLinksKeyboard(storeUrl: string, dashboardUrl: string) {
+  return {
+    inline_keyboard: [
+      [{ text: 'رابط متجر التاجر (للزبائن)', url: storeUrl }],
+      [{ text: 'رابط صفحة التاجر (الإدارة)', url: dashboardUrl }],
+    ],
+  };
+}
+
+async function sendBotMessage(
+  botToken: string,
+  chatId: string | number,
+  text: string,
+  replyMarkup?: ReturnType<typeof buildStoreLinksKeyboard>
+) {
+  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      disable_web_page_preview: true,
+      ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+    }),
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const update = await req.json();
@@ -39,6 +89,8 @@ export async function POST(req: NextRequest) {
             telegramUsername: username,
           });
 
+          const { storeUrl, dashboardUrl } = buildMerchantLinks(matchedStore);
+
           const confirmationMessage = [
             `أهلاً وسهلاً بك يا ${firstName}!`,
             '==============================',
@@ -46,21 +98,27 @@ export async function POST(req: NextRequest) {
             '------------------------------',
             `كود المتجر: ${matchedStore.code}`,
             `التاجر: ${matchedStore.ownerName || firstName}`,
-            `معرف المحادثة (Chat ID): ${chatId}`,
+            '------------------------------',
+            'احفظ هذين الرابطين في هذه المحادثة دائماً:',
+            '',
+            'رابط متجر التاجر (للزبائن):',
+            storeUrl,
+            '',
+            'رابط صفحة التاجر (لوحة الإدارة):',
+            dashboardUrl,
             '------------------------------',
             'من الآن فصاعداً، ستصلك كافة إشعارات الطلبات الجديدة وتفاصيل مبيعاتك وأرباحك فور تسجيل أي طلب لمتجرك مباشرة هنا.',
             '==============================',
+            'احفظ هذه الرسالة في مكان آمن، ولا تشارك رابط صفحة التاجر مع أحد.',
             'منصة وصلي الذكية تتمنى لك تجارة مباركة ومبيعات مضاعفة!'
           ].join('\n');
 
-          await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: chatId,
-              text: confirmationMessage,
-            }),
-          });
+          await sendBotMessage(
+            botToken,
+            chatId,
+            confirmationMessage,
+            buildStoreLinksKeyboard(storeUrl, dashboardUrl)
+          );
         } else {
           // لم يتم تمرير كود متجر، نتحقق إن كان هذا التاجر مرتبطاً مسبقاً بأي متجر
           const allStores = await getAllStores();
@@ -69,47 +127,48 @@ export async function POST(req: NextRequest) {
           );
 
           if (alreadyLinkedStore) {
+            const { storeUrl, dashboardUrl } = buildMerchantLinks(alreadyLinkedStore);
+
             const linkedMsg = [
               `أهلاً بعودتك يا ${firstName}!`,
               '==============================',
               `حسابك مرتبط حالياً بمتجر: ${alreadyLinkedStore.name}`,
               `كود المتجر: ${alreadyLinkedStore.code}`,
               '------------------------------',
+              'روابطك المحفوظة:',
+              '',
+              'رابط متجر التاجر (للزبائن):',
+              storeUrl,
+              '',
+              'رابط صفحة التاجر (لوحة الإدارة):',
+              dashboardUrl,
+              '------------------------------',
               'البوت يعمل بصورة ممتازة وجاهز لتسليم إشعارات المبيعات والأرباح فور وصولها.',
               '=============================='
             ].join('\n');
 
-            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chat_id: chatId,
-                text: linkedMsg,
-              }),
-            });
+            await sendBotMessage(
+              botToken,
+              chatId,
+              linkedMsg,
+              buildStoreLinksKeyboard(storeUrl, dashboardUrl)
+            );
           } else {
             const welcomeMessage = [
               `أهلاً بك يا ${firstName} في بوت (إشعارات طلبات وصلي)`,
               '==============================',
               'البوت متصل بنجاح وهو المخصص لإرسال إشعارات الطلبات والمبيعات الفورية.',
               '',
-              'لكي يتم ربط متجرك وتصلك إشعارات مبيعاتك وأرباحك تلقائياً:',
-              '1. افتح صفحة التاجر لمتجرك.',
-              '2. من القائمة الجانبية اضغط على زر [الاتصال ببوت الإشعارات].',
-              '3. سيتم فتح هذا البوت وربط المتجر فوراً بضغطة زر واحدة!',
+              'لكي يتم ربط متجرك وتصلك إشعارات مبيعاتك وأرباحك تلقائياً مع حفظ روابطك:',
+              '1. أكمل تسجيل متجرك، أو افتح صفحة التاجر.',
+              '2. اضغط زر [احفظ روابطك وفعّل إشعارات التليكرام].',
+              '3. سيتم فتح هذا البوت وربط المتجر فوراً وإرسال روابطك بضغطة واحدة!',
               '------------------------------',
               `معرف محادثتك الشخصي (Chat ID): ${chatId}`,
               '=============================='
             ].join('\n');
 
-            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chat_id: chatId,
-                text: welcomeMessage,
-              }),
-            });
+            await sendBotMessage(botToken, chatId, welcomeMessage);
           }
         }
       } else if (text === '/status' || text === 'الحالة') {
@@ -118,37 +177,45 @@ export async function POST(req: NextRequest) {
           s => s.telegramChatId === String(chatId) || (s as any).settings?.telegram_chat_id === String(chatId)
         );
 
-        const statusMsg = alreadyLinkedStore
-          ? `حالة الاتصال: نشط ومتصل بمتجر (${alreadyLinkedStore.name})\nكود المتجر: ${alreadyLinkedStore.code}\nتصلك كافة إشعارات الطلبات فور تسجيلها بنجاح.`
-          : 'حالة الاتصال: غير مرتبط بأي متجر بعد. يرجى الضغط على زر (الاتصال ببوت الإشعارات) من صفحة التاجر لمتجرك ليتم الربط تلقائياً.';
+        if (alreadyLinkedStore) {
+          const { storeUrl, dashboardUrl } = buildMerchantLinks(alreadyLinkedStore);
+          const statusMsg = [
+            `حالة الاتصال: نشط ومتصل بمتجر (${alreadyLinkedStore.name})`,
+            `كود المتجر: ${alreadyLinkedStore.code}`,
+            'تصلك كافة إشعارات الطلبات فور تسجيلها بنجاح.',
+            '',
+            'رابط متجر التاجر:',
+            storeUrl,
+            '',
+            'رابط صفحة التاجر:',
+            dashboardUrl,
+          ].join('\n');
 
-        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: statusMsg,
-          }),
-        });
+          await sendBotMessage(
+            botToken,
+            chatId,
+            statusMsg,
+            buildStoreLinksKeyboard(storeUrl, dashboardUrl)
+          );
+        } else {
+          await sendBotMessage(
+            botToken,
+            chatId,
+            'حالة الاتصال: غير مرتبط بأي متجر بعد. يرجى الضغط على زر (احفظ روابطك وفعّل إشعارات التليكرام) من شاشة نجاح التسجيل أو من صفحة التاجر ليتم الربط تلقائياً.'
+          );
+        }
       } else if (text === '/help' || text === 'مساعدة') {
         const helpMsg = [
           'دليل استخدام بوت إشعارات وصلي:',
           '==============================',
-          '• /start - بدء واستقبال رسالة الترحيب والربط مع المتجر.',
-          '• /status - التحقق من حالة ربط حسابك بمتجرك وتفعيل الإشعارات.',
+          '• /start - بدء واستقبال رسالة الترحيب والربط مع المتجر وإرسال روابطك.',
+          '• /status - التحقق من حالة الربط وعرض رابط المتجر ورابط صفحة التاجر.',
           '• /help - عرض تعليمات المساعدة الحالية.',
           '------------------------------',
-          'لربط أي متجر جديد: افتح صفحة التاجر واضغط على [الاتصال ببوت الإشعارات].'
+          'لربط أي متجر جديد: من شاشة نجاح التسجيل أو صفحة التاجر اضغط على زر تفعيل إشعارات التليكرام.'
         ].join('\n');
 
-        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: helpMsg,
-          }),
-        });
+        await sendBotMessage(botToken, chatId, helpMsg);
       }
     }
 
