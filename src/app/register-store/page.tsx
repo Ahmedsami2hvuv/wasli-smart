@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { IRAQ_GOVERNORATES } from '@/data/iraqCities';
 import PinStrengthMeter from '@/components/merchant/PinStrengthMeter';
 import MerchantAuthForm from '@/components/merchant/MerchantAuthForm';
+import PasswordInput from '@/components/merchant/PasswordInput';
 import { validatePinFormat } from '@/lib/merchantAuthShared';
 import type { Store as StoreType } from '@/types';
 
@@ -398,14 +399,13 @@ ${dashboardUrl}`;
                   <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">
                     هذا الرمز يحمي صفحة التاجر. احفظه جيداً وستحتاجه عند كل دخول.
                   </p>
-                  <input
-                    type="password"
+                  <PasswordInput
                     required
                     minLength={4}
                     placeholder="4 خانات على الأقل"
                     value={loginPin}
-                    onChange={(e) => setLoginPin(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm outline-none transition-all bg-white"
+                    onChange={setLoginPin}
+                    autoComplete="new-password"
                   />
                   <PinStrengthMeter pin={loginPin} />
                 </div>
@@ -415,14 +415,13 @@ ${dashboardUrl}`;
                     <span>تأكيد رمز الدخول</span>
                     <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     required
                     minLength={4}
                     placeholder="أعد كتابة رمز الدخول"
                     value={confirmLoginPin}
-                    onChange={(e) => setConfirmLoginPin(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm outline-none transition-all bg-white"
+                    onChange={setConfirmLoginPin}
+                    autoComplete="new-password"
                   />
                 </div>
               </div>

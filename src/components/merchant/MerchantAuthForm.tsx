@@ -7,13 +7,13 @@ import {
   ArrowLeft,
   Bell,
   CheckCircle2,
-  KeyRound,
   Phone,
   ShieldCheck,
   Sparkles,
   Store,
 } from 'lucide-react';
 import PinStrengthMeter from '@/components/merchant/PinStrengthMeter';
+import PasswordInput from '@/components/merchant/PasswordInput';
 import { buildMerchantHelpMessage, validatePinFormat } from '@/lib/merchantAuthShared';
 import type { Store as StoreType } from '@/types';
 
@@ -245,21 +245,15 @@ export default function MerchantAuthForm({
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-2">رمز الدخول</label>
-            <div className="relative">
-              <input
-                type="password"
-                value={pin}
-                onChange={(e) => {
-                  setPin(e.target.value);
-                  resetMessages();
-                }}
-                placeholder="أدخل رمز الدخول"
-                className="w-full pl-4 pr-10 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm outline-none"
-              />
-              <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
-                <KeyRound className="w-4 h-4" />
-              </div>
-            </div>
+            <PasswordInput
+              value={pin}
+              onChange={(value) => {
+                setPin(value);
+                resetMessages();
+              }}
+              placeholder="أدخل رمز الدخول"
+              autoComplete="current-password"
+            />
           </div>
 
           {(errorMessage || infoMessage) && (
@@ -430,23 +424,21 @@ export default function MerchantAuthForm({
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-2">رمز الدخول الجديد</label>
-            <input
-              type="password"
+            <PasswordInput
               value={newPin}
-              onChange={(e) => setNewPin(e.target.value)}
-              className="w-full py-3 px-4 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 text-sm outline-none"
+              onChange={setNewPin}
               placeholder="4 خانات على الأقل"
+              autoComplete="new-password"
             />
             <PinStrengthMeter pin={newPin} />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-2">تأكيد رمز الدخول</label>
-            <input
-              type="password"
+            <PasswordInput
               value={confirmPin}
-              onChange={(e) => setConfirmPin(e.target.value)}
-              className="w-full py-3 px-4 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 text-sm outline-none"
+              onChange={setConfirmPin}
               placeholder="أعد كتابة الرمز"
+              autoComplete="new-password"
             />
           </div>
           {errorMessage && (
