@@ -54,6 +54,7 @@ import { Store as StoreType, Order, Customer } from '@/types';
 import PromoLinkModal from '@/components/PromoLinkModal';
 import { PromoLink } from '@/lib/services/promoLinkService';
 import CreateOrderModal from '@/components/merchant/CreateOrderModal';
+import MerchantAuthForm, { MerchantAuthHeader } from '@/components/merchant/MerchantAuthForm';
 
 const IRAQI_GOVERNORATES = [
   'بغداد',
@@ -274,6 +275,23 @@ interface MerchantEditFormState {
         }
 
         if (found) {
+          // المتاجر المحمية برمز دخول تحتاج جلسة دخول ناجحة مسبقاً على نفس الجهاز
+          if (found.hasLoginPin && typeof window !== 'undefined') {
+            let sessionAuthed = false;
+            try {
+              const savedSession = localStorage.getItem('wasli_current_store');
+              const parsedSession = savedSession ? JSON.parse(savedSession) : null;
+              sessionAuthed =
+                parsedSession?.authOk === true &&
+                parsedSession?.code?.toLowerCase() === String(found.code || '').toLowerCase();
+            } catch (e) {}
+            if (!sessionAuthed) {
+              setCurrentStore(null);
+              setLoading(false);
+              return;
+            }
+          }
+
           setCurrentStore(found);
           setEditForm(prev => ({
             ...prev,
@@ -291,7 +309,7 @@ interface MerchantEditFormState {
             creditPhone: found.payoutDetails?.creditPhone || prev.creditPhone,
           }));
           if (typeof window !== 'undefined') {
-            localStorage.setItem('wasli_current_store', JSON.stringify(found));
+            localStorage.setItem('wasli_current_store', JSON.stringify({ ...found, authOk: true }));
             try {
               const regStr = localStorage.getItem('wasli_stores_registry');
               const reg = regStr ? JSON.parse(regStr) : [];
@@ -458,159 +476,58 @@ interface MerchantEditFormState {
     }
   };
 
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError('');
-
-    const rawInput = storeInput.trim();
-    if (!rawInput) {
-      setLoginError('يرجى إدخال رابط متجرك أو رمزه للدخول');
-      return;
+  const hydrateMerchantSession = async (found: StoreType) => {
+    const sessionStore = { ...found, authOk: true } as StoreType & { authOk?: boolean };
+    setCurrentStore(found);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('wasli_current_store', JSON.stringify(sessionStore));
     }
-
-    // استخراج الكود الذكي من أي شكل من أشكال الروابط
-    let extractedCode = rawInput;
-    const matchParam = rawInput.match(/[?&]storeCode=([a-zA-Z0-9_-]+)/i);
-    const matchS = rawInput.match(/\/s\/([a-zA-Z0-9_-]+)/i);
-    const matchW = rawInput.match(/\b(w-[a-zA-Z0-9]+)\b/i);
-
-    if (matchParam && matchParam[1]) {
-      extractedCode = matchParam[1].trim();
-    } else if (matchS && matchS[1]) {
-      extractedCode = matchS[1].trim();
-    } else if (matchW && matchW[1]) {
-      extractedCode = matchW[1].trim();
-    } else if (rawInput.startsWith('http://') || rawInput.startsWith('https://')) {
-      try {
-        const url = new URL(rawInput);
-        const sp = url.searchParams.get('storeCode') || url.searchParams.get('code');
-        if (sp) {
-          extractedCode = sp.trim();
-        } else {
-          const parts = url.pathname.split('/').filter(Boolean);
-          if (parts.length > 0 && parts[parts.length - 1] !== 'merchant') {
-            extractedCode = parts[parts.length - 1].trim();
-          }
-        }
-      } catch (e) {}
-    }
-
-    setIsLoggingIn(true);
+    router.push(`/merchant?storeCode=${found.code}`);
 
     try {
-      const res = await fetch('/api/stores');
-      const data = await res.json();
+      const ordersRes = await fetch(`/api/orders?storeId=${found.id}`);
+      const ordersData = await ordersRes.json();
+      if (ordersData.success && ordersData.orders) {
+        setOrders(ordersData.orders);
+      }
+    } catch (e) {}
 
-      let found = null;
-      if (data && data.stores) {
-        const queryLower = extractedCode.toLowerCase();
-        const rawLower = rawInput.toLowerCase();
-
-        found = data.stores.find((s: any) => {
-          const sCode = (s.code || '').toLowerCase();
-          const sSlug = (s.slug || '').toLowerCase();
-          const sPhone = (s.phone || '').trim();
-          const sName = (s.name || '').toLowerCase();
-
-          return (
-            sCode === queryLower ||
-            sSlug === queryLower ||
-            sCode === rawLower ||
-            (sPhone && sPhone === rawInput) ||
-            sName === rawLower
-          );
+    try {
+      const spRes = await fetch(`/api/stores/products?storeCode=${found.code || found.id}`);
+      const spData = await spRes.json();
+      if (spData.success && Array.isArray(spData.products)) {
+        setMerchantProducts(spData.products);
+        setTotalProductsCount(spData.products.length);
+        const initialPrices: Record<string, number> = {};
+        spData.products.forEach((p: any) => {
+          initialPrices[p.id] = p.sellingPrice || p.priceIqd || p.platformPriceIqd;
         });
+        setEditingPrices(initialPrices);
       }
+    } catch (e) {}
 
-      // إذا لم يعثر عليه من السيرفر، الفحص في التخزين المحلي للمتصفح
-      if (!found && typeof window !== 'undefined') {
-        try {
-          const curSaved = localStorage.getItem('wasli_current_store');
-          if (curSaved) {
-            const parsed = JSON.parse(curSaved);
-            if (parsed.code?.toLowerCase() === extractedCode.toLowerCase()) {
-              found = parsed;
-            }
-          }
-          if (!found) {
-            const regSaved = localStorage.getItem('wasli_stores_registry');
-            if (regSaved) {
-              const reg = JSON.parse(regSaved);
-              if (Array.isArray(reg)) {
-                found = reg.find((s: any) => s.code?.toLowerCase() === extractedCode.toLowerCase());
-              }
-            }
-          }
-        } catch (e) {}
+    try {
+      const promoRes = await fetch(`/api/promo-links?storeCode=${found.code || found.id}`);
+      const promoData = await promoRes.json();
+      if (promoData.success && Array.isArray(promoData.links)) {
+        setPromoLinks(promoData.links);
       }
+    } catch (e) {}
 
-      // إذا كان الكود كود متجر وصلي صالح w-[code] نثبته ونفتح لوحة التحكم فوراً
-      if (!found && (extractedCode.toLowerCase().startsWith('w-') || extractedCode.length === 9)) {
-        found = {
-          id: `store-${extractedCode}`,
-          name: extractedCode.toLowerCase() === 'w-arjad8q' ? 'متجر ارجد' : `متجر ${extractedCode}`,
-          ownerName: '',
-          slug: `store-${extractedCode}`,
-          code: extractedCode,
-          description: 'متجر إلكتروني معتمد للتجارة المباشرة والتوصيل السريع لكافة المحافظات',
-          city: 'العراق',
-          phone: '',
-          status: 'active',
-          totalSales: 0,
-          totalOrders: 0,
-          balanceEarned: 0,
-          balanceWithdrawn: 0,
-          rating: 5.0,
-          reviewsCount: 1,
-          deliveryFeeIqd: 5000,
-          deliveryTimeMinutes: 'خلال يوم أو يومين',
-          isOpen: true,
-          isAbiAlkhaseeb: false,
-          image: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80',
-          logoUrl: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80',
-          location: 'العراق',
-          district: 'العراق',
-          createdAt: new Date().toISOString(),
-        };
+    try {
+      const custRes = await fetch(`/api/customers?storeId=${found.id}&storeCode=${found.code || ''}`);
+      const custData = await custRes.json();
+      if (custData.success && Array.isArray(custData.customers)) {
+        setCustomers(custData.customers);
       }
+    } catch (e) {}
+  };
 
-      if (found) {
-        setCurrentStore(found);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('wasli_current_store', JSON.stringify(found));
-        }
-        // تحديث الرابط في المتصفح ليبقى دائماً متصلاً بكود المتجر
-        router.push(`/merchant?storeCode=${found.code}`);
-
-        // جلب الطلبات
-        try {
-          const ordersRes = await fetch(`/api/orders?storeId=${found.id}`);
-          const ordersData = await ordersRes.json();
-          if (ordersData.success && ordersData.orders) {
-            setOrders(ordersData.orders);
-          }
-        } catch (e) {}
-
-        // جلب منتجات وأسعار متجر هذا التاجر
-        try {
-          const spRes = await fetch(`/api/stores/products?storeCode=${found.code || found.id}`);
-          const spData = await spRes.json();
-          if (spData.success && Array.isArray(spData.products)) {
-            setMerchantProducts(spData.products);
-            setTotalProductsCount(spData.products.length);
-            const initialPrices: Record<string, number> = {};
-            spData.products.forEach((p: any) => {
-              initialPrices[p.id] = p.sellingPrice || p.priceIqd || p.platformPriceIqd;
-            });
-            setEditingPrices(initialPrices);
-          }
-        } catch (e) {}
-        return;
-      }
-
-      setLoginError('لم يتم العثور على متجر مطابق لهذا الرابط. يرجى التأكد من الرابط أو إنشاء متجر جديد مجاناً.');
-    } catch (err) {
-      setLoginError('حدث خطأ أثناء محاولة الدخول، يرجى المحاولة مرة أخرى.');
+  const handleAuthSuccess = async (found: StoreType) => {
+    setLoginError('');
+    setIsLoggingIn(true);
+    try {
+      await hydrateMerchantSession(found);
     } finally {
       setIsLoggingIn(false);
     }
@@ -977,81 +894,24 @@ interface MerchantEditFormState {
     return (
       <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center" dir="rtl">
         <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-10 shadow-xl border border-slate-200/80">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-tr from-brand-700 to-skybrand-500 rounded-2xl flex items-center justify-center text-white mx-auto shadow-md shadow-brand-700/20 mb-4">
-              <Store className="w-8 h-8" />
-            </div>
-            <h1 className="text-2xl font-black text-slate-900 mb-2">
-              دخول صفحة التاجر
-            </h1>
-            <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
-              يرجى إدخال رابط متجرك الإلكتروني أو رمزه لفتح لوحة التحكم الخاصة بك ومتابعة أرباحك
-            </p>
+          <MerchantAuthHeader />
+          <div className="mt-6">
+            <MerchantAuthForm onSuccess={handleAuthSuccess} showRegisterLink />
           </div>
-
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2">
-                رابط متجرك أو رمز المتجر:
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={storeInput}
-                  onChange={(e) => {
-                    setStoreInput(e.target.value);
-                    if (loginError) setLoginError('');
-                  }}
-                  placeholder="مثال: wasli-smart.vercel.app/s/your-store أو الرمز"
-                  className="w-full pl-4 pr-10 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm outline-none transition-all placeholder:text-slate-400 text-left dir-ltr"
-                />
-                <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
-                  <LinkIcon className="w-4 h-4" />
-                </div>
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1.5 leading-normal">
-                يمكنك لصق رابط متجرك كاملاً أو كتابة رمز المتجر الخاص بك.
-              </p>
+          <div className="pt-4 text-center">
+            <Link href="/" className="text-xs text-slate-400 hover:text-slate-600">
+              العودة للصفحة الرئيسية
+            </Link>
+          </div>
+          {isLoggingIn && (
+            <p className="text-center text-xs text-slate-500 mt-3">جاري تجهيز صفحة التاجر...</p>
+          )}
+          {loginError && (
+            <div className="mt-3 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{loginError}</span>
             </div>
-
-            {loginError && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{loginError}</span>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={isLoggingIn}
-              className="w-full py-3.5 px-4 rounded-xl bg-brand-700 hover:bg-brand-800 active:bg-brand-900 text-white font-black text-sm shadow-md shadow-brand-700/20 transition-all flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
-            >
-              {isLoggingIn ? (
-                <span>جاري التحقق والدخول...</span>
-              ) : (
-                <>
-                  <span>دخول لحسابي</span>
-                  <ArrowLeft className="w-4 h-4" />
-                </>
-              )}
-            </button>
-
-            <div className="pt-4 border-t border-slate-100 text-center space-y-3">
-              <p className="text-xs text-slate-500">ليس لديك متجر بعد؟</p>
-              <Link
-                href="/register-store"
-                className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-colors"
-              >
-                <Sparkles className="w-4 h-4 text-amber-500" />
-                <span>أنشئ متجرك مجاناً في دقيقة واحدة</span>
-              </Link>
-              <div>
-                <Link href="/" className="text-xs text-slate-400 hover:text-slate-600">
-                  العودة للصفحة الرئيسية
-                </Link>
-              </div>
-            </div>
-          </form>
+          )}
         </div>
       </div>
     );

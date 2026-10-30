@@ -85,6 +85,7 @@ export interface Store {
   balanceWithdrawn?: number;
   telegramChatId?: string; // أيدي محادثة تيليجرام لصاحب المتجر لتلقي إشعارات الطلبات
   telegramUsername?: string; // معرف يوزر تيليجرام لصاحب المتجر
+  hasLoginPin?: boolean; // هل أنشأ التاجر رمز دخول دائم (بدون كشف الرمز نفسه)
   adminNotes?: string; // ملاحظات المدير الإدارية عن حساب التاجر
   tags?: string[];
   createdAt?: string;

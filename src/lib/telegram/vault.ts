@@ -286,6 +286,71 @@ export async function sendAdminOrderNotification(orderData: OrderNotificationPay
   }
 }
 
+export interface LoginRecoveryNotificationPayload {
+  storeName: string;
+  ownerName?: string;
+  storeCode?: string;
+  phone: string;
+  otpCode: string;
+  whatsappUrl: string;
+}
+
+/**
+ * إشعار خاص للمدير عند طلب رمز تأكيد دخول التاجر (بالخاص وليس بالقناة)
+ */
+export async function sendAdminLoginRecoveryNotification(
+  payload: LoginRecoveryNotificationPayload
+): Promise<boolean> {
+  // نفضّل بوت الإشعارات للخاص، مع بديل بوت المستودع إن لزم
+  const botToken = getOrdersBotToken() || getVaultBotToken();
+  const adminChatId = cleanTelegramChatId(process.env.TELEGRAM_ADMIN_CHAT_ID);
+
+  if (!botToken || !adminChatId) {
+    console.warn('تعذر إرسال إشعار استرجاع الدخول: بوت أو معرف المدير غير مضبوط');
+    return false;
+  }
+
+  const messageText = [
+    'طلب رمز تسجيل دخول لتاجر',
+    '==============================',
+    `بابه، التاجر يطلب رمز تأكيد دخول.`,
+    `اسم التاجر: ${payload.ownerName || 'غير محدد'}`,
+    `اسم المتجر: ${payload.storeName}`,
+    payload.storeCode ? `كود المتجر: ${payload.storeCode}` : '',
+    `رقم الهاتف: ${payload.phone}`,
+    '------------------------------',
+    `رمز الدخول المؤقت: ${payload.otpCode}`,
+    'الرمز صالح لمدة 15 دقيقة.',
+    '==============================',
+    'اضغط الزر بالأسفل لفتح واتساب التاجر مع رسالة جاهزة فيها الرمز.'
+  ].filter(Boolean).join('\n');
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: adminChatId,
+        text: messageText,
+        disable_web_page_preview: true,
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'إرسال الرمز عبر واتساب', url: payload.whatsappUrl }],
+          ],
+        },
+      }),
+    });
+    const resData = await response.json();
+    if (!resData.ok) {
+      console.error('فشل إشعار استرجاع الدخول:', resData.description);
+    }
+    return resData.ok === true;
+  } catch (err) {
+    console.error('خطأ في إرسال إشعار استرجاع الدخول للمدير:', err);
+    return false;
+  }
+}
+
 
 export function cleanTelegramChatId(input: string | number | null | undefined): string | number | null {
   if (!input) return null;

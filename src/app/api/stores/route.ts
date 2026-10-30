@@ -13,10 +13,17 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, phone, city, description, ownerName, payoutMethod, payoutDetails } = body;
+    const { name, phone, city, description, ownerName, payoutMethod, payoutDetails, loginPin } = body;
 
     if (!name?.trim() || !phone?.trim()) {
       return NextResponse.json({ success: false, message: 'اسم المتجر ورقم الهاتف مطلوبان' }, { status: 400 });
+    }
+
+    if (!loginPin || String(loginPin).trim().length < 4) {
+      return NextResponse.json(
+        { success: false, message: 'يرجى إنشاء رمز دخول من 4 خانات على الأقل لحماية حسابك' },
+        { status: 400 }
+      );
     }
 
     const store = await createNewStore({
@@ -27,6 +34,7 @@ export async function POST(request: NextRequest) {
       description: description?.trim() || '',
       payoutMethod,
       payoutDetails,
+      loginPin: String(loginPin).trim(),
     });
 
     return NextResponse.json({ success: true, store }, { status: 201 });

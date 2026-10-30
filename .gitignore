@@ -73,6 +73,7 @@ web_modules/
 # كاش محلي دائم للروابط الترويجية والمتاجر (لا يُرفع للمستودع)
 src/data/promoLinksCache.json
 src/data/registeredStoresCache.json
+src/data/merchantAuthCache.json
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache

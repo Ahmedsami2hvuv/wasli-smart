@@ -2,9 +2,11 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Store, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Share2, User, Phone, MapPin, Copy, Check, Lock, CreditCard, Wallet, Smartphone, ExternalLink, Bell } from 'lucide-react';
+import { Store, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Share2, User, Phone, MapPin, Copy, Check, Lock, CreditCard, Wallet, Smartphone, ExternalLink, Bell, KeyRound } from 'lucide-react';
 import Link from 'next/link';
 import { IRAQ_GOVERNORATES } from '@/data/iraqCities';
+import PinStrengthMeter from '@/components/merchant/PinStrengthMeter';
+import { validatePinFormat } from '@/lib/merchantAuthShared';
 
 const ORDERS_BOT_USERNAME = 'wasliasharatbot';
 
@@ -19,6 +21,8 @@ export default function RegisterStorePage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [copiedInfo, setCopiedInfo] = useState(false);
   const [telegramOpened, setTelegramOpened] = useState(false);
+  const [loginPin, setLoginPin] = useState('');
+  const [confirmLoginPin, setConfirmLoginPin] = useState('');
 
   // حالات طريقة استلام الأرباح
   const [payoutMethod, setPayoutMethod] = useState<'mastercard' | 'zain_cash' | 'mobile_credit'>('mastercard');
@@ -154,6 +158,16 @@ ${dashboardUrl}`;
       return;
     }
 
+    const pinError = validatePinFormat(loginPin);
+    if (pinError) {
+      setErrorMsg(pinError);
+      return;
+    }
+    if (loginPin !== confirmLoginPin) {
+      setErrorMsg('تأكيد رمز الدخول غير متطابق');
+      return;
+    }
+
     // التحقق من طريقة استلام الأرباح
     if (payoutMethod === 'mastercard') {
       if (!mastercardNumber.trim()) {
@@ -203,6 +217,7 @@ ${dashboardUrl}`;
           city,
           payoutMethod,
           payoutDetails: payoutDetailsObj,
+          loginPin: loginPin.trim(),
         }),
       });
 
@@ -340,6 +355,46 @@ ${dashboardUrl}`;
                   onChange={(e) => setPhone(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm text-right outline-none transition-all"
                 />
+              </div>
+
+              {/* رمز الدخول لحماية حساب التاجر */}
+              <div className="rounded-2xl border border-brand-100 bg-brand-50/40 p-4 space-y-3">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-800 mb-1.5 flex items-center gap-1.5">
+                    <KeyRound className="w-4 h-4 text-brand-700" />
+                    <span>رمز الدخول لحسابك</span>
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">
+                    هذا الرمز يحمي صفحة التاجر. احفظه جيداً وستحتاجه عند كل دخول.
+                  </p>
+                  <input
+                    type="password"
+                    required
+                    minLength={4}
+                    placeholder="4 خانات على الأقل"
+                    value={loginPin}
+                    onChange={(e) => setLoginPin(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm outline-none transition-all bg-white"
+                  />
+                  <PinStrengthMeter pin={loginPin} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-800 mb-1.5 flex items-center gap-1.5">
+                    <Lock className="w-4 h-4 text-brand-700" />
+                    <span>تأكيد رمز الدخول</span>
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={4}
+                    placeholder="أعد كتابة رمز الدخول"
+                    value={confirmLoginPin}
+                    onChange={(e) => setConfirmLoginPin(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm outline-none transition-all bg-white"
+                  />
+                </div>
               </div>
 
               {/* اختيار المحافظة من بين 18 محافظة */}
