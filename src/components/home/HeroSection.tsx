@@ -40,18 +40,18 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             {/* وسم ترحيبي مميز */}
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-skybrand-50 border border-skybrand-200 text-skybrand-800 text-xs font-semibold shadow-sm">
               <span className="w-2 h-2 rounded-full bg-skybrand-500 animate-ping" />
-              <span>المنصة الرائدة للتسوق والتوصيل في عموم العراق</span>
+              <span>منصة التجارة الذكية والدروب شيبينغ في عموم العراق</span>
             </div>
 
             {/* العنوان الرئيسي العريض */}
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-[1.25] sm:leading-[1.2]">
-              تسوق من متاجرك المفضلة <br className="hidden sm:inline" />
-              وطلبك <span className="text-transparent bg-clip-text bg-gradient-to-l from-brand-700 via-skybrand-600 to-skybrand-500">«يوصلك بأسرع وقت»</span> لباب بيتك
+              أنشئ متجرك وابدأ البيع <br className="hidden sm:inline" />
+              بدون رأس مال و<span className="text-transparent bg-clip-text bg-gradient-to-l from-brand-700 via-skybrand-600 to-skybrand-500">اترك الشحن علينا</span>
             </h1>
 
             {/* الوصف التوضيحي البسيط */}
             <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl font-normal">
-              من أشهى المأكولات والمطاعم والمنتجات المحلية، إلى أحدث الإلكترونيات والاحتياجات اليومية. كل ما تريده يصلك طازجاً، دافئاً، وبأقل تكلفة توصيل لكافة محافظات العراق.
+              وصلي تمكّنك من امتلاك متجر إلكتروني خاص باسمك، تبيع فيه المنتجات بأسعارك، بينما نتولى نحن التخزين والتغليف والتوصيل والتحصيل في كافة محافظات العراق.
             </p>
 
             {/* شريط الإجراءات والبحث الفوري */}
@@ -66,10 +66,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               </a>
 
               <a
-                href="#stores"
+                href="/#how-it-works"
                 className="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-white hover:bg-slate-50 text-slate-800 font-bold text-sm border border-slate-200/90 shadow-sm hover:border-slate-300 transition-all duration-200"
               >
-                <span>تصفح المتاجر والمنتجات</span>
+                <span>كيف تعمل المنصة؟</span>
               </a>
             </div>
 

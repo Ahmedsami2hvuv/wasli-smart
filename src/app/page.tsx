@@ -623,7 +623,7 @@ export default function HomePage() {
             </div>
             <div>
               <span className="text-sm font-black text-white">منصة وصلي سمارت</span>
-              <p className="text-[11px] text-slate-500">التجارة والتسويق الذكي لأبناء العراق</p>
+              <p className="text-[11px] text-slate-500">التجارة الذكية والدروب شيبينغ لأبناء العراق</p>
             </div>
           </div>
 

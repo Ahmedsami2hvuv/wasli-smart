@@ -16,13 +16,13 @@ export const Footer: React.FC = () => {
               <div>
                 <span className="text-2xl font-black text-white tracking-tight">وصلي</span>
                 <span className="block text-[10px] font-bold text-skybrand-400 -mt-1 tracking-wider">
-                  منصة التسوق والتوصيل العراقية
+                  منصة التجارة الذكية والدروب شيبينغ
                 </span>
               </div>
             </div>
 
             <p className="text-sm text-slate-400 leading-relaxed max-w-sm">
-              «وصلي» منصة عراقية صُممت لتقريب المسافات وربط الزبائن بأفضل المتاجر المحلية والمطاعم والمنتجات في عموم العراق، لتجربة شراء سهلة وسريعة وموثوقة.
+              «وصلي» منصة عراقية تمكّن الشباب من امتلاك متاجرهم الخاصة والبيع بدون رأس مال، بينما تتولى المنصة التخزين والشحن والتحصيل في كافة محافظات العراق.
             </p>
 
             <div className="flex items-center gap-3 pt-2">
@@ -37,30 +37,27 @@ export const Footer: React.FC = () => {
             </div>
           </div>
 
-          {/* العمود الثاني: أقسام التوصيل */}
+          {/* العمود الثاني: مسارات التاجر */}
           <div className="space-y-3">
-            <h4 className="text-white text-sm font-bold tracking-wide uppercase">أقسام التسوق</h4>
+            <h4 className="text-white text-sm font-bold tracking-wide uppercase">للتاجر</h4>
             <ul className="space-y-2 text-xs">
               <li>
-                <a href="#stores" className="hover:text-skybrand-400 transition-colors flex items-center justify-between">
-                  <span>المتاجر الأكثر طلباً</span>
-                  <span className="text-[10px] bg-brand-900/80 text-skybrand-300 px-1.5 py-0.5 rounded">مميز</span>
+                <a href="/register-store" className="hover:text-skybrand-400 transition-colors flex items-center justify-between">
+                  <span>إنشاء متجر مجاناً</span>
+                  <span className="text-[10px] bg-brand-900/80 text-skybrand-300 px-1.5 py-0.5 rounded">مجاني</span>
                 </a>
               </li>
               <li>
-                <a href="#stores" className="hover:text-skybrand-400 transition-colors">مطاعم ومأكولات شرقية</a>
+                <a href="/merchant" className="hover:text-skybrand-400 transition-colors">صفحة التاجر</a>
               </li>
               <li>
-                <a href="#stores" className="hover:text-skybrand-400 transition-colors">حلويات وكليجة عراقية</a>
+                <a href="/#how-it-works" className="hover:text-skybrand-400 transition-colors">كيف تعمل المنصة؟</a>
               </li>
               <li>
-                <a href="#stores" className="hover:text-skybrand-400 transition-colors">سوبرماركت وتموينات</a>
+                <a href="/#profit-calculator" className="hover:text-skybrand-400 transition-colors">حاسبة الأرباح</a>
               </li>
               <li>
-                <a href="#stores" className="hover:text-skybrand-400 transition-colors">صيدليات ومستلزمات صحية</a>
-              </li>
-              <li>
-                <a href="#stores" className="hover:text-skybrand-400 transition-colors">عطور وبخور عراقي</a>
+                <a href="/#faq" className="hover:text-skybrand-400 transition-colors">الأسئلة الشائعة</a>
               </li>
             </ul>
           </div>
@@ -92,18 +89,18 @@ export const Footer: React.FC = () => {
             </ul>
           </div>
 
-          {/* العمود الرابع: انضمام الشركاء والمتاجر */}
+          {/* العمود الرابع: انضمام التجار */}
           <div className="space-y-3">
-            <h4 className="text-white text-sm font-bold tracking-wide uppercase">أصحاب المتاجر</h4>
+            <h4 className="text-white text-sm font-bold tracking-wide uppercase">ابدأ كـ تاجر</h4>
             <p className="text-xs text-slate-400 leading-relaxed">
-              هل تمتلك متجراً، مطعماً، أو منتجات مميزة في العراق؟ انضم لعائلة «وصلي» وزد مبيعاتك وأرباحك اليوم.
+              أنشئ متجرك الخاص بدون رأس مال، حدد أسعار البيع، واترك التخزين والشحن والتحصيل على منصة وصلي.
             </p>
             <div className="pt-2">
               <a
                 href="/register-store"
                 className="inline-flex items-center gap-1.5 text-xs font-bold text-accent-400 hover:text-accent-300 transition-colors group"
               >
-                <span>سجل متجرك الآن مجاناً</span>
+                <span>سجّل متجرك الآن مجاناً</span>
                 <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
               </a>
             </div>

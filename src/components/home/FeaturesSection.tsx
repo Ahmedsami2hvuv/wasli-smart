@@ -26,13 +26,13 @@ export const FeaturesSection: React.FC = () => {
         
         <div className="text-center max-w-2xl mx-auto mb-10 space-y-2">
           <span className="text-xs font-bold text-skybrand-600 uppercase tracking-wider bg-skybrand-50 px-3 py-1 rounded-full border border-skybrand-100">
-            لماذا يفضل أهل البصرة «وصلي»؟
+            لماذا يختار التجار «وصلي»؟
           </span>
           <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-            تجربة تسوق وتوصيل صُممت خصيصاً لأجلك
+            كل ما تحتاجه للبيع أونلاين بدون رأس مال
           </h2>
           <p className="text-xs sm:text-sm text-slate-500">
-            نهتم بكل تفصيلة، من لحظة اختيارك للمنتج وحتى وصول المندوب لبابك بابتسامة وعناية فائقة.
+            من إنشاء المتجر وضبط الأسعار، إلى التخزين والشحن والتحصيل — منصة واحدة تدعم تجارتك في كل العراق.
           </p>
         </div>
 

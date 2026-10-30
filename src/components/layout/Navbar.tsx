@@ -49,7 +49,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="bg-gradient-to-r from-brand-800 via-brand-700 to-skybrand-600 text-white text-xs py-1.5 px-4 text-center font-medium shadow-sm">
         <div className="max-w-7xl mx-auto flex items-center justify-center gap-2">
           <Sparkles className="w-3.5 h-3.5 text-accent-400 shrink-0" />
-          <span>أهلاً بكم في منصة وصلي | خدمة التوصيل الأسرع والتجارة الذكية في عموم العراق</span>
+          <span>أهلاً بكم في منصة وصلي | التجارة الذكية والدروب شيبينغ بدون رأس مال في عموم العراق</span>
         </div>
       </div>
 
