@@ -23,6 +23,7 @@ export default function RegisterStorePage() {
   const [telegramOpened, setTelegramOpened] = useState(false);
   const [loginPin, setLoginPin] = useState('');
   const [confirmLoginPin, setConfirmLoginPin] = useState('');
+  const [phoneExists, setPhoneExists] = useState(false);
 
   // حالات طريقة استلام الأرباح
   const [payoutMethod, setPayoutMethod] = useState<'mastercard' | 'zain_cash' | 'mobile_credit'>('mastercard');
@@ -142,6 +143,7 @@ ${dashboardUrl}`;
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+    setPhoneExists(false);
 
     if (!ownerName.trim()) {
       setErrorMsg('يرجى كتابة اسمك الثلاثي');
@@ -245,9 +247,11 @@ ${dashboardUrl}`;
           } catch (e) {}
         }
       } else {
+        setPhoneExists(Boolean(data.phoneExists || data.code === 'PHONE_EXISTS'));
         setErrorMsg(data.message || 'حدث خطأ أثناء إنشاء المتجر');
       }
     } catch (err: any) {
+      setPhoneExists(false);
       setErrorMsg('تعذر الاتصال بالخادم، يرجى المحاولة ثانية');
     } finally {
       setIsLoading(false);
@@ -298,8 +302,30 @@ ${dashboardUrl}`;
             </div>
 
             {errorMsg && (
-              <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium text-center">
-                {errorMsg}
+              <div
+                className={`mb-6 p-4 rounded-xl border text-sm font-medium text-right space-y-3 ${
+                  phoneExists
+                    ? 'bg-amber-50 border-amber-200 text-amber-950'
+                    : 'bg-red-50 border-red-200 text-red-700 text-center'
+                }`}
+              >
+                <p className="leading-relaxed">{errorMsg}</p>
+                {phoneExists && (
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Link
+                      href="/merchant"
+                      className="flex-1 min-h-[44px] py-2.5 px-4 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-xs font-black text-center flex items-center justify-center"
+                    >
+                      دخول حسابي الحالي
+                    </Link>
+                    <Link
+                      href={`/merchant?recover=1&phone=${encodeURIComponent(phone.trim())}`}
+                      className="flex-1 min-h-[44px] py-2.5 px-4 rounded-xl border border-amber-300 bg-white hover:bg-amber-100/60 text-amber-950 text-xs font-bold text-center flex items-center justify-center"
+                    >
+                      نسيت رمز الدخول؟
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
 

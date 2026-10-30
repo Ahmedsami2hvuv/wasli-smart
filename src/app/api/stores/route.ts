@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllStores, createNewStore, updateStore, deleteStore } from '@/lib/services/storeService';
+import { getAllStores, createNewStore, updateStore, deleteStore, findStoreByPhone } from '@/lib/services/storeService';
+import { normalizeIraqiPhone } from '@/lib/merchantAuth';
 
 export async function GET() {
   try {
@@ -19,10 +20,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: 'اسم المتجر ورقم الهاتف مطلوبان' }, { status: 400 });
     }
 
+    if (!normalizeIraqiPhone(phone)) {
+      return NextResponse.json({ success: false, message: 'يرجى إدخال رقم هاتف عراقي صحيح' }, { status: 400 });
+    }
+
     if (!loginPin || String(loginPin).trim().length < 4) {
       return NextResponse.json(
         { success: false, message: 'يرجى إنشاء رمز دخول من 4 خانات على الأقل لحماية حسابك' },
         { status: 400 }
+      );
+    }
+
+    // منع إنشاء حساب جديد برقم هاتف مسجّل مسبقاً
+    const existingByPhone = await findStoreByPhone(phone.trim());
+    if (existingByPhone) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'PHONE_EXISTS',
+          phoneExists: true,
+          message:
+            'هذا الرقم مسجّل مسبقاً ولديه حساب تاجر. سجّل الدخول برقمك ورمز الدخول، أو استخدم خيار نسيت رمز الدخول إذا نسيته.',
+          existingStoreName: existingByPhone.name,
+        },
+        { status: 409 }
       );
     }
 

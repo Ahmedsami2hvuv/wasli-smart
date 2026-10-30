@@ -23,6 +23,8 @@ interface MerchantAuthFormProps {
   onSuccess: (store: StoreType) => void;
   showRegisterLink?: boolean;
   compact?: boolean;
+  initialMode?: Mode;
+  initialPhone?: string;
 }
 
 const HELP_UNLOCK_SECONDS = 300;
@@ -30,9 +32,11 @@ const HELP_UNLOCK_SECONDS = 300;
 export default function MerchantAuthForm({
   onSuccess,
   showRegisterLink = true,
+  initialMode = 'login',
+  initialPhone = '',
 }: MerchantAuthFormProps) {
-  const [mode, setMode] = useState<Mode>('login');
-  const [phone, setPhone] = useState('');
+  const [mode, setMode] = useState<Mode>(initialMode);
+  const [phone, setPhone] = useState(initialPhone);
   const [pin, setPin] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [newPin, setNewPin] = useState('');

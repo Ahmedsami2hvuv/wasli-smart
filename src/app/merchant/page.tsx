@@ -896,7 +896,12 @@ interface MerchantEditFormState {
         <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-10 shadow-xl border border-slate-200/80">
           <MerchantAuthHeader />
           <div className="mt-6">
-            <MerchantAuthForm onSuccess={handleAuthSuccess} showRegisterLink />
+            <MerchantAuthForm
+              onSuccess={handleAuthSuccess}
+              showRegisterLink
+              initialMode={searchParams.get('recover') === '1' ? 'recover-phone' : 'login'}
+              initialPhone={searchParams.get('phone') || ''}
+            />
           </div>
           <div className="pt-4 text-center">
             <Link href="/" className="text-xs text-slate-400 hover:text-slate-600">
