@@ -1,12 +1,47 @@
 export type PinStrength = 'weak' | 'medium' | 'strong';
 
+/** تحويل الأرقام العربية/الفارسية إلى إنجليزية قبل أي مقارنة */
+export function toEnglishDigits(input: string): string {
+  return String(input || '')
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - '٠'.charCodeAt(0)))
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - '۰'.charCodeAt(0)));
+}
+
 export function normalizeIraqiPhone(input: string): string {
-  const digits = String(input || '').replace(/\D/g, '');
+  const digits = toEnglishDigits(input).replace(/\D/g, '');
   if (!digits) return '';
   if (digits.startsWith('964')) return digits;
   if (digits.startsWith('0')) return `964${digits.slice(1)}`;
   if (digits.startsWith('7') && digits.length === 10) return `964${digits}`;
   return digits;
+}
+
+/** الصيغة المحلية المعتمدة للتخزين: 07XXXXXXXXX */
+export function toIraqiLocalPhone(input: string): string {
+  const normalized = normalizeIraqiPhone(input);
+  if (!normalized) return '';
+  if (normalized.startsWith('964') && normalized.length >= 13) {
+    return `0${normalized.slice(3)}`;
+  }
+  if (normalized.startsWith('7') && normalized.length === 10) {
+    return `0${normalized}`;
+  }
+  return toEnglishDigits(input).replace(/\D/g, '');
+}
+
+export function getPhoneLookupVariants(input: string): string[] {
+  const local = toIraqiLocalPhone(input);
+  const normalized = normalizeIraqiPhone(input);
+  const raw = toEnglishDigits(input).replace(/\D/g, '');
+  const variants = [
+    input.trim(),
+    raw,
+    local,
+    normalized,
+    normalized ? `+${normalized}` : '',
+    normalized.startsWith('964') ? normalized.slice(3) : '',
+  ].filter(Boolean);
+  return Array.from(new Set(variants));
 }
 
 export function phonesMatch(a?: string | null, b?: string | null): boolean {

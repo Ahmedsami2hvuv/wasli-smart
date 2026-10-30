@@ -3,7 +3,13 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { supabaseAdmin, isSupabaseAdminConfigured } from '@/lib/supabase/admin';
 import { mockStores } from '@/data/mockData';
 import { getAllProducts } from '@/lib/services/productService';
-import { generateRecoveryToken, hashSecret, phonesMatch } from '@/lib/merchantAuth';
+import {
+  generateRecoveryToken,
+  getPhoneLookupVariants,
+  hashSecret,
+  phonesMatch,
+  toIraqiLocalPhone,
+} from '@/lib/merchantAuth';
 import fs from 'fs';
 import path from 'path';
 
@@ -198,6 +204,7 @@ export async function createNewStore(params: {
     .replace(/^-+|-+$/g, '');
   const slug = `${baseSlug}-${code.replace('w-', '')}`;
   const loginPinHash = params.loginPin ? hashSecret(params.loginPin.trim()) : undefined;
+  const normalizedPhone = toIraqiLocalPhone(params.phone) || params.phone.trim();
 
   const newStore: Store = {
     id: `store-${Date.now()}`,
@@ -207,7 +214,7 @@ export async function createNewStore(params: {
     code: code,
     description: params.description || `متجر ${params.name} الإلكتروني للتسوق المباشر والتوصيل السريع والدفع عند الاستلام`,
     city: params.city || 'العراق',
-    phone: params.phone,
+    phone: normalizedPhone,
     payoutMethod: params.payoutMethod,
     payoutDetails: params.payoutDetails,
     hasLoginPin: Boolean(loginPinHash),
@@ -258,10 +265,13 @@ export async function createNewStore(params: {
       if (!error && data) {
         newStore.id = data.id;
       } else if (error) {
-        console.warn('تنبيه سوبابيس عند إنشاء متجر:', error.message);
+        console.error('فشل حفظ المتجر في سوبابيس:', error.message);
+        throw new Error('تعذر حفظ المتجر في قاعدة البيانات. يرجى المحاولة مرة أخرى.');
       }
-    } catch (e) {
-      console.warn('تم حفظ المتجر في الذاكرة الحالية:', e);
+    } catch (e: any) {
+      if (e?.message?.includes('تعذر حفظ المتجر')) throw e;
+      console.error('خطأ أثناء إنشاء المتجر في سوبابيس:', e);
+      throw new Error('تعذر حفظ المتجر في قاعدة البيانات. يرجى المحاولة مرة أخرى.');
     }
   }
 
@@ -526,8 +536,50 @@ async function patchStoreAuthSettings(store: Store, patch: StoreAuthSettings & R
 }
 
 export async function findStoreByPhone(phone: string): Promise<Store | null> {
+  const variants = getPhoneLookupVariants(phone);
+  if (variants.length === 0) return null;
+
+  const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+
+  // 1) بحث مباشر في سوبابيس بكل صيغ الرقم المحتملة
+  if (activeSupabase) {
+    try {
+      const orFilter = variants
+        .map((v) => `phone.eq.${v.replace(/,/g, '')}`)
+        .join(',');
+
+      const { data, error } = await activeSupabase
+        .from('stores')
+        .select('*')
+        .or(orFilter)
+        .limit(20);
+
+      if (!error && data && data.length > 0) {
+        const matched = data.find((row) => phonesMatch(row.phone, phone));
+        if (matched) return sanitizeStoreForClient(mapDbStoreToStore(matched));
+        return sanitizeStoreForClient(mapDbStoreToStore(data[0]));
+      }
+
+      // 2) مسح أوسع: جلب أرقام الهواتف ومطابقتها بآخر 10 أرقام
+      const { data: phoneRows, error: phoneErr } = await activeSupabase
+        .from('stores')
+        .select('*')
+        .not('phone', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(2000);
+
+      if (!phoneErr && phoneRows && phoneRows.length > 0) {
+        const matched = phoneRows.find((row) => phonesMatch(row.phone, phone));
+        if (matched) return sanitizeStoreForClient(mapDbStoreToStore(matched));
+      }
+    } catch (e) {
+      console.warn('تعذر البحث عن المتجر بالهاتف عبر سوبابيس:', e);
+    }
+  }
+
+  // 3) بديل محلي / كاش
   const stores = await getAllStores();
-  return stores.find(s => phonesMatch(s.phone, phone)) || null;
+  return stores.find((s) => phonesMatch(s.phone, phone)) || null;
 }
 
 export async function verifyStoreLoginPin(store: Store, pin: string): Promise<boolean> {

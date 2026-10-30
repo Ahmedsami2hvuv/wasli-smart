@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllStores, createNewStore, updateStore, deleteStore, findStoreByPhone } from '@/lib/services/storeService';
-import { normalizeIraqiPhone } from '@/lib/merchantAuth';
+import { normalizeIraqiPhone, toIraqiLocalPhone } from '@/lib/merchantAuth';
 
 export async function GET() {
   try {
@@ -20,7 +20,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: 'اسم المتجر ورقم الهاتف مطلوبان' }, { status: 400 });
     }
 
-    if (!normalizeIraqiPhone(phone)) {
+    const normalizedPhone = toIraqiLocalPhone(phone);
+    if (!normalizedPhone || !normalizeIraqiPhone(phone) || normalizedPhone.length < 11) {
       return NextResponse.json({ success: false, message: 'يرجى إدخال رقم هاتف عراقي صحيح' }, { status: 400 });
     }
 
@@ -31,8 +32,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // منع إنشاء حساب جديد برقم هاتف مسجّل مسبقاً
-    const existingByPhone = await findStoreByPhone(phone.trim());
+    // منع إنشاء حساب جديد برقم هاتف مسجّل مسبقاً (بكل صيغ الرقم)
+    const existingByPhone = await findStoreByPhone(normalizedPhone);
     if (existingByPhone) {
       return NextResponse.json(
         {
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
     const store = await createNewStore({
       name: name.trim(),
       ownerName: ownerName?.trim() || '',
-      phone: phone.trim(),
+      phone: normalizedPhone,
       city: city?.trim() || 'البصرة',
       description: description?.trim() || '',
       payoutMethod,
