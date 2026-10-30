@@ -2550,14 +2550,14 @@ interface MerchantEditFormState {
                 />
               </div>
 
-              {/* قسم تعديل طريقة استلام الأرباح */}
-              <div className="pt-4 border-t border-slate-200">
+              {/* قسم تعديل طريقة استلام الأرباح — يُطلب عند السحب وليس عند التسجيل */}
+              <div id="merchant-payout-section" className="pt-4 border-t border-slate-200">
                 <label className="block text-xs font-bold text-slate-900 mb-1 flex items-center gap-1.5">
                   <CreditCard className="w-4 h-4 text-brand-700" />
-                  <span>طريقة استلام الأرباح</span>
+                  <span>وسيلة سحب الأرباح</span>
                 </label>
                 <p className="text-[11px] text-slate-500 mb-3">
-                  حدد الحساب أو الوسيلة التي ترغب باستلام أرباح مبيعاتك عليها
+                  عبّئها عندما تريد سحب أرباحك: زين كاش أو ماستر كارت أو رقم لتحويل رصيد اتصال.
                 </p>
 
                 {/* أزرار اختيار الوسيلة */}
@@ -2958,7 +2958,7 @@ interface MerchantEditFormState {
                   </div>
 
                   {/* الأرباح المستحقة */}
-                  <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200">
+                  <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200 space-y-3">
                     <div className="text-xs font-bold text-emerald-800 mb-1 flex items-center justify-between">
                       <span>الأرباح المستحقة:</span>
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -2966,9 +2966,32 @@ interface MerchantEditFormState {
                     <div className="text-2xl font-black text-emerald-600 font-mono">
                       {earnedProfits.toLocaleString('ar-IQ')} <span className="text-xs font-normal text-emerald-800">د.ع</span>
                     </div>
-                    <div className="text-[11px] text-emerald-700 font-medium mt-1">
+                    <div className="text-[11px] text-emerald-700 font-medium">
                       جاهزة للسحب بعد تسليم الطلب للزبون
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSidebarDrawerOpen(false);
+                        openEditModal();
+                        setTimeout(() => {
+                          document.getElementById('merchant-payout-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 200);
+                      }}
+                      className="w-full min-h-[44px] py-2.5 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Wallet className="w-3.5 h-3.5" />
+                      <span>
+                        {currentStore?.payoutMethod
+                          ? 'طلب سحب الأرباح / تعديل وسيلة التحويل'
+                          : 'تحديد وسيلة السحب لسحب الأرباح'}
+                      </span>
+                    </button>
+                    {!currentStore?.payoutMethod && (
+                      <p className="text-[10px] text-emerald-800/80 leading-relaxed">
+                        عند أول سحب نطلب منك زين كاش أو ماستر كارت أو رقم لتحويل رصيد.
+                      </p>
+                    )}
                   </div>
 
                   {/* الأرباح المتوقعة */}
@@ -3096,8 +3119,23 @@ interface MerchantEditFormState {
                       </div>
                     )}
                     {!currentStore?.payoutMethod && (
-                      <div className="text-center py-2 text-slate-500 text-xs">
-                        لم تحدد وسيلة سحب أرباحك بعد
+                      <div className="text-center py-2 space-y-2">
+                        <p className="text-slate-500 text-xs leading-relaxed">
+                          لم تحدد وسيلة سحب بعد. أضفها عندما تصير عندك أرباح وتريد سحبها.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsSidebarDrawerOpen(false);
+                            openEditModal();
+                            setTimeout(() => {
+                              document.getElementById('merchant-payout-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }, 200);
+                          }}
+                          className="text-xs font-bold text-brand-700 hover:underline cursor-pointer"
+                        >
+                          إضافة وسيلة السحب الآن
+                        </button>
                       </div>
                     )}
                   </div>
