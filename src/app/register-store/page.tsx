@@ -2,16 +2,19 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Store, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Share2, User, Phone, MapPin, Copy, Check, Lock, ExternalLink, Bell, KeyRound } from 'lucide-react';
+import { Store, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Share2, User, Phone, MapPin, Copy, Check, Lock, ExternalLink, Bell, KeyRound, LogIn } from 'lucide-react';
 import Link from 'next/link';
 import { IRAQ_GOVERNORATES } from '@/data/iraqCities';
 import PinStrengthMeter from '@/components/merchant/PinStrengthMeter';
+import MerchantAuthForm from '@/components/merchant/MerchantAuthForm';
 import { validatePinFormat } from '@/lib/merchantAuthShared';
+import type { Store as StoreType } from '@/types';
 
 const ORDERS_BOT_USERNAME = 'wasliasharatbot';
 
 export default function RegisterStorePage() {
   const router = useRouter();
+  const [pageMode, setPageMode] = useState<'register' | 'login'>('register');
   const [ownerName, setOwnerName] = useState('');
   const [storeName, setStoreName] = useState('');
   const [phone, setPhone] = useState('');
@@ -24,6 +27,13 @@ export default function RegisterStorePage() {
   const [loginPin, setLoginPin] = useState('');
   const [confirmLoginPin, setConfirmLoginPin] = useState('');
   const [phoneExists, setPhoneExists] = useState(false);
+
+  const handleExistingLoginSuccess = (store: StoreType) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('wasli_current_store', JSON.stringify({ ...store, authOk: true }));
+    }
+    router.push(`/merchant?storeCode=${store.code}`);
+  };
 
   // توليد النص الكامل الشامل لمعلومات المتجر للحفظ والمشاركة
   const getFullStoreInfoText = () => {
@@ -213,18 +223,72 @@ ${dashboardUrl}`;
         {!createdStore ? (
           <div className="bg-white rounded-3xl p-6 sm:p-10 shadow-xl border border-slate-200/80">
             {/* الهيدر */}
-            <div className="text-center mb-8">
+            <div className="text-center mb-6">
               <div className="w-16 h-16 bg-gradient-to-tr from-brand-700 to-skybrand-500 rounded-2xl flex items-center justify-center text-white mx-auto shadow-md shadow-brand-500/20 mb-4">
                 <Store className="w-8 h-8" />
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-2">
-                انضم كتاجر وأنشئ متجرك مجاناً
+                {pageMode === 'login' ? 'تسجيل دخول التاجر' : 'انضم كتاجر وأنشئ متجرك مجاناً'}
               </h1>
               <p className="text-slate-600 text-sm leading-relaxed max-w-md mx-auto">
-                كن تاجراً معتمداً، اختر منتجات المنصة، حدد سعر البيع الذي تريده، وابدأ بجني أرباحك فورياً بدون الحاجة لرأس مال أو شراء بضاعة مسبقاً!
+                {pageMode === 'login'
+                  ? 'أدخل رقم هاتفك ورمز الدخول لفتح صفحة التاجر ومتابعة مبيعاتك وأرباحك.'
+                  : 'كن تاجراً معتمداً، اختر منتجات المنصة، حدد سعر البيع الذي تريده، وابدأ بجني أرباحك فورياً بدون الحاجة لرأس مال أو شراء بضاعة مسبقاً!'}
               </p>
             </div>
 
+            {/* تبديل بين إنشاء حساب وتسجيل الدخول */}
+            <div className="grid grid-cols-2 gap-2 p-1.5 mb-6 rounded-2xl bg-slate-100 border border-slate-200/80">
+              <button
+                type="button"
+                onClick={() => {
+                  setPageMode('register');
+                  setErrorMsg('');
+                  setPhoneExists(false);
+                }}
+                className={`min-h-[44px] py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  pageMode === 'register'
+                    ? 'bg-white text-brand-800 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-800'
+                }`}
+              >
+                <Sparkles className={`w-3.5 h-3.5 ${pageMode === 'register' ? 'text-amber-500' : 'text-slate-400'}`} />
+                <span>إنشاء حساب</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPageMode('login');
+                  setErrorMsg('');
+                  setPhoneExists(false);
+                }}
+                className={`min-h-[44px] py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  pageMode === 'login'
+                    ? 'bg-white text-brand-800 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-800'
+                }`}
+              >
+                <LogIn className={`w-3.5 h-3.5 ${pageMode === 'login' ? 'text-sky-600' : 'text-slate-400'}`} />
+                <span>تسجيل الدخول</span>
+              </button>
+            </div>
+
+            {pageMode === 'login' ? (
+              <div className="space-y-2">
+                <MerchantAuthForm
+                  onSuccess={handleExistingLoginSuccess}
+                  showRegisterLink={false}
+                />
+                <button
+                  type="button"
+                  onClick={() => setPageMode('register')}
+                  className="w-full text-xs font-bold text-brand-700 hover:text-brand-800 py-2 cursor-pointer"
+                >
+                  ما عندك حساب؟ أنشئ متجرك مجاناً
+                </button>
+              </div>
+            ) : (
+              <>
             {/* الميزات السريعة */}
             <div className="grid grid-cols-3 gap-2 mb-8 bg-slate-50 p-3 rounded-2xl border border-slate-200/60 text-center text-xs">
               <div className="flex flex-col items-center gap-1 p-2">
@@ -406,7 +470,18 @@ ${dashboardUrl}`;
                   </>
                 )}
               </button>
+
+              <button
+                type="button"
+                onClick={() => setPageMode('login')}
+                className="w-full text-xs font-bold text-sky-700 hover:text-sky-800 py-2 cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>عندك حساب مسبقاً؟ سجّل الدخول من هنا</span>
+              </button>
             </form>
+              </>
+            )}
           </div>
         ) : (
           /* شاشة نجاح إنشاء المتجر */
