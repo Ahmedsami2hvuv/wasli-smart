@@ -4,7 +4,7 @@ import {
   generateOtpCode,
   getAdminTelegramLink,
   getAdminWhatsAppLink,
-  normalizeIraqiPhone,
+  getIraqiPhoneValidationMessage,
   toWhatsAppNumber,
 } from '@/lib/merchantAuth';
 import {
@@ -20,11 +20,11 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const phone = String(body.phone || '').trim();
-    const normalized = normalizeIraqiPhone(phone);
+    const phoneError = getIraqiPhoneValidationMessage(phone);
 
-    if (!normalized || normalized.length < 11) {
+    if (phoneError) {
       return NextResponse.json(
-        { success: false, message: 'يرجى إدخال رقم هاتف عراقي صحيح' },
+        { success: false, message: phoneError },
         { status: 400 }
       );
     }

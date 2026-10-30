@@ -14,7 +14,11 @@ import {
 } from 'lucide-react';
 import PinStrengthMeter from '@/components/merchant/PinStrengthMeter';
 import PasswordInput from '@/components/merchant/PasswordInput';
-import { buildMerchantHelpMessage, validatePinFormat } from '@/lib/merchantAuthShared';
+import {
+  buildMerchantHelpMessage,
+  getIraqiPhoneValidationMessage,
+  validatePinFormat,
+} from '@/lib/merchantAuthShared';
 import type { Store as StoreType } from '@/types';
 
 type Mode = 'login' | 'recover-phone' | 'recover-wait' | 'recover-otp' | 'set-pin';
@@ -79,6 +83,11 @@ export default function MerchantAuthForm({
       setErrorMessage('أدخل رقم الهاتف ورمز الدخول');
       return;
     }
+    const loginPhoneError = getIraqiPhoneValidationMessage(phone);
+    if (loginPhoneError) {
+      setErrorMessage(loginPhoneError);
+      return;
+    }
     setIsLoading(true);
     try {
       const res = await fetch('/api/merchant/auth/login', {
@@ -107,6 +116,11 @@ export default function MerchantAuthForm({
     resetMessages();
     if (!phone.trim()) {
       setErrorMessage('أدخل رقم هاتفك المسجّل');
+      return;
+    }
+    const recoverPhoneError = getIraqiPhoneValidationMessage(phone);
+    if (recoverPhoneError) {
+      setErrorMessage(recoverPhoneError);
       return;
     }
     setIsLoading(true);
@@ -222,15 +236,19 @@ export default function MerchantAuthForm({
   return (
     <div className="space-y-4" dir="rtl">
       {mode === 'login' && (
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-4" autoComplete="off">
+          <input type="text" name="prevent_autofill_user" autoComplete="username" tabIndex={-1} aria-hidden="true" className="hidden" style={{ display: 'none' }} />
+          <input type="password" name="prevent_autofill_pass" autoComplete="current-password" tabIndex={-1} aria-hidden="true" className="hidden" style={{ display: 'none' }} />
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-2">رقم الهاتف المسجّل</label>
             <div className="relative">
               <input
                 type="tel"
+                inputMode="numeric"
+                maxLength={11}
                 value={phone}
                 onChange={(e) => {
-                  setPhone(e.target.value);
+                  setPhone(e.target.value.replace(/\D/g, '').slice(0, 11));
                   resetMessages();
                 }}
                 placeholder="07700000000"
@@ -241,18 +259,20 @@ export default function MerchantAuthForm({
                 <Phone className="w-4 h-4" />
               </div>
             </div>
+            <p className="text-[11px] text-slate-400 mt-1.5">11 رقماً يبدأ بـ 07 {phone ? `(${phone.length}/11)` : ''}</p>
           </div>
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-2">رمز الدخول</label>
             <PasswordInput
+              name="merchant_login_pin"
               value={pin}
               onChange={(value) => {
                 setPin(value);
                 resetMessages();
               }}
               placeholder="أدخل رمز الدخول"
-              autoComplete="current-password"
+              autoComplete="off"
             />
           </div>
 
@@ -309,12 +329,15 @@ export default function MerchantAuthForm({
             <label className="block text-xs font-bold text-slate-700 mb-2">رقم الهاتف</label>
             <input
               type="tel"
+              inputMode="numeric"
+              maxLength={11}
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))}
               placeholder="07700000000"
               className="w-full py-3 px-4 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 text-sm outline-none text-left"
               dir="ltr"
             />
+            <p className="text-[11px] text-slate-400 mt-1.5">11 رقماً يبدأ بـ 07 {phone ? `(${phone.length}/11)` : ''}</p>
           </div>
           {errorMessage && (
             <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex gap-2">
@@ -415,7 +438,9 @@ export default function MerchantAuthForm({
       )}
 
       {mode === 'set-pin' && (
-        <form onSubmit={handleSetPin} className="space-y-4">
+        <form onSubmit={handleSetPin} className="space-y-4" autoComplete="off">
+          <input type="text" name="prevent_autofill_user" autoComplete="username" tabIndex={-1} aria-hidden="true" className="hidden" style={{ display: 'none' }} />
+          <input type="password" name="prevent_autofill_pass" autoComplete="new-password" tabIndex={-1} aria-hidden="true" className="hidden" style={{ display: 'none' }} />
           <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-right">
             <p className="text-xs text-emerald-900 leading-relaxed font-semibold">
               تم التحقق من حسابك
@@ -425,20 +450,22 @@ export default function MerchantAuthForm({
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-2">رمز الدخول الجديد</label>
             <PasswordInput
+              name="merchant_reset_pin"
               value={newPin}
               onChange={setNewPin}
               placeholder="4 خانات على الأقل"
-              autoComplete="new-password"
+              autoComplete="off"
             />
             <PinStrengthMeter pin={newPin} />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-2">تأكيد رمز الدخول</label>
             <PasswordInput
+              name="merchant_reset_pin_confirm"
               value={confirmPin}
               onChange={setConfirmPin}
               placeholder="أعد كتابة الرمز"
-              autoComplete="new-password"
+              autoComplete="off"
             />
           </div>
           {errorMessage && (

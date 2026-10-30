@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { normalizeIraqiPhone } from '@/lib/merchantAuth';
 import {
   findStoreByPhone,
+  findStoresByPhone,
   getStoreBySlugOrCode,
   getAllStores,
   verifyStoreLoginPin,
@@ -25,34 +26,46 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const store = await findStoreByPhone(phone);
-      if (!store) {
+      // نبحث في كل المتاجر المرتبطة بالرقم (حتى لو صار تكرار بالخطأ)
+      // وندخل للحساب الذي يطابق رمز الدخول، مع تفضيل الحساب الأصلي
+      const matches = await findStoresByPhone(phone);
+      if (!matches.length) {
         return NextResponse.json(
           { success: false, message: 'رقم الهاتف أو رمز الدخول غير صحيح' },
           { status: 401 }
         );
       }
 
-      if (!store.hasLoginPin) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: 'لم يتم تعيين رمز دخول لهذا المتجر بعد. استخدم نسيت الرمز لإنشاء رمز جديد، أو ادخل برابط المتجر إن كان متاحاً.',
-            needsPinSetup: true,
-          },
-          { status: 403 }
-        );
+      let matchedStore = null as (typeof matches)[number] | null;
+      for (const candidate of matches) {
+        if (!candidate.hasLoginPin) continue;
+        const ok = await verifyStoreLoginPin(candidate, pin);
+        if (ok) {
+          matchedStore = candidate;
+          break;
+        }
       }
 
-      const ok = await verifyStoreLoginPin(store, pin);
-      if (!ok) {
+      // إن لم يوجد تطابق بالرمز، جرّب الحساب الأساسي فقط لرسالة أوضح
+      if (!matchedStore) {
+        const primary = (await findStoreByPhone(phone)) || matches[0];
+        if (!primary.hasLoginPin) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: 'لم يتم تعيين رمز دخول لهذا المتجر بعد. استخدم نسيت الرمز لإنشاء رمز جديد.',
+              needsPinSetup: true,
+            },
+            { status: 403 }
+          );
+        }
         return NextResponse.json(
           { success: false, message: 'رقم الهاتف أو رمز الدخول غير صحيح' },
           { status: 401 }
         );
       }
 
-      return NextResponse.json({ success: true, store });
+      return NextResponse.json({ success: true, store: matchedStore });
     }
 
     // توافق قديم: دخول بالكود/الرابط فقط للمتاجر بدون رمز دخول

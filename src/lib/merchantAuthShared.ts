@@ -29,6 +29,28 @@ export function toIraqiLocalPhone(input: string): string {
   return toEnglishDigits(input).replace(/\D/g, '');
 }
 
+/** رقم موبايل عراقي صالح: يبدأ بـ 07 وطوله 11 رقماً بالضبط */
+export function isValidIraqiMobilePhone(input: string): boolean {
+  const local = toIraqiLocalPhone(input);
+  return /^07[3-9]\d{8}$/.test(local);
+}
+
+export function getIraqiPhoneValidationMessage(input: string): string | null {
+  const rawDigits = toEnglishDigits(input).replace(/\D/g, '');
+  if (!rawDigits) return 'يرجى إدخال رقم هاتفك';
+  if (!isValidIraqiMobilePhone(input)) {
+    const local = toIraqiLocalPhone(input);
+    if (local && local.length < 11) {
+      return `رقم الهاتف ناقص. يجب أن يكون 11 رقماً ويبدأ بـ 07 (حالياً ${local.length} أرقام)`;
+    }
+    if (local && local.length > 11) {
+      return 'رقم الهاتف أطول من اللازم. يجب أن يكون 11 رقماً ويبدأ بـ 07';
+    }
+    return 'يرجى إدخال رقم موبايل عراقي صحيح من 11 رقماً يبدأ بـ 07';
+  }
+  return null;
+}
+
 export function getPhoneLookupVariants(input: string): string[] {
   const local = toIraqiLocalPhone(input);
   const normalized = normalizeIraqiPhone(input);

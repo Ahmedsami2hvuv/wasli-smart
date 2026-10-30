@@ -185,6 +185,15 @@ export async function getStoreBySlugOrCode(identifier: string): Promise<Store | 
 /**
  * إنشاء متجر جديد لصاحب المتجر (المسوّق)
  */
+export class PhoneAlreadyExistsError extends Error {
+  existingStore: Store;
+  constructor(existingStore: Store) {
+    super('PHONE_EXISTS');
+    this.name = 'PhoneAlreadyExistsError';
+    this.existingStore = existingStore;
+  }
+}
+
 export async function createNewStore(params: {
   name: string;
   phone: string;
@@ -205,6 +214,12 @@ export async function createNewStore(params: {
   const slug = `${baseSlug}-${code.replace('w-', '')}`;
   const loginPinHash = params.loginPin ? hashSecret(params.loginPin.trim()) : undefined;
   const normalizedPhone = toIraqiLocalPhone(params.phone) || params.phone.trim();
+
+  // حماية مزدوجة: لا يُسمح أبداً بإنشاء متجر برقم موجود
+  const existingByPhone = await findStoreByPhone(normalizedPhone);
+  if (existingByPhone) {
+    throw new PhoneAlreadyExistsError(existingByPhone);
+  }
 
   const newStore: Store = {
     id: `store-${Date.now()}`,
@@ -332,6 +347,20 @@ export async function updateStore(
 
   if (!targetStore) {
     return null;
+  }
+
+  // منع تحويل رقم الهاتف إلى رقم مستخدم في متجر آخر
+  if (updates.phone !== undefined) {
+    const nextPhone = toIraqiLocalPhone(updates.phone) || updates.phone.trim();
+    const phoneOwners = await findStoresByPhone(nextPhone);
+    const conflict = phoneOwners.find(
+      (s) => (s.id && targetStore.id && s.id !== targetStore.id) ||
+        (s.code && targetStore.code && s.code.toLowerCase() !== targetStore.code.toLowerCase())
+    );
+    if (conflict) {
+      throw new PhoneAlreadyExistsError(conflict);
+    }
+    updates.phone = nextPhone;
   }
 
   // دمج التحديثات
@@ -535,13 +564,29 @@ async function patchStoreAuthSettings(store: Store, patch: StoreAuthSettings & R
   saveAuthCache(cache);
 }
 
-export async function findStoreByPhone(phone: string): Promise<Store | null> {
+function pickPrimaryStoreByPhone(matches: Store[]): Store | null {
+  if (!matches.length) return null;
+
+  // الأقدم أولاً (الحساب الأصلي)، ومع تفضيل من لديه رمز دخول
+  const sorted = [...matches].sort((a, b) => {
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    if (aTime !== bTime) return aTime - bTime;
+    return 0;
+  });
+
+  const withPin = sorted.find((s) => s.hasLoginPin);
+  return withPin || sorted[0];
+}
+
+/** كل المتاجر المرتبطة بنفس رقم الهاتف (بما فيها المكررة بالخطأ) */
+export async function findStoresByPhone(phone: string): Promise<Store[]> {
   const variants = getPhoneLookupVariants(phone);
-  if (variants.length === 0) return null;
+  if (variants.length === 0) return [];
 
   const activeSupabase = (isSupabaseAdminConfigured && supabaseAdmin) ? supabaseAdmin : (isSupabaseConfigured ? supabase : null);
+  const matchedMap = new Map<string, Store>();
 
-  // 1) بحث مباشر في سوبابيس بكل صيغ الرقم المحتملة
   if (activeSupabase) {
     try {
       const orFilter = variants
@@ -552,34 +597,60 @@ export async function findStoreByPhone(phone: string): Promise<Store | null> {
         .from('stores')
         .select('*')
         .or(orFilter)
-        .limit(20);
+        .order('created_at', { ascending: true })
+        .limit(50);
 
-      if (!error && data && data.length > 0) {
-        const matched = data.find((row) => phonesMatch(row.phone, phone));
-        if (matched) return sanitizeStoreForClient(mapDbStoreToStore(matched));
-        return sanitizeStoreForClient(mapDbStoreToStore(data[0]));
+      if (!error && data) {
+        data.forEach((row) => {
+          if (phonesMatch(row.phone, phone)) {
+            const store = sanitizeStoreForClient(mapDbStoreToStore(row));
+            matchedMap.set(store.id || store.code || row.id, store);
+          }
+        });
       }
 
-      // 2) مسح أوسع: جلب أرقام الهواتف ومطابقتها بآخر 10 أرقام
-      const { data: phoneRows, error: phoneErr } = await activeSupabase
+      // مسح أوسع لضمان عدم تفويت صيغ أرقام مختلفة
+      const { data: phoneRows } = await activeSupabase
         .from('stores')
         .select('*')
         .not('phone', 'is', null)
-        .order('created_at', { ascending: false })
+        .order('created_at', { ascending: true })
         .limit(2000);
 
-      if (!phoneErr && phoneRows && phoneRows.length > 0) {
-        const matched = phoneRows.find((row) => phonesMatch(row.phone, phone));
-        if (matched) return sanitizeStoreForClient(mapDbStoreToStore(matched));
-      }
+      (phoneRows || []).forEach((row) => {
+        if (phonesMatch(row.phone, phone)) {
+          const store = sanitizeStoreForClient(mapDbStoreToStore(row));
+          matchedMap.set(store.id || store.code || row.id, store);
+        }
+      });
     } catch (e) {
-      console.warn('تعذر البحث عن المتجر بالهاتف عبر سوبابيس:', e);
+      console.warn('تعذر البحث عن المتاجر بالهاتف عبر سوبابيس:', e);
     }
   }
 
-  // 3) بديل محلي / كاش
-  const stores = await getAllStores();
-  return stores.find((s) => phonesMatch(s.phone, phone)) || null;
+  if (matchedMap.size === 0) {
+    const stores = await getAllStores();
+    stores.forEach((s) => {
+      if (phonesMatch(s.phone, phone)) {
+        matchedMap.set(s.id || s.code || '', s);
+      }
+    });
+  }
+
+  return Array.from(matchedMap.values()).sort((a, b) => {
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return aTime - bTime;
+  });
+}
+
+/**
+ * المتجر الأساسي لرقم الهاتف:
+ * عند وجود تكرار بالخطأ نختار الحساب الأصلي (الأقدم) ويفضَّل من لديه رمز دخول
+ */
+export async function findStoreByPhone(phone: string): Promise<Store | null> {
+  const matches = await findStoresByPhone(phone);
+  return pickPrimaryStoreByPhone(matches);
 }
 
 export async function verifyStoreLoginPin(store: Store, pin: string): Promise<boolean> {

@@ -2,13 +2,13 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Store, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Share2, User, Phone, MapPin, Copy, Check, Lock, ExternalLink, Bell, KeyRound, LogIn } from 'lucide-react';
+import { Store, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Share2, User, Phone, MapPin, Copy, Check, Lock, ExternalLink, Bell, KeyRound, LogIn, X, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { IRAQ_GOVERNORATES } from '@/data/iraqCities';
 import PinStrengthMeter from '@/components/merchant/PinStrengthMeter';
 import MerchantAuthForm from '@/components/merchant/MerchantAuthForm';
 import PasswordInput from '@/components/merchant/PasswordInput';
-import { validatePinFormat } from '@/lib/merchantAuthShared';
+import { getIraqiPhoneValidationMessage, validatePinFormat } from '@/lib/merchantAuthShared';
 import type { Store as StoreType } from '@/types';
 
 const ORDERS_BOT_USERNAME = 'wasliasharatbot';
@@ -19,7 +19,7 @@ export default function RegisterStorePage() {
   const [ownerName, setOwnerName] = useState('');
   const [storeName, setStoreName] = useState('');
   const [phone, setPhone] = useState('');
-  const [city, setCity] = useState('البصرة');
+  const [city, setCity] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [createdStore, setCreatedStore] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -28,6 +28,23 @@ export default function RegisterStorePage() {
   const [loginPin, setLoginPin] = useState('');
   const [confirmLoginPin, setConfirmLoginPin] = useState('');
   const [phoneExists, setPhoneExists] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{
+    ownerName?: string;
+    storeName?: string;
+    phone?: string;
+    loginPin?: string;
+    confirmLoginPin?: string;
+    city?: string;
+  }>({});
+
+  const clearFieldError = (key: keyof typeof fieldErrors) => {
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   const handleExistingLoginSuccess = (store: StoreType) => {
     if (typeof window !== 'undefined') {
@@ -134,30 +151,36 @@ ${dashboardUrl}`;
     setErrorMsg('');
     setPhoneExists(false);
 
+    const nextErrors: typeof fieldErrors = {};
+
     if (!ownerName.trim()) {
-      setErrorMsg('يرجى كتابة اسمك الثلاثي');
-      return;
+      nextErrors.ownerName = 'يرجى كتابة اسمك الثلاثي';
     }
-
     if (!storeName.trim()) {
-      setErrorMsg('يرجى كتابة اسم متجرك');
-      return;
+      nextErrors.storeName = 'يرجى كتابة اسم متجرك';
     }
-
     if (!phone.trim()) {
-      setErrorMsg('يرجى إدخال رقم هاتفك للتواصل');
-      return;
+      nextErrors.phone = 'يرجى إدخال رقم هاتفك للتواصل';
+    } else {
+      const phoneError = getIraqiPhoneValidationMessage(phone);
+      if (phoneError) nextErrors.phone = phoneError;
     }
 
     const pinError = validatePinFormat(loginPin);
     if (pinError) {
-      setErrorMsg(pinError);
-      return;
+      nextErrors.loginPin = pinError;
     }
-    if (loginPin !== confirmLoginPin) {
-      setErrorMsg('تأكيد رمز الدخول غير متطابق');
-      return;
+    if (!confirmLoginPin.trim()) {
+      nextErrors.confirmLoginPin = 'يرجى تأكيد رمز الدخول';
+    } else if (loginPin !== confirmLoginPin) {
+      nextErrors.confirmLoginPin = 'تأكيد رمز الدخول غير متطابق';
     }
+    if (!city.trim()) {
+      nextErrors.city = 'يرجى اختيار محافظتك';
+    }
+
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
 
     setIsLoading(true);
 
@@ -169,7 +192,7 @@ ${dashboardUrl}`;
           ownerName: ownerName.trim(),
           name: storeName.trim(),
           phone: phone.trim(),
-          city,
+          city: city.trim(),
           loginPin: loginPin.trim(),
         }),
       });
@@ -198,8 +221,17 @@ ${dashboardUrl}`;
           } catch (e) {}
         }
       } else {
-        setPhoneExists(Boolean(data.phoneExists || data.code === 'PHONE_EXISTS'));
-        setErrorMsg(data.message || 'حدث خطأ أثناء إنشاء المتجر');
+        const exists = Boolean(data.phoneExists || data.code === 'PHONE_EXISTS');
+        setPhoneExists(exists);
+        if (exists) {
+          setFieldErrors({ phone: 'هذا الرقم مسجّل مسبقاً' });
+          setErrorMsg(
+            data.message ||
+              'هذا الرقم مسجّل مسبقاً ولديه حساب تاجر. سجّل الدخول أو استخدم نسيت رمز الدخول.'
+          );
+        } else {
+          setErrorMsg(data.message || 'حدث خطأ أثناء إنشاء المتجر');
+        }
       }
     } catch (err: any) {
       setPhoneExists(false);
@@ -211,6 +243,73 @@ ${dashboardUrl}`;
 
   return (
     <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
+      {/* نافذة منبثقة: الرقم مسجّل مسبقاً */}
+      {phoneExists && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/55 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-amber-200/80 p-6 sm:p-7 text-right animate-in zoom-in-95 duration-200"
+            dir="rtl"
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setPhoneExists(false);
+                setErrorMsg('');
+              }}
+              className="absolute top-4 left-4 p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              title="إغلاق"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-7 h-7" />
+            </div>
+
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 text-center mb-2">
+              هذا الرقم مسجّل مسبقاً
+            </h3>
+            <p className="text-sm text-slate-600 leading-relaxed text-center mb-2">
+              {errorMsg || 'لديك حساب تاجر مرتبط بهذا الرقم. سجّل الدخول أو استرجع رمز الدخول.'}
+            </p>
+            {phone && (
+              <p className="text-center font-mono font-bold text-brand-800 bg-brand-50 border border-brand-100 rounded-xl py-2 px-3 mb-5" dir="ltr">
+                {phone}
+              </p>
+            )}
+
+            <div className="space-y-2.5">
+              <Link
+                href="/merchant"
+                className="w-full min-h-[48px] py-3 px-4 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-sm font-black flex items-center justify-center gap-2"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>تسجيل الدخول لحسابي</span>
+              </Link>
+              <Link
+                href={`/merchant?recover=1&phone=${encodeURIComponent(phone.trim())}`}
+                className="w-full min-h-[48px] py-3 px-4 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-950 text-sm font-bold flex items-center justify-center"
+              >
+                نسيت رمز الدخول؟ استرجع حسابك
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setPhoneExists(false);
+                  setErrorMsg('');
+                  setPageMode('login');
+                }}
+                className="w-full min-h-[44px] py-2.5 px-4 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-bold cursor-pointer"
+              >
+                فتح تسجيل الدخول في هذه الصفحة
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-xl mx-auto">
         {/* العودة للرئيسية */}
         <Link 
@@ -246,6 +345,7 @@ ${dashboardUrl}`;
                   setPageMode('register');
                   setErrorMsg('');
                   setPhoneExists(false);
+                  setFieldErrors({});
                 }}
                 className={`min-h-[44px] py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                   pageMode === 'register'
@@ -306,36 +406,12 @@ ${dashboardUrl}`;
               </div>
             </div>
 
-            {errorMsg && (
-              <div
-                className={`mb-6 p-4 rounded-xl border text-sm font-medium text-right space-y-3 ${
-                  phoneExists
-                    ? 'bg-amber-50 border-amber-200 text-amber-950'
-                    : 'bg-red-50 border-red-200 text-red-700 text-center'
-                }`}
-              >
-                <p className="leading-relaxed">{errorMsg}</p>
-                {phoneExists && (
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <Link
-                      href="/merchant"
-                      className="flex-1 min-h-[44px] py-2.5 px-4 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-xs font-black text-center flex items-center justify-center"
-                    >
-                      دخول حسابي الحالي
-                    </Link>
-                    <Link
-                      href={`/merchant?recover=1&phone=${encodeURIComponent(phone.trim())}`}
-                      className="flex-1 min-h-[44px] py-2.5 px-4 rounded-xl border border-amber-300 bg-white hover:bg-amber-100/60 text-amber-950 text-xs font-bold text-center flex items-center justify-center"
-                    >
-                      نسيت رمز الدخول؟
-                    </Link>
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* النموذج */}
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off" noValidate>
+              {/* حقول وهمية لامتصاص اقتراحات كوكل لكلمات السر */}
+              <input type="text" name="prevent_autofill_user" autoComplete="username" tabIndex={-1} aria-hidden="true" className="hidden" style={{ display: 'none' }} />
+              <input type="password" name="prevent_autofill_pass" autoComplete="new-password" tabIndex={-1} aria-hidden="true" className="hidden" style={{ display: 'none' }} />
+
               {/* الاسم الثلاثي */}
               <div>
                 <label className="block text-sm font-semibold text-slate-800 mb-1.5 flex items-center gap-1.5">
@@ -345,12 +421,19 @@ ${dashboardUrl}`;
                 </label>
                 <input
                   type="text"
-                  required
                   placeholder="مثال: أحمد عبد الله حسين"
                   value={ownerName}
-                  onChange={(e) => setOwnerName(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm outline-none transition-all"
+                  onChange={(e) => {
+                    setOwnerName(e.target.value);
+                    clearFieldError('ownerName');
+                  }}
+                  className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm outline-none transition-all ${
+                    fieldErrors.ownerName ? 'border-red-400 bg-red-50/40' : 'border-slate-300'
+                  }`}
                 />
+                {fieldErrors.ownerName && (
+                  <p className="mt-1.5 text-[11px] font-bold text-red-600">{fieldErrors.ownerName}</p>
+                )}
               </div>
 
               {/* اسم المتجر */}
@@ -362,12 +445,19 @@ ${dashboardUrl}`;
                 </label>
                 <input
                   type="text"
-                  required
                   placeholder="مثال: متجر النخيل، متجر الوسام"
                   value={storeName}
-                  onChange={(e) => setStoreName(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm outline-none transition-all"
+                  onChange={(e) => {
+                    setStoreName(e.target.value);
+                    clearFieldError('storeName');
+                  }}
+                  className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm outline-none transition-all ${
+                    fieldErrors.storeName ? 'border-red-400 bg-red-50/40' : 'border-slate-300'
+                  }`}
                 />
+                {fieldErrors.storeName && (
+                  <p className="mt-1.5 text-[11px] font-bold text-red-600">{fieldErrors.storeName}</p>
+                )}
               </div>
 
               {/* رقم الهاتف */}
@@ -379,17 +469,33 @@ ${dashboardUrl}`;
                 </label>
                 <input
                   type="tel"
-                  required
                   dir="ltr"
+                  inputMode="numeric"
+                  maxLength={11}
                   placeholder="07700000000"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm text-right outline-none transition-all"
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
+                    setPhone(digits);
+                    clearFieldError('phone');
+                    setPhoneExists(false);
+                    setErrorMsg('');
+                  }}
+                  className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm text-right outline-none transition-all ${
+                    fieldErrors.phone ? 'border-red-400 bg-red-50/40' : 'border-slate-300'
+                  }`}
                 />
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  يجب أن يكون الرقم 11 خانة ويبدأ بـ 07 (مثال: 07701234567)
+                  {phone ? ` — الآن: ${phone.replace(/\D/g, '').length}/11` : ''}
+                </p>
+                {fieldErrors.phone && !phoneExists && (
+                  <p className="mt-1.5 text-[11px] font-bold text-red-600">{fieldErrors.phone}</p>
+                )}
               </div>
 
               {/* رمز الدخول لحماية حساب التاجر */}
-              <div className="rounded-2xl border border-brand-100 bg-brand-50/40 p-4 space-y-3">
+              <div className={`rounded-2xl border p-4 space-y-3 ${fieldErrors.loginPin || fieldErrors.confirmLoginPin ? 'border-red-200 bg-red-50/30' : 'border-brand-100 bg-brand-50/40'}`}>
                 <div>
                   <label className="block text-sm font-semibold text-slate-800 mb-1.5 flex items-center gap-1.5">
                     <KeyRound className="w-4 h-4 text-brand-700" />
@@ -400,14 +506,22 @@ ${dashboardUrl}`;
                     هذا الرمز يحمي صفحة التاجر. احفظه جيداً وستحتاجه عند كل دخول.
                   </p>
                   <PasswordInput
-                    required
                     minLength={4}
+                    name="merchant_pin_create"
                     placeholder="4 خانات على الأقل"
                     value={loginPin}
-                    onChange={setLoginPin}
-                    autoComplete="new-password"
+                    onChange={(v) => {
+                      setLoginPin(v);
+                      clearFieldError('loginPin');
+                      clearFieldError('confirmLoginPin');
+                    }}
+                    autoComplete="off"
+                    className={fieldErrors.loginPin ? 'border-red-400' : ''}
                   />
                   <PinStrengthMeter pin={loginPin} />
+                  {fieldErrors.loginPin && (
+                    <p className="mt-1.5 text-[11px] font-bold text-red-600">{fieldErrors.loginPin}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-800 mb-1.5 flex items-center gap-1.5">
@@ -416,13 +530,20 @@ ${dashboardUrl}`;
                     <span className="text-red-500">*</span>
                   </label>
                   <PasswordInput
-                    required
                     minLength={4}
+                    name="merchant_pin_confirm"
                     placeholder="أعد كتابة رمز الدخول"
                     value={confirmLoginPin}
-                    onChange={setConfirmLoginPin}
-                    autoComplete="new-password"
+                    onChange={(v) => {
+                      setConfirmLoginPin(v);
+                      clearFieldError('confirmLoginPin');
+                    }}
+                    autoComplete="off"
+                    className={fieldErrors.confirmLoginPin ? 'border-red-400' : ''}
                   />
+                  {fieldErrors.confirmLoginPin && (
+                    <p className="mt-1.5 text-[11px] font-bold text-red-600">{fieldErrors.confirmLoginPin}</p>
+                  )}
                 </div>
               </div>
 
@@ -435,9 +556,17 @@ ${dashboardUrl}`;
                 </label>
                 <select
                   value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-slate-900 text-sm outline-none transition-all bg-white"
+                  onChange={(e) => {
+                    setCity(e.target.value);
+                    clearFieldError('city');
+                  }}
+                  className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-brand-600 focus:border-brand-600 text-sm outline-none transition-all bg-white ${
+                    fieldErrors.city ? 'border-red-400 bg-red-50/40 text-slate-900' : city ? 'border-slate-300 text-slate-900' : 'border-slate-300 text-slate-400'
+                  }`}
                 >
+                  <option value="" disabled>
+                    اختر محافظتك
+                  </option>
                   {IRAQ_GOVERNORATES.map((gov) => (
                     <option key={gov} value={gov}>
                       {gov}
@@ -447,7 +576,16 @@ ${dashboardUrl}`;
                 <p className="text-xs text-slate-500 mt-1">
                   اختر محافظتك من بين المحافظات العراقية الـ 18
                 </p>
+                {fieldErrors.city && (
+                  <p className="mt-1.5 text-[11px] font-bold text-red-600">{fieldErrors.city}</p>
+                )}
               </div>
+
+              {errorMsg && !phoneExists && (
+                <div className="p-3 rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs font-bold text-right">
+                  {errorMsg}
+                </div>
+              )}
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-right">
                 <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed">
