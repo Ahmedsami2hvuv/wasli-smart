@@ -296,17 +296,20 @@ export interface LoginRecoveryNotificationPayload {
 }
 
 /**
- * إشعار خاص للمدير عند طلب رمز تأكيد دخول التاجر (بالخاص وليس بالقناة)
+ * إشعار خاص للمدير عند طلب رمز تأكيد دخول التاجر
+ * يُرسل عبر بوت النشر/المستودع (وليس بوت إشعارات الطلبات)
  */
 export async function sendAdminLoginRecoveryNotification(
   payload: LoginRecoveryNotificationPayload
 ): Promise<boolean> {
-  // نفضّل بوت الإشعارات للخاص، مع بديل بوت المستودع إن لزم
-  const botToken = getOrdersBotToken() || getVaultBotToken();
-  const adminChatId = cleanTelegramChatId(process.env.TELEGRAM_ADMIN_CHAT_ID);
+  // رمز التأكيد ورسائل الاسترجاع تمر عبر بوت النشر فقط — بوت الإشعارات للطلبات فقط
+  const botToken = getVaultBotToken();
+  const adminChatId = cleanTelegramChatId(
+    process.env.TELEGRAM_VAULT_ADMIN_CHAT_ID || process.env.TELEGRAM_ADMIN_CHAT_ID
+  );
 
   if (!botToken || !adminChatId) {
-    console.warn('تعذر إرسال إشعار استرجاع الدخول: بوت أو معرف المدير غير مضبوط');
+    console.warn('تعذر إرسال إشعار استرجاع الدخول: بوت النشر أو معرف المدير غير مضبوط');
     return false;
   }
 
