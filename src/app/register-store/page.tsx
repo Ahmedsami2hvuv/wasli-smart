@@ -15,6 +15,7 @@ const ORDERS_BOT_USERNAME = 'wasliasharatbot';
 
 export default function RegisterStorePage() {
   const router = useRouter();
+  const [channelChoice, setChannelChoice] = useState<'choose' | 'website' | 'telegram'>('choose');
   const [pageMode, setPageMode] = useState<'register' | 'login'>('register');
   const [ownerName, setOwnerName] = useState('');
   const [storeName, setStoreName] = useState('');
@@ -139,10 +140,19 @@ ${dashboardUrl}`;
   const getOrdersBotConnectUrl = (storeCode: string) =>
     `https://t.me/${ORDERS_BOT_USERNAME}?start=store_${encodeURIComponent(storeCode)}`;
 
+  const getOrdersBotAuthUrl = () =>
+    `https://t.me/${ORDERS_BOT_USERNAME}?start=auth`;
+
   const handleConnectOrdersBot = (storeCode?: string) => {
     const code = storeCode || createdStore?.code;
     if (!code) return;
     window.open(getOrdersBotConnectUrl(code), '_blank', 'noopener,noreferrer');
+    setTelegramOpened(true);
+  };
+
+  const handleOpenTelegramAuth = () => {
+    window.open(getOrdersBotAuthUrl(), '_blank', 'noopener,noreferrer');
+    setChannelChoice('telegram');
     setTelegramOpened(true);
   };
 
@@ -328,14 +338,135 @@ ${dashboardUrl}`;
                 <Store className="w-8 h-8" />
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-2">
-                {pageMode === 'login' ? 'تسجيل دخول التاجر' : 'انضم كتاجر وأنشئ متجرك مجاناً'}
+                {channelChoice === 'choose'
+                  ? 'انضم كتاجر في وصلي'
+                  : channelChoice === 'telegram'
+                    ? 'التسجيل عبر تيليجرام'
+                    : pageMode === 'login'
+                      ? 'تسجيل دخول التاجر'
+                      : 'أنشئ متجرك من الموقع'}
               </h1>
               <p className="text-slate-600 text-sm leading-relaxed max-w-md mx-auto">
-                {pageMode === 'login'
-                  ? 'أدخل رقم هاتفك ورمز الدخول لفتح صفحة التاجر ومتابعة مبيعاتك وأرباحك.'
-                  : 'كن تاجراً معتمداً، اختر منتجات المنصة، حدد سعر البيع الذي تريده، وابدأ بجني أرباحك فورياً بدون الحاجة لرأس مال أو شراء بضاعة مسبقاً!'}
+                {channelChoice === 'choose'
+                  ? 'اختر الطريقة الأنسب لك: سجّل من الموقع هنا، أو أكمل كل شيء بسهولة عبر بوت الإشعارات في تيليجرام.'
+                  : channelChoice === 'telegram'
+                    ? 'البوت يساعدك تنشئ حسابك أو تسجّل دخولك وتختار محافظتك بأزرار جاهزة، ويربط متجرك بالإشعارات فوراً.'
+                    : pageMode === 'login'
+                      ? 'أدخل رقم هاتفك ورمز الدخول لفتح صفحة التاجر ومتابعة مبيعاتك وأرباحك.'
+                      : 'كن تاجراً معتمداً، اختر منتجات المنصة، حدد سعر البيع الذي تريده، وابدأ بجني أرباحك فورياً بدون رأس مال!'}
               </p>
             </div>
+
+            {channelChoice === 'choose' ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChannelChoice('website');
+                      setPageMode('register');
+                      setErrorMsg('');
+                      setPhoneExists(false);
+                    }}
+                    className="min-h-[120px] p-5 rounded-2xl border-2 border-slate-200 hover:border-brand-400 bg-slate-50 hover:bg-brand-50/60 text-right transition-all cursor-pointer group"
+                  >
+                    <div className="w-11 h-11 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                      <Store className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-sm font-black text-slate-900 mb-1">التسجيل من الموقع</h3>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      املأ النموذج هنا مباشرة: اسمك، رقمك، اسم المتجر، رمز الدخول، والمحافظة.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenTelegramAuth}
+                    className="min-h-[120px] p-5 rounded-2xl border-2 border-sky-200 hover:border-sky-400 bg-sky-50/70 hover:bg-sky-50 text-right transition-all cursor-pointer group"
+                  >
+                    <div className="w-11 h-11 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                      <Bell className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-sm font-black text-slate-900 mb-1">التسجيل عبر تيليجرام</h3>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      ينقلك لبوت الإشعارات: إنشاء حساب أو دخول أو استرجاع الرمز، مع أزرار المحافظات.
+                    </p>
+                  </button>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600 leading-relaxed space-y-1.5">
+                  <p className="font-bold text-slate-800">عند فتح البوت اضغط Start ثم اختر:</p>
+                  <p>1) إنشاء حساب تاجر</p>
+                  <p>2) تسجيل دخول</p>
+                  <p>3) نسيت رمز الدخول</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChannelChoice('website');
+                    setPageMode('login');
+                  }}
+                  className="w-full min-h-[44px] rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-bold text-slate-700 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <LogIn className="w-4 h-4 text-sky-600" />
+                  <span>عندي حساب مسبقاً — تسجيل دخول من الموقع</span>
+                </button>
+              </div>
+            ) : channelChoice === 'telegram' ? (
+              <div className="space-y-5">
+                <div className="rounded-2xl border border-sky-200 bg-sky-50 p-5 text-sm text-slate-700 leading-relaxed space-y-3">
+                  <p className="font-black text-sky-900 flex items-center gap-2">
+                    <Bell className="w-4 h-4" />
+                    <span>تم فتح بوت الإشعارات</span>
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1.5 text-xs sm:text-sm">
+                    <li>اضغط <span className="font-bold">Start</span> داخل البوت</li>
+                    <li>اختر إنشاء حساب أو تسجيل دخول أو نسيت الرمز</li>
+                    <li>اتبع الأسئلة: الاسم، الرقم، اسم المتجر، الرمز، ثم المحافظة من الأزرار</li>
+                    <li>إذا الرقم موجود سابقاً، البوت يخبرك ويفتح لك خيار الدخول</li>
+                  </ol>
+                </div>
+
+                <a
+                  href={getOrdersBotAuthUrl()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full min-h-[48px] py-3 px-4 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-black flex items-center justify-center gap-2"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>فتح بوت وصلي مرة أخرى</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChannelChoice('choose');
+                    setTelegramOpened(false);
+                  }}
+                  className="w-full min-h-[44px] rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  العودة لاختيار طريقة التسجيل
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setChannelChoice('website')}
+                  className="w-full min-h-[44px] rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-brand-700 cursor-pointer"
+                >
+                  أفضل أكمل من الموقع بدل التيليجرام
+                </button>
+              </div>
+            ) : (
+              <>
+            <button
+              type="button"
+              onClick={() => setChannelChoice('choose')}
+              className="mb-4 inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-brand-700 cursor-pointer"
+            >
+              <ArrowRight className="w-3.5 h-3.5" />
+              <span>تغيير طريقة التسجيل</span>
+            </button>
 
             {/* تبديل بين إنشاء حساب وتسجيل الدخول */}
             <div className="grid grid-cols-2 gap-2 p-1.5 mb-6 rounded-2xl bg-slate-100 border border-slate-200/80">
@@ -617,6 +748,8 @@ ${dashboardUrl}`;
                 <span>عندك حساب مسبقاً؟ سجّل الدخول من هنا</span>
               </button>
             </form>
+              </>
+            )}
               </>
             )}
           </div>
