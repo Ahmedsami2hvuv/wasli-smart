@@ -341,7 +341,8 @@ export async function handleAuthCallback(params: {
         'استرجاع رمز الدخول',
         '',
         'أرسل رقم هاتفك المسجّل.',
-        'سنرسل لك رمز تأكيد مؤقت (لا نرسل الرمز السري القديم حفاظاً على أمانك).',
+        'راح يوصل طلب الرمز للإدارة، وترسل لك الإدارة رمز تأكيد مؤقت عبر واتساب.',
+        'بعدها أدخله هنا وعيّن رمز دخول جديد.',
       ].join('\n'),
       replyMarkup: cancelKeyboard(),
     };
@@ -519,6 +520,8 @@ async function handleRecoverPhone(
   const waText = buildAdminWhatsAppOtpMessage(otpCode, store.name);
   const whatsappUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent(waText)}`;
 
+  // نفس نظام الموقع: الرمز يذهب للمدير عبر بوت النشر، والمدير يرسله للتاجر عبر واتساب بزر واحد.
+  // لا يُرسل الرمز أبداً في محادثة التيليجرام حتى لا يطلب أي شخص رقم غيره ويستلم الرمز هنا.
   await sendAdminLoginRecoveryNotification({
     storeName: store.name,
     ownerName: store.ownerName,
@@ -528,36 +531,17 @@ async function handleRecoverPhone(
     whatsappUrl,
   });
 
-  // إذا كان هذا التيليجرام مربوط مسبقاً بنفس المتجر، نرسل الرمز هنا مباشرة
-  const linkedHere =
-    String(store.telegramChatId || '') === String(chatId) ||
-    String((store as any).settings?.telegram_chat_id || '') === String(chatId);
-
   session.data.phone = phone;
   session.step = 'recover_otp';
   await saveSession(session);
 
-  if (linkedHere) {
-    return {
-      text: [
-        'أرسلنا رمز التأكيد إلى هذه المحادثة لأن حسابك مربوط مسبقاً.',
-        '',
-        `رمز التأكيد: ${otpCode}`,
-        '',
-        'الرمز صالح لمدة 15 دقيقة.',
-        'الآن أرسل الرمز هنا للمتابعة:',
-      ].join('\n'),
-      replyMarkup: cancelKeyboard(),
-    };
-  }
-
   return {
     text: [
-      'تم إرسال طلب رمز التأكيد للإدارة.',
-      'راح يوصلك الرمز عبر واتساب على رقمك المسجّل.',
+      'تم إرسال طلب رمز التأكيد إلى الإدارة.',
+      'راح يوصلك الرمز عبر واتساب على رقمك المسجّل من الإدارة.',
       '',
-      'عندما يوصلك الرمز، أرسله هنا مباشرة.',
-      'لا نرسل رمز الدخول السري القديم — هذا رمز مؤقت فقط لحماية حسابك.',
+      'عندما يوصلك الرمز على واتساب، أرسله هنا للمتابعة.',
+      'لا نرسل الرمز داخل تيليجرام حفاظاً على أمان حسابك.',
     ].join('\n'),
     replyMarkup: cancelKeyboard(),
   };
